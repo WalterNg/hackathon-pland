@@ -2,13 +2,112 @@
 
 :root {
   color-scheme: light;
+  --font-sans: Inter, sans-serif;
+
+  --color-primary: #b8e2d5;
+  --color-primary-hover: #a0d5c5;
+  --color-secondary: #0f1115;
+
+  --color-background-light: #f3f4f6;
+  --color-background-dark: #111827;
+  --color-card-light: #ffffff;
+  --color-card-dark: #1f2937;
+  --color-sidebar-dark: #0f1115;
+  --color-mint-light: #d8efe9;
+  --color-mint-card: #e0f2ec;
+
+  --shadow-soft: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+
+  --chart-fill-start: 235 250 245;
+  --chart-fill-end: 255 255 255;
+  --chart-point-bg: 255 255 255;
+  --chart-grid: 243 244 246;
+  --chart-tick: 156 163 175;
 }
 
 * {
   box-sizing: border-box;
 }
 
+*::-webkit-scrollbar {
+  width: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
 body {
   margin: 0;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  background-color: var(--color-background-light);
+}
+
+.sidebar-container {
+  border-top-right-radius: 2rem;
+  border-bottom-right-radius: 2rem;
+}
+
+.chart-container {
+  position: relative;
+  height: 250px;
+  width: 100%;
+}
+
+.bg-primary {
+  background-color: var(--color-primary);
+}
+
+.text-primary {
+  color: var(--color-primary);
+}
+
+.bg-primary-hover,
+.hover\:bg-primary-hover:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.bg-background-light {
+  background-color: var(--color-background-light);
+}
+
+.dark .dark\:bg-background-dark {
+  background-color: var(--color-background-dark);
+}
+
+.bg-card-light {
+  background-color: var(--color-card-light);
+}
+
+.dark .dark\:bg-card-dark {
+  background-color: var(--color-card-dark);
+}
+
+.bg-sidebar-dark {
+  background-color: var(--color-sidebar-dark);
+}
+
+.text-sidebar-dark {
+  color: var(--color-sidebar-dark);
+}
+
+.bg-mint-light {
+  background-color: var(--color-mint-light);
+}
+
+.bg-mint-card {
+  background-color: var(--color-mint-card);
+}
+
+.shadow-soft {
+  box-shadow: var(--shadow-soft);
 }
