@@ -2,13 +2,249 @@
 
 :root {
   color-scheme: light;
+  --font-sans: Inter, sans-serif;
+
+  --color-primary: #cce5e3;
+  --color-primary-hover: #6ee7b7;
+  --color-secondary: #d1fae5;
+
+  --color-background: #f4f6f8;
+  --color-background-light: #f4f6f8;
+  --color-card-light: #ffffff;
+  --color-sidebar-dark: #0f1115;
+  --color-mint-light: #d8efe9;
+  --color-mint-card: #cce5e3;
+
+  --shadow-soft: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+
+  --text-strong: #111827;
+  --text-body: #374151;
+  --text-muted: #6b7280;
+  --text-subtle: #9ca3af;
+  --text-inverse: #ffffff;
+  --text-on-primary: #111827;
+  --text-success: #166534;
+  --text-positive: #16a34a;
+  --text-accent: #0f766e;
+  --text-danger: #dc2626;
+  --text-warning: #ea580c;
+  --text-info: #2563eb;
+
+  --color-success-soft: #dcfce7;
+  --color-danger-soft: #fee2e2;
+  --color-info-soft: #dbeafe;
+  --color-info: #60a5fa;
+
+  --chart-fill-start: 235 250 245;
+  --chart-fill-end: 255 255 255;
+  --chart-point-bg: 255 255 255;
+  --chart-grid: 243 244 246;
+  --chart-tick: 156 163 175;
 }
 
 * {
   box-sizing: border-box;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 body {
   margin: 0;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  background-color: var(--color-background);
+  color: var(--text-body);
+}
+
+.sidebar-container {
+  border-top-right-radius: 2rem;
+  border-bottom-right-radius: 2rem;
+}
+
+.chart-container {
+  position: relative;
+  height: 250px;
+  width: 100%;
+}
+
+.bg-primary {
+  background-color: var(--color-primary);
+}
+
+.text-primary {
+  color: var(--color-primary);
+}
+
+.bg-primary-hover,
+.hover\:bg-primary-hover:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.bg-secondary {
+  background-color: var(--color-secondary);
+}
+
+.text-secondary {
+  color: var(--color-secondary);
+}
+
+.bg-background {
+  background-color: var(--color-background);
+}
+
+.bg-background-light {
+  background-color: var(--color-background-light);
+}
+
+.bg-card-light {
+  background-color: var(--color-card-light);
+}
+
+.bg-sidebar-dark {
+  background-color: var(--color-sidebar-dark);
+}
+
+.text-sidebar-dark {
+  color: var(--color-sidebar-dark);
+}
+
+.bg-mint-light {
+  background-color: var(--color-mint-light);
+}
+
+.bg-mint-card {
+  background-color: var(--color-mint-card);
+}
+
+.shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
+
+.text-strong {
+  color: var(--text-strong);
+}
+
+.text-body {
+  color: var(--text-body);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-subtle {
+  color: var(--text-subtle);
+}
+
+.text-inverse {
+  color: var(--text-inverse);
+}
+
+.text-on-primary {
+  color: var(--text-on-primary);
+}
+
+.text-success {
+  color: var(--text-success);
+}
+
+.text-positive {
+  color: var(--text-positive);
+}
+
+.text-accent {
+  color: var(--text-accent);
+}
+
+.text-danger {
+  color: var(--text-danger);
+}
+
+.text-warning {
+  color: var(--text-warning);
+}
+
+.text-info {
+  color: var(--text-info);
+}
+
+.bg-success-soft {
+  background-color: var(--color-success-soft);
+}
+
+.bg-danger-soft {
+  background-color: var(--color-danger-soft);
+}
+
+.bg-info-soft {
+  background-color: var(--color-info-soft);
+}
+
+.bg-info {
+  background-color: var(--color-info);
+}
+
+.bg-danger {
+  background-color: var(--text-danger);
+}
+
+.bg-distribution-ring {
+  background-image: conic-gradient(var(--color-primary) 0 45%, var(--color-info) 45% 75%, var(--color-sidebar-dark) 75% 100%);
+}
+
+.hover\:text-inverse:hover {
+  color: var(--text-inverse);
+}
+
+.typo-display {
+  font-size: 2.25rem;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.typo-h1 {
+  font-size: 1.25rem;
+  line-height: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.typo-section {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.typo-body-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+}
+
+.typo-body-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+}
+
+.typo-caption {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 500;
+}
+
+.typo-metric {
+  font-size: 3rem;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
