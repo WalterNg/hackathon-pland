@@ -25,7 +25,7 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined"
         />
       </head>
-      <body className="bg-background-light text-gray-800 antialiased transition-colors duration-200 dark:bg-background-dark dark:text-gray-100">
+      <body className="bg-background-light text-body antialiased transition-colors duration-200">
         {children}
       </body>
     </html>
