@@ -1,49 +1,66 @@
 import { MaterialIcon } from "../dashboard/material-icon";
+import type { JournalSummaryPayload, JournalTradeItem } from "@/app/lib/journal-types";
 
-type Trade = {
-  date: string;
-  pair: string;
-  symbol: string;
-  side: "LONG" | "SHORT";
-  entry: string;
-  exit: string;
-  pnl: string;
-  profit: boolean;
+type JournalActivityProps = {
+  summary: JournalSummaryPayload | null;
+  isLoading: boolean;
 };
 
-const trades: Trade[] = [
-  { date: "Oct 24, 14:30", pair: "BTC/USDT", symbol: "₿", side: "LONG", entry: "$34,200", exit: "$35,100", pnl: "+$900.00", profit: true },
-  { date: "Oct 23, 09:15", pair: "ETH/USDT", symbol: "Ξ", side: "SHORT", entry: "$1,850", exit: "$1,820", pnl: "+$450.00", profit: true },
-  { date: "Oct 22, 16:45", pair: "SOL/USDT", symbol: "S", side: "LONG", entry: "$32.50", exit: "$31.80", pnl: "-$140.00", profit: false },
-  { date: "Oct 21, 11:20", pair: "BNB/USDT", symbol: "B", side: "LONG", entry: "$215.00", exit: "$222.00", pnl: "+$210.00", profit: true }
-];
+function formatBtc(value: number | null | undefined, fractionDigits = 8): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return "N/A";
+  }
 
-export function JournalActivity() {
+  return `${value.toFixed(fractionDigits)} BTC`;
+}
+
+const dateFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit"
+});
+
+function toTradeRow(item: JournalTradeItem) {
+  const date = new Date(item.executedAt);
+  const isDateValid = !Number.isNaN(date.getTime());
+  const pnl = item.pnlBtc;
+
+  return {
+    id: item.id,
+    date: isDateValid ? dateFormatter.format(date) : item.executedAt,
+    pair: item.pair,
+    symbol: item.pair.slice(0, 1).toUpperCase(),
+    side: item.side.toUpperCase(),
+    entry: formatBtc(item.entryPriceBtc),
+    exit: formatBtc(item.exitPriceBtc),
+    pnl: formatBtc(pnl),
+    profit: pnl !== null ? pnl >= 0 : false
+  };
+}
+
+function sideBadgeClass(side: string): string {
+  if (side === "LONG" || side === "BUY" || side === "DEPOSIT") {
+    return "bg-success-soft text-success";
+  }
+
+  if (side === "SHORT" || side === "SELL" || side === "WITHDRAWAL") {
+    return "bg-danger-soft text-danger";
+  }
+
+  return "bg-info-soft text-info";
+}
+
+export function JournalActivity({ summary, isLoading }: JournalActivityProps) {
+  const trades = (summary?.trades ?? []).map(toTradeRow);
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1 pb-4">
-      <div className="rounded-2xl bg-card-light p-6 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-strong">Daily Performance</h3>
-          <div className="flex space-x-2">
-            <button className="rounded-md bg-gray-100 px-3 py-1 text-xs font-medium text-muted">Week</button>
-            <button className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-on-primary">Month</button>
-          </div>
-        </div>
-
-        <div className="grid h-48 grid-cols-7 items-end gap-2">
-          {[58, 72, 35, 46, 40, 42, 68].map((height, index) => (
-            <div key={index} className="relative flex h-full items-end">
-              <div className="w-full rounded-md bg-primary" style={{ height: `${height}%` }} />
-            </div>
-          ))}
-        </div>
-      </div>
-
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-4 sm:pr-1">
       <div className="flex min-h-75 flex-1 flex-col overflow-hidden rounded-2xl bg-card-light shadow-sm">
-        <div className="flex items-center justify-between border-b border-gray-100 p-5">
+        <div className="flex flex-col gap-3 border-b border-gray-100 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <h3 className="text-lg font-bold text-strong">Trade Logs</h3>
           <div className="flex space-x-2">
-            <input type="text" placeholder="Search pair..." className="w-40 rounded-lg bg-gray-50 px-3 py-1.5 text-xs text-body focus:ring-1 focus:ring-primary" />
+            <input type="text" placeholder="Search pair..." className="w-32 rounded-lg bg-gray-50 px-3 py-1.5 text-xs text-body focus:ring-1 focus:ring-primary sm:w-40" />
             <button className="text-muted transition hover:text-body">
               <MaterialIcon name="filter_list" className="text-lg" />
             </button>
@@ -64,15 +81,31 @@ export function JournalActivity() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-sm">
+              {isLoading && (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-muted">
+                    Loading trade logs...
+                  </td>
+                </tr>
+              )}
+
+              {!isLoading && trades.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-muted">
+                    No journal entries found.
+                  </td>
+                </tr>
+              )}
+
               {trades.map((trade) => (
-                <tr key={`${trade.date}-${trade.pair}`} className="group transition-colors hover:bg-gray-50">
+                <tr key={trade.id} className="group transition-colors hover:bg-gray-50">
                   <td className="px-6 py-4 text-muted">{trade.date}</td>
                   <td className="flex items-center gap-2 px-6 py-4 font-medium text-strong">
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/30 text-xs font-bold text-on-primary">{trade.symbol}</div>
                     {trade.pair}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`rounded px-2 py-1 text-xs font-semibold ${trade.side === "LONG" ? "bg-success-soft text-success" : "bg-danger-soft text-danger"}`}>
+                    <span className={`rounded px-2 py-1 text-xs font-semibold ${sideBadgeClass(trade.side)}`}>
                       {trade.side}
                     </span>
                   </td>

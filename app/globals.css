@@ -72,6 +72,12 @@ body {
   width: 100%;
 }
 
+.content-shell {
+  width: 100%;
+  max-width: 1340px;
+  margin-inline: auto;
+}
+
 .bg-primary {
   background-color: var(--color-primary);
 }
