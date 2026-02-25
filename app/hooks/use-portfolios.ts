@@ -1,0 +1,92 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+
+const MAIN_PORTFOLIO_NAME = "Main Portfolio";
+
+type PortfolioResponseRow = {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  createdAt: string;
+};
+
+export type PortfolioItem = {
+  id: string;
+  name: string;
+  isDefault: boolean;
+};
+
+type UsePortfoliosResult = {
+  portfolios: PortfolioItem[];
+  isLoading: boolean;
+  error: string | null;
+  createPortfolio: (name: string) => Promise<{ ok: boolean; message?: string; portfolioName?: string }>;
+  reload: () => Promise<void>;
+};
+
+export function usePortfolios(): UsePortfoliosResult {
+  const [portfolios, setPortfolios] = useState<PortfolioItem[]>([]);
+  const [isLoading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadPortfolios = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/portfolios", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Failed to load portfolios (${response.status})`);
+      }
+
+      const payload = (await response.json()) as { portfolios?: PortfolioResponseRow[] };
+      const nextPortfolios = (payload.portfolios ?? []).map((item) => ({
+        id: item.id,
+        name: item.name,
+        isDefault: item.isDefault
+      }));
+
+      if (nextPortfolios.length === 0) {
+        setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true }]);
+      } else {
+        setPortfolios(nextPortfolios);
+      }
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Unable to load portfolios");
+      setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true }]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPortfolios();
+  }, [loadPortfolios]);
+
+  const createPortfolio = useCallback(async (name: string) => {
+    const response = await fetch("/api/portfolios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      return { ok: false, message: payload?.error ?? "Unable to create portfolio." };
+    }
+
+    const payload = (await response.json()) as { portfolio?: { name?: string } };
+
+    await loadPortfolios();
+    return { ok: true, portfolioName: payload.portfolio?.name };
+  }, [loadPortfolios]);
+
+  return {
+    portfolios,
+    isLoading,
+    error,
+    createPortfolio,
+    reload: loadPortfolios
+  };
+}

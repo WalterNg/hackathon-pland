@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "hackathon-pland",
-  description: "Project bootstrapped with Next.js, TypeScript, and Tailwind CSS"
+  title: "Pland",
+  description: "Crypto portfolio tracker and trading journal"
 };
 
 export default function RootLayout({

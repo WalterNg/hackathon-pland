@@ -1,46 +1,92 @@
+import type { PortfolioMetrics as PortfolioMetricsType } from "@/app/lib/portfolio-types";
 import { MaterialIcon } from "../dashboard/material-icon";
 
-const cards = [
-  { title: "All-time Profit", value: "-66.00 BTC", badge: "53.66%", negative: true },
-  { title: "Cost Basis", value: "123.00 BTC", badge: "Total invested", negative: false },
-  { title: "Best Performer", value: "Bitcoin (BTC)", badge: "-66.00 BTC • -53.66%", negative: true, coin: true },
-  { title: "Worst Performer", value: "Bitcoin (BTC)", badge: "-66.00 BTC • -53.66%", negative: true, coin: true }
-];
+type PortfolioMetricsProps = {
+  metrics: PortfolioMetricsType;
+  btcPriceUsd: number | null;
+};
 
-export function PortfolioMetrics() {
+const symbolNames: Record<string, string> = {
+  BTCUSDT: "Bitcoin",
+  ETHUSDT: "Ethereum",
+  BNBUSDT: "BNB",
+  SOLUSDT: "Solana",
+  DOGEUSDT: "Dogecoin"
+};
+
+function formatBtc(usdAmount: number, btcPriceUsd: number | null): string {
+  if (!btcPriceUsd || !Number.isFinite(btcPriceUsd) || btcPriceUsd <= 0) {
+    return "N/A";
+  }
+
+  return `${(usdAmount / btcPriceUsd).toFixed(6)} BTC`;
+}
+
+export function PortfolioMetrics({ metrics, btcPriceUsd }: PortfolioMetricsProps) {
+  const best = metrics.bestPerformer24h;
+  const worst = metrics.worstPerformer24h;
+
   return (
-    <section className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-      {cards.map((card) => (
-        <article key={card.title} className="rounded-2xl border border-gray-100 bg-card-light p-6 shadow-sm transition-shadow hover:shadow-md">
-          <div className="mb-4 flex items-start justify-between">
-            <h3 className="typo-body-sm font-medium text-muted">{card.title}</h3>
-            {card.coin ? (
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-100">
-                <span className="text-xs font-bold text-orange-500">B</span>
-              </div>
-            ) : (
-              <MaterialIcon name="info" outlined={false} className="text-sm text-gray-300" />
-            )}
-          </div>
+    <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 lg:mb-8 lg:grid-cols-4">
+      <article className="rounded-2xl border-2 border-gray-100 bg-card-light p-5 sm:p-6">
+        <div className="mb-4 flex items-start justify-between">
+          <h3 className="typo-body-sm font-medium text-muted">All-time Profit</h3>
+          <MaterialIcon name="info" outlined={false} className="text-sm text-gray-300" />
+        </div>
 
-          <p className={`mb-1 text-2xl font-bold ${card.negative ? "text-red-500" : "text-strong"}`}>{card.value}</p>
+        <p className={`mb-1 text-2xl font-bold ${metrics.allTimeProfitUsd >= 0 ? "text-success" : "text-danger"}`}>
+          {formatBtc(metrics.allTimeProfitUsd, btcPriceUsd)}
+        </p>
 
-          {card.negative ? (
-            <div className="w-max rounded-md bg-red-50 px-2 py-1 text-xs text-red-500">
-              {card.coin ? (
-                <span className="font-semibold">{card.badge}</span>
-              ) : (
-                <span className="flex items-center">
-                  <MaterialIcon name="arrow_downward" outlined={false} className="mr-1 text-xs" />
-                  {card.badge}
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="text-xs text-subtle">{card.badge}</div>
-          )}
-        </article>
-      ))}
+        <div
+          className={`w-max rounded-md px-2 py-1 text-xs ${metrics.allTimeProfitUsd >= 0 ? "bg-success-soft text-success" : "bg-danger-soft text-danger"}`}
+        >
+          <span className="flex items-center">
+            <MaterialIcon
+              name={metrics.allTimeProfitUsd >= 0 ? "arrow_upward" : "arrow_downward"}
+              outlined={false}
+              className="mr-1 text-xs"
+            />
+            {Math.abs(metrics.allTimeProfitPercent).toFixed(2)}%
+          </span>
+        </div>
+      </article>
+
+      <article className="rounded-2xl border-2 border-gray-100 bg-card-light p-5 sm:p-6">
+        <div className="mb-4 flex items-start justify-between">
+          <h3 className="typo-body-sm font-medium text-muted">Cost Basis</h3>
+          <MaterialIcon name="info" outlined={false} className="text-sm text-gray-300" />
+        </div>
+
+        <p className="mb-1 text-2xl font-bold text-strong">{formatBtc(metrics.totalCostBasisUsd, btcPriceUsd)}</p>
+        <div className="text-xs text-subtle">Total invested</div>
+      </article>
+
+      <article className="rounded-2xl border-2 border-gray-100 bg-card-light p-5 sm:p-6">
+        <div className="mb-4">
+          <h3 className="typo-body-sm font-medium text-muted">Best Performer</h3>
+        </div>
+
+        <p className="mb-1 text-lg font-bold text-strong">
+          {best ? `${symbolNames[best.symbol] ?? best.symbol.replace("USDT", "")} (${best.symbol.replace("USDT", "")})` : "N/A"}
+        </p>
+        <div className="w-max rounded-md bg-success-soft px-2 py-1 text-xs text-success">
+          <span className="font-semibold">{best ? `${best.change24hPercent.toFixed(2)}%` : "0.00%"}</span>
+        </div>
+      </article>
+
+      <article className="rounded-2xl border-2 border-gray-100 bg-card-light p-5 sm:p-6">
+        <div className="mb-4">
+          <h3 className="typo-body-sm font-medium text-muted">Worst Performer</h3>
+        </div>
+
+        <p className="mb-1 text-lg font-bold text-strong">
+          {worst ? `${symbolNames[worst.symbol] ?? worst.symbol.replace("USDT", "")} (${worst.symbol.replace("USDT", "")})` : "N/A"}
+        </p>
+        <div className="w-max rounded-md bg-danger-soft px-2 py-1 text-xs text-danger">
+          <span className="font-semibold">{worst ? `${worst.change24hPercent.toFixed(2)}%` : "0.00%"}</span>
+        </div>
+      </article>
     </section>
   );
 }

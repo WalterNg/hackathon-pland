@@ -1,4 +1,32 @@
-export function PortfolioChart() {
+import type { PortfolioChartPoint } from "@/app/lib/portfolio-types";
+
+type PortfolioChartProps = {
+  chart: PortfolioChartPoint[];
+};
+
+function chartToSvgPath(points: PortfolioChartPoint[]): string {
+  if (points.length === 0) {
+    return "M40 220 L580 220";
+  }
+
+  const values = points.map((point) => point.totalValueUsd);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const spread = Math.max(maxValue - minValue, 1);
+
+  return points
+    .map((point, index) => {
+      const x = 40 + (index / Math.max(points.length - 1, 1)) * 540;
+      const normalized = (point.totalValueUsd - minValue) / spread;
+      const y = 220 - normalized * 130;
+      return `${index === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+export function PortfolioChart({ chart }: PortfolioChartProps) {
+  const linePath = chartToSvgPath(chart);
+
   return (
     <svg viewBox="0 0 700 260" className="h-full w-full" role="img" aria-label="Portfolio chart">
       <defs>
@@ -8,16 +36,15 @@ export function PortfolioChart() {
         </linearGradient>
       </defs>
 
-      <path d="M40 200 L130 170 L220 178 L310 95 L400 152 L490 122 L580 145 L580 220 L40 220 Z" fill="url(#portfolio-gradient)" />
+      <path d={`${linePath} L580 220 L40 220 Z`} fill="url(#portfolio-gradient)" />
       <path
-        d="M40 200 L130 170 L220 178 L310 95 L400 152 L490 122 L580 145"
+        d={linePath}
         fill="none"
         stroke="var(--color-primary)"
         strokeWidth="4"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="310" cy="95" r="7" fill="var(--color-card-light)" stroke="var(--color-primary)" strokeWidth="4" />
     </svg>
   );
 }
