@@ -43,7 +43,13 @@ export async function updateSupabaseSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
 
           response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+          cookiesToSet.forEach(({ name, value, options }) => {
+            const cookieOptions = { ...options };
+            if (!cookieOptions.domain) {
+              delete cookieOptions.domain;
+            }
+            response.cookies.set(name, value, cookieOptions);
+          });
         }
       }
     }
