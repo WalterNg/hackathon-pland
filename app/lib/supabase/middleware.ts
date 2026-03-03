@@ -3,33 +3,15 @@ import { createServerClient } from "@supabase/ssr";
 import { hasSupabaseEnv } from "./env";
 
 export async function updateSupabaseSession(request: NextRequest) {
-  const pathname = request.nextUrl.pathname;
-  const isProtectedRoute =
-    pathname === "/" ||
-    pathname === "/dashboard" ||
-    pathname.startsWith("/dashboard/") ||
-    pathname === "/portfolio" ||
-    pathname.startsWith("/portfolio/") ||
-    pathname === "/journal" ||
-    pathname.startsWith("/journal/");
-  const isAuthRoute = pathname === "/auth/login" || pathname === "/auth/register" || pathname === "/auth/callback";
-
-  if (pathname.startsWith("/api") || pathname.startsWith("/_next") || pathname.includes(".")) {
-    return NextResponse.next({ request });
-  }
+  let response = NextResponse.next({ request });
 
   if (!hasSupabaseEnv()) {
-    if (isProtectedRoute) {
-      const loginUrl = request.nextUrl.clone();
-      loginUrl.pathname = "/auth/login";
-      loginUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
-      return NextResponse.redirect(loginUrl);
-    }
-
-    return NextResponse.next({ request });
+    return response;
   }
 
-  let response = NextResponse.next({ request });
+  if (request.nextUrl.pathname.startsWith('/_next') || request.nextUrl.pathname.includes('.') || request.nextUrl.pathname.startsWith('/api')) {
+    return response;
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -41,17 +23,14 @@ export async function updateSupabaseSession(request: NextRequest) {
         },
         setAll(cookiesToSet: Array<{ name: string; value: string; options?: Record<string, unknown> }>) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-
           response = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) => {
             const cookieOptions = { ...options };
-            if (!cookieOptions.domain) {
-              delete cookieOptions.domain;
-            }
+            if (!cookieOptions.domain) delete cookieOptions.domain;
             response.cookies.set(name, value, cookieOptions);
           });
-        }
-      }
+        },
+      },
     }
   );
 
@@ -63,14 +42,23 @@ export async function updateSupabaseSession(request: NextRequest) {
     user = null;
   }
 
-  if (!user && isProtectedRoute) {
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/auth/login";
-    loginUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
-    return NextResponse.redirect(loginUrl);
+  const pathname = request.nextUrl.pathname;
+  
+  if (pathname === "/auth/callback") {
+    return response;
   }
 
-  if (user && (pathname === "/auth/login" || pathname === "/auth/register")) {
+  const isProtectedRoute = pathname === "/" || pathname === "/dashboard" || pathname.startsWith("/dashboard/") || pathname === "/portfolio" || pathname.startsWith("/portfolio/") || pathname === "/journal" || pathname.startsWith("/journal/");
+  const isAuthPage = pathname === "/auth/login" || pathname === "/auth/register";
+
+  if (!user && isProtectedRoute) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/login";
+    url.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+    return NextResponse.redirect(url);
+  }
+
+  if (user && isAuthPage) {
     const homeUrl = request.nextUrl.clone();
     const nextPath = request.nextUrl.searchParams.get("next");
     if (nextPath && nextPath.startsWith("/")) {
@@ -78,14 +66,9 @@ export async function updateSupabaseSession(request: NextRequest) {
       homeUrl.search = "";
       return NextResponse.redirect(homeUrl);
     }
-
     homeUrl.pathname = "/";
     homeUrl.search = "";
     return NextResponse.redirect(homeUrl);
-  }
-
-  if (isAuthRoute || isProtectedRoute) {
-    return response;
   }
 
   return response;
