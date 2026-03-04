@@ -14,7 +14,15 @@ export async function createSupabaseServerClient() {
       setAll(cookiesToSet: Array<{ name: string; value: string; options?: Record<string, unknown> }>) {
         try {
           cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
+            const cookieOptions = { ...options };
+            if (!cookieOptions.domain) delete cookieOptions.domain;
+            
+            cookieStore.set({
+              name,
+              value,
+              ...cookieOptions,
+              secure: process.env.NODE_ENV === "production" || undefined,
+            });
           });
         } catch {
           // ignored: called from contexts where cookies are read-only

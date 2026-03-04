@@ -34,3 +34,7 @@ pnpm-debug.log*
 __pycache__/
 .venv/
 venv/
+
+# Bmad
+_bmad/
+.agent

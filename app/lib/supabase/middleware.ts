@@ -18,10 +18,19 @@ export async function updateSupabaseSession(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+  
+  const origin = appUrl 
+    ? appUrl 
+    : forwardedHost 
+      ? `${forwardedProto}://${forwardedHost}` 
+      : request.nextUrl.origin;
+
   if (!hasSupabaseEnv()) {
     if (isProtectedRoute) {
-      const loginUrl = request.nextUrl.clone();
-      loginUrl.pathname = "/auth/login";
+      const loginUrl = new URL("/auth/login", origin);
       loginUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
       return NextResponse.redirect(loginUrl);
     }
@@ -43,7 +52,17 @@ export async function updateSupabaseSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
 
           response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+          cookiesToSet.forEach(({ name, value, options }) => {
+            const cookieOptions = { ...options };
+            if (!cookieOptions.domain) delete cookieOptions.domain;
+            
+            response.cookies.set({
+              name,
+              value,
+              ...cookieOptions,
+              secure: process.env.NODE_ENV === "production" || request.nextUrl.protocol === "https:",
+            });
+          });
         }
       }
     }
@@ -58,24 +77,15 @@ export async function updateSupabaseSession(request: NextRequest) {
   }
 
   if (!user && isProtectedRoute) {
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/auth/login";
+    const loginUrl = new URL("/auth/login", origin);
     loginUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(loginUrl);
   }
 
   if (user && (pathname === "/auth/login" || pathname === "/auth/register")) {
-    const homeUrl = request.nextUrl.clone();
     const nextPath = request.nextUrl.searchParams.get("next");
-    if (nextPath && nextPath.startsWith("/")) {
-      homeUrl.pathname = nextPath;
-      homeUrl.search = "";
-      return NextResponse.redirect(homeUrl);
-    }
-
-    homeUrl.pathname = "/";
-    homeUrl.search = "";
-    return NextResponse.redirect(homeUrl);
+    const redirectUrl = new URL(nextPath && nextPath.startsWith("/") ? nextPath : "/", origin);
+    return NextResponse.redirect(redirectUrl);
   }
 
   if (isAuthRoute || isProtectedRoute) {
