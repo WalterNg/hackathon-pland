@@ -1,10 +1,14 @@
+"""
+Tests for all specialist agents (TA, Sentiment, Risk).
+Since ChatGoogleGenerativeAI now lives in core.base_agent, we mock BaseAgent.run directly.
+"""
 import pytest
-from agents.ta_agent.agent import analyze_technical
-from schemas.input import EvaluationPayload, MarketData
-from schemas.output import TAResult
+from unittest.mock import AsyncMock, patch, MagicMock
+from schemas.input import EvaluationPayload, MarketData, PortfolioItem
+from schemas.output import TAResult, SentimentResult, RiskResult
 from schemas.state import AgentState
-from unittest.mock import AsyncMock, patch
-from langchain_core.messages import BaseMessage
+from core.base_agent import AgentError
+
 
 @pytest.fixture
 def mock_payload():
@@ -15,11 +19,12 @@ def mock_payload():
         market_data=MarketData(
             rvol=2.0,
             ma50=50000.0,
-            rsi=80.0,
-            bollinger_bands="Above Upper",
-            obv=2000000.0
-        )
+            rsi=65.0,
+            bollinger_bands="Upper",
+            obv=2000000.0,
+        ),
     )
+
 
 @pytest.fixture
 def mock_state(mock_payload):
@@ -29,100 +34,104 @@ def mock_state(mock_payload):
         sentiment_result=None,
         risk_result=None,
         final_decision=None,
-        error=None
+        error=None,
     )
 
+
+# ─── TA Agent ─────────────────────────────────────────────────────────────────
+
 @pytest.mark.asyncio
-@patch("agents.ta_agent.agent.ChatGoogleGenerativeAI")
-async def test_analyze_technical_success(mock_chat_class, mock_state):
-    # Mock the LLM chain
-    mock_llm_instance = mock_chat_class.return_value
-    mock_structured_llm = AsyncMock()
-    mock_llm_instance.with_structured_output.return_value = mock_structured_llm
-    
-    mock_ta_result = TAResult(
+async def test_analyze_technical_success(mock_state):
+    from agents.ta_agent.agent import TAAgent
+    agent = TAAgent()
+    expected = TAResult(
         trend="Bullish",
         signal_strength=8,
-        reasons=["High RVOL", "RSI Overbought but strong momentum"],
-        recommended_action="Take Profit"
+        reasons=["High RVOL", "RSI strong momentum"],
+        recommended_action="Accumulate",
     )
-    mock_structured_llm.ainvoke.return_value = mock_ta_result
+    with patch.object(agent, "run", new_callable=AsyncMock, return_value=expected):
+        result = await agent.run_node(mock_state)
 
-    # Run the function
-    result_state = await analyze_technical(mock_state)
-    
-    assert "ta_result" in result_state
-    assert result_state["ta_result"] == mock_ta_result
-    assert "error" not in result_state or result_state["error"] is None
-
-@pytest.mark.asyncio
-@patch("agents.ta_agent.agent.ChatGoogleGenerativeAI")
-async def test_analyze_technical_api_error(mock_chat_class, mock_state):
-    from google.api_core.exceptions import GoogleAPIError
-    
-    mock_llm_instance = mock_chat_class.return_value
-    mock_structured_llm = AsyncMock()
-    mock_llm_instance.with_structured_output.return_value = mock_structured_llm
-    
-    mock_structured_llm.ainvoke.side_effect = GoogleAPIError("API limit exceeded")
-
-    result_state = await analyze_technical(mock_state)
-    
-    assert "error" in result_state
-    assert result_state["error"] == "TA Agent LLM API failed"
+    assert result["ta_result"] == expected
+    assert "error" not in result
 
 
 @pytest.mark.asyncio
-@patch("agents.sentiment_agent.agent.ChatGoogleGenerativeAI")
-async def test_analyze_sentiment_success(mock_chat_class, mock_state):
-    from agents.sentiment_agent.agent import analyze_sentiment
-    from schemas.output import SentimentResult
-    
-    # Add dummy news to payload for this test
-    mock_state["payload"].news_headlines = ["Bitcoin reaches new ATH!", "Institutions are buying crypto."]
+async def test_analyze_technical_api_error(mock_state):
+    from agents.ta_agent.agent import TAAgent
+    agent = TAAgent()
+    with patch.object(agent, "run", new_callable=AsyncMock, side_effect=AgentError("Gemini API error")):
+        result = await agent.run_node(mock_state)
+
+    assert "error" in result
+    assert "TA Agent failed" in result["error"]
+
+
+# ─── Sentiment Agent ──────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_analyze_sentiment_success(mock_state):
+    from agents.sentiment_agent.agent import SentimentAgent
+    mock_state["payload"].news_headlines = ["Bitcoin ATH!", "Institutions buying crypto."]
     mock_state["payload"].social_dominance = 55.0
 
-    mock_llm_instance = mock_chat_class.return_value
-    mock_structured_llm = AsyncMock()
-    mock_llm_instance.with_structured_output.return_value = mock_structured_llm
-    
-    mock_sent_result = SentimentResult(
+    agent = SentimentAgent()
+    expected = SentimentResult(
         sentiment_score=85,
-        narrative_summary="Extremely bullish market driven by ETF inflows.",
-        bias="Bullish"
+        narrative_summary="Extremely bullish market.",
+        bias="Bullish",
     )
-    mock_structured_llm.ainvoke.return_value = mock_sent_result
+    with patch.object(agent, "run", new_callable=AsyncMock, return_value=expected):
+        result = await agent.run_node(mock_state)
 
-    result_state = await analyze_sentiment(mock_state)
-    
-    assert "sentiment_result" in result_state
-    assert result_state["sentiment_result"] == mock_sent_result
-    assert "error" not in result_state or result_state["error"] is None
+    assert result["sentiment_result"] == expected
+    assert "error" not in result
+
 
 @pytest.mark.asyncio
-@patch("agents.risk_agent.agent.ChatGoogleGenerativeAI")
-async def test_analyze_risk_success(mock_chat_class, mock_state):
-    from agents.risk_agent.agent import analyze_risk
-    from schemas.output import RiskResult
-    from schemas.input import PortfolioItem
+async def test_analyze_sentiment_neutral_default(mock_state):
+    """No headlines → should return Neutral without calling the LLM."""
+    from agents.sentiment_agent.agent import SentimentAgent
+    mock_state["payload"].news_headlines = []
+    mock_state["payload"].social_dominance = None
 
-    # Add dummy portfolio to hit some risk rules conditionally
-    mock_state["payload"].portfolio = [PortfolioItem(asset="BTC", amount=0.5, current_price=60000.0)]
-    mock_state["payload"].stablecoin_reserve = 1000.0 # High risk (low reserve relative to 30k portfolio)
+    agent = SentimentAgent()
+    with patch.object(agent, "run", new_callable=AsyncMock) as mock_run:
+        result = await agent.run_node(mock_state)
+        mock_run.assert_not_called()
 
-    mock_llm_instance = mock_chat_class.return_value
-    mock_structured_llm = AsyncMock()
-    mock_llm_instance.with_structured_output.return_value = mock_structured_llm
-    
-    mock_risk_result = RiskResult(
-        risk_level="Critical",
-        recommended_constraints=["Only allow Hold or Stop Loss", "Sell assets to increase stablecoin reserve"]
+    assert result["sentiment_result"].bias == "Neutral"
+
+
+# ─── Risk Agent ───────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_analyze_risk_success(mock_state):
+    from agents.risk_agent.agent import RiskAgent
+    mock_state["payload"].portfolio = [
+        PortfolioItem(asset="BTC", amount=0.5, current_price=60000.0)
+    ]
+    mock_state["payload"].stablecoin_reserve = 1000.0
+
+    agent = RiskAgent()
+    expected = RiskResult(
+        risk_level="High",
+        recommended_constraints=["Limit new positions", "Increase stablecoin reserve"],
     )
-    mock_structured_llm.ainvoke.return_value = mock_risk_result
+    with patch.object(agent, "run", new_callable=AsyncMock, return_value=expected):
+        result = await agent.run_node(mock_state)
 
-    result_state = await analyze_risk(mock_state)
-    
-    assert "risk_result" in result_state
-    assert result_state["risk_result"] == mock_risk_result
-    assert "error" not in result_state or result_state["error"] is None
+    assert result["risk_result"] == expected
+    assert "error" not in result
 
+
+@pytest.mark.asyncio
+async def test_analyze_risk_agent_error(mock_state):
+    from agents.risk_agent.agent import RiskAgent
+    agent = RiskAgent()
+    with patch.object(agent, "run", new_callable=AsyncMock, side_effect=AgentError("API down")):
+        result = await agent.run_node(mock_state)
+
+    assert "error" in result
+    assert "Risk Agent failed" in result["error"]

@@ -1,81 +1,51 @@
 import logging
-import time
-from langchain_google_genai import ChatGoogleGenerativeAI
-from pydantic import ValidationError
-from google.api_core.exceptions import GoogleAPIError
-
-from core.config import settings
+from core.base_agent import BaseAgent, AgentError
 from schemas.state import AgentState
 from schemas.output import RiskResult
 from .prompts import RISK_SYSTEM_PROMPT
 
 logger = logging.getLogger("RISK_AGENT")
 
-async def analyze_risk(state: AgentState) -> AgentState:
-    """
-    LangGraph node: Analyzes portfolio and market volatility to assign a Risk Level.
-    """
-    logger.info("Executing Risk Agent analysis.")
-    payload = state["payload"]
-    portfolio = payload.portfolio
-    stablecoin_reserve = payload.stablecoin_reserve
-    market_data = payload.market_data
 
-    # Calculate total portfolio value (F3: Guard against zero/missing prices)
-    total_assets_value = 0.0
-    for item in portfolio:
-        price = item.current_price or 0.0
-        if price <= 0:
-            logger.warning(f"Portfolio asset {item.asset} has invalid price: {price}")
-        total_assets_value += item.amount * price
-        
-    total_value = total_assets_value + stablecoin_reserve
+class RiskAgent(BaseAgent):
+    """Evaluates portfolio risk level based on market data and portfolio composition."""
 
-    user_input = f"""
-    Please analyze the risk level for the following context:
-    
-    Total Value: ${total_value:.2f}
-    Stablecoin Reserve: ${stablecoin_reserve:.2f}
-    Number of Assets: {len(portfolio)}
-    
-    Market Data:
-    RVOL: {market_data.rvol}
-    MA50: {market_data.ma50}
-    RSI: {market_data.rsi}
-    """
-    
-    try:
-        api_key = settings.gemini_api_key
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY is not set in environment")
+    def _build_input(self, state: AgentState) -> str:
+        payload = state["payload"]
+        portfolio = payload.portfolio
+        md = payload.market_data
 
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            api_key=api_key,
-            temperature=0.0,
-            max_retries=3 # F2: Added simple retry logic
+        total_assets_value = sum(
+            item.amount * (item.current_price or 0.0)
+            for item in portfolio
         )
-        structured_llm = llm.with_structured_output(RiskResult)
-        
-        messages = [
-            ("system", RISK_SYSTEM_PROMPT),
-            ("human", user_input)
-        ]
-        
-        logger.info("Invoking Gemini for Risk evaluation.")
-        start_time = time.perf_counter()
-        result: RiskResult = await structured_llm.ainvoke(messages)
-        duration = time.perf_counter() - start_time
-        logger.info(f"Risk Evaluation complete: {result.risk_level} | Duration: {duration:.2f}s")
-        
-        return {"risk_result": result}
+        total_value = total_assets_value + payload.stablecoin_reserve
 
-    except ValidationError as e:
-        logger.error(f"Risk Agent Output Validation Error: {e}")
-        return {"error": "Risk Agent returned invalid data format"}
-    except GoogleAPIError as e:
-        logger.error(f"Google API Error in Risk Agent: {e}")
-        return {"error": "Risk Agent LLM API failed"}
-    except Exception as e:
-        logger.error(f"Unexpected error in Risk Agent: {e}")
-        return {"error": f"Risk Agent encountered an error: {str(e)}"}
+        return (
+            f"Please evaluate the risk level for the following context:\n"
+            f"  Total Portfolio Value: ${total_value:.2f}\n"
+            f"  Stablecoin Reserve: ${payload.stablecoin_reserve:.2f}\n"
+            f"  Number of Assets: {len(portfolio)}\n"
+            f"Market Data:\n"
+            f"  RVOL: {md.rvol}\n"
+            f"  MA50: {md.ma50}\n"
+            f"  RSI: {md.rsi}"
+        )
+
+    async def run_node(self, state: AgentState) -> AgentState:
+        logger.info("Executing Risk Agent.")
+        try:
+            result: RiskResult = await self.run(
+                RISK_SYSTEM_PROMPT, self._build_input(state), RiskResult
+            )
+            return {"risk_result": result}
+        except AgentError as e:
+            logger.error(str(e))
+            return {"error": f"Risk Agent failed: {e}"}
+
+
+# Singleton node function for LangGraph
+_agent = RiskAgent()
+
+async def analyze_risk(state: AgentState) -> AgentState:
+    return await _agent.run_node(state)

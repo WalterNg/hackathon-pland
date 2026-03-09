@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from schemas.input import EvaluationPayload
 from schemas.output import EvaluationResponse
 from schemas.state import AgentState
-from agents.orchestrator import evaluator_graph
+from agents.graph import evaluator_graph
 import logging
 import time
 
