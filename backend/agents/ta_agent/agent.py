@@ -1,4 +1,5 @@
 import logging
+import time
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import ValidationError
 from google.api_core.exceptions import GoogleAPIError
@@ -8,7 +9,7 @@ from schemas.state import AgentState
 from schemas.output import TAResult
 from .prompts import TA_SYSTEM_PROMPT
 
-logger = logging.getLogger("hackathon-pland")
+logger = logging.getLogger("TA_AGENT")
 
 async def analyze_technical(state: AgentState) -> AgentState:
     """
@@ -30,7 +31,6 @@ async def analyze_technical(state: AgentState) -> AgentState:
     
     # Initialize the LLM with structured output
     try:
-        # Require API key to be set, fallback to dummy key handled gracefully during    try:
         api_key = settings.gemini_api_key
         if not api_key:
             raise ValueError("GEMINI_API_KEY is not set in environment")
@@ -39,7 +39,7 @@ async def analyze_technical(state: AgentState) -> AgentState:
             model="gemini-2.5-flash",
             api_key=api_key,
             temperature=0.0,
-            max_retries=3 # F2: Added simple retry logic
+            max_retries=3
         )
         structured_llm = llm.with_structured_output(TAResult)
         
@@ -50,8 +50,10 @@ async def analyze_technical(state: AgentState) -> AgentState:
         ]
         
         logger.info("Invoking Gemini for TA evaluation.")
+        start_time = time.perf_counter()
         result: TAResult = await structured_llm.ainvoke(messages)
-        logger.info(f"TA Evaluation complete: {result.recommended_action} - Strength: {result.signal_strength}")
+        duration = time.perf_counter() - start_time
+        logger.info(f"TA Evaluation complete: {result.recommended_action} - Strength: {result.signal_strength} | Duration: {duration:.2f}s")
         
         return {"ta_result": result}
 

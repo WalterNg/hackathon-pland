@@ -6,7 +6,7 @@ from agents.ta_agent.agent import analyze_technical
 from agents.sentiment_agent.agent import analyze_sentiment
 from agents.risk_agent.agent import analyze_risk
 
-logger = logging.getLogger("hackathon-pland")
+logger = logging.getLogger("ORCHESTRATOR")
 
 async def base_orchestrator(state: AgentState) -> AgentState:
     """

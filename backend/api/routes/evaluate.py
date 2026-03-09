@@ -4,6 +4,7 @@ from schemas.output import EvaluationResponse
 from schemas.state import AgentState
 from agents.orchestrator import evaluator_graph
 import logging
+import time
 
 router = APIRouter()
 logger = logging.getLogger("hackathon-pland")
@@ -23,8 +24,11 @@ async def evaluate_portfolio(payload: EvaluationPayload):
     
     try:
         logger.info(f"Triggering Evaluator Graph for payload: {payload.user_id}")
+        start_time = time.perf_counter()
         final_state = await evaluator_graph.ainvoke(initial_state)
+        duration = time.perf_counter() - start_time
         
+        logger.info(f"Evaluation request completed for user: {payload.user_id} | Total Time: {duration:.2f}s")        
         if final_state.get("error"):
             logger.error(f"Graph execution error: {final_state['error']}")
             return EvaluationResponse(

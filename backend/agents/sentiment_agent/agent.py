@@ -1,4 +1,5 @@
 import logging
+import time
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import ValidationError
 from google.api_core.exceptions import GoogleAPIError
@@ -8,7 +9,7 @@ from schemas.state import AgentState
 from schemas.output import SentimentResult
 from .prompts import SENTIMENT_SYSTEM_PROMPT
 
-logger = logging.getLogger("hackathon-pland")
+logger = logging.getLogger("SENTIMENT_AGENT")
 
 async def analyze_sentiment(state: AgentState) -> AgentState:
     """
@@ -56,8 +57,10 @@ async def analyze_sentiment(state: AgentState) -> AgentState:
         ]
         
         logger.info("Invoking Gemini for Sentiment evaluation.")
+        start_time = time.perf_counter()
         result: SentimentResult = await structured_llm.ainvoke(messages)
-        logger.info(f"Sentiment Evaluation complete: {result.bias} - Score: {result.sentiment_score}")
+        duration = time.perf_counter() - start_time
+        logger.info(f"Sentiment Evaluation complete: {result.bias} - Score: {result.sentiment_score} | Duration: {duration:.2f}s")
         
         return {"sentiment_result": result}
 

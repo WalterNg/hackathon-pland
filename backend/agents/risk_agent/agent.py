@@ -1,4 +1,5 @@
 import logging
+import time
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import ValidationError
 from google.api_core.exceptions import GoogleAPIError
@@ -8,7 +9,7 @@ from schemas.state import AgentState
 from schemas.output import RiskResult
 from .prompts import RISK_SYSTEM_PROMPT
 
-logger = logging.getLogger("hackathon-pland")
+logger = logging.getLogger("RISK_AGENT")
 
 async def analyze_risk(state: AgentState) -> AgentState:
     """
@@ -62,8 +63,10 @@ async def analyze_risk(state: AgentState) -> AgentState:
         ]
         
         logger.info("Invoking Gemini for Risk evaluation.")
+        start_time = time.perf_counter()
         result: RiskResult = await structured_llm.ainvoke(messages)
-        logger.info(f"Risk Evaluation complete: {result.risk_level}")
+        duration = time.perf_counter() - start_time
+        logger.info(f"Risk Evaluation complete: {result.risk_level} | Duration: {duration:.2f}s")
         
         return {"risk_result": result}
 

@@ -1,17 +1,51 @@
 import logging
+import logging.config
 import sys
 
-def setup_logger(name: str) -> logging.Logger:
-    logger = logging.getLogger(name)
-    if not logger.handlers:
-        logger.setLevel(logging.INFO)
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setLevel(logging.INFO)
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-    return logger
+LOGGING_CONFIG = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "standard": {
+            "format": "%(asctime)s | %(levelname)s | [%(name)s] %(message)s",
+            "datefmt": "%H:%M:%S",
+        },
+    },
+    "handlers": {
+        "default": {
+            "level": "INFO",
+            "formatter": "standard",
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+        },
+    },
+    "loggers": {
+        "": {  # root logger
+            "handlers": ["default"],
+            "level": "INFO",
+            "propagate": True,
+        },
+        "httpx": {
+            "handlers": ["default"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "httpcore": {
+            "handlers": ["default"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "google_genai.models": {
+            "handlers": ["default"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+    },
+}
 
-logger = setup_logger("hackathon-pland")
+def setup_logger():
+    logging.config.dictConfig(LOGGING_CONFIG)
+    return logging.getLogger()
+
+# Initialize logging
+logger = setup_logger()
