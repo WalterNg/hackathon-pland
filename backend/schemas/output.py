@@ -16,9 +16,19 @@ class TAResult(BaseModel):
     )
 
 class SentimentResult(BaseModel):
-    sentiment_score: int = Field(ge=1, le=100)
-    narrative_summary: str
-    bias: Literal["Bullish", "Bearish", "Neutral"]
+    sentiment_score: int = Field(
+        ge=1,
+        le=100,
+        description="Overall market sentiment score (1 = Extreme Fear, 100 = Extreme Greed).",
+    )
+    narrative_summary: str = Field(
+        ...,
+        description="Short natural-language summary of the dominant market narrative based on recent news and sentiment signals.",
+    )
+    bias: Literal["Bullish", "Bearish", "Neutral"] = Field(
+        ...,
+        description='High-level sentiment classification: "Bullish", "Bearish", or "Neutral".',
+    )
 
 class RiskResult(BaseModel):
     risk_level: Literal["Low", "Moderate", "High", "Critical"]
