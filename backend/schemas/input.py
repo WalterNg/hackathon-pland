@@ -14,9 +14,29 @@ class MarketData(BaseModel):
     obv: float = Field(description="On-Balance Volume")
 
 class EvaluationPayload(BaseModel):
-    user_id: str
-    portfolio: List[PortfolioItem]
-    stablecoin_reserve: float = Field(..., ge=0)
-    market_data: MarketData
-    news_headlines: List[str] = Field(default_factory=list)
-    social_dominance: float = Field(default=0.0, ge=0, le=100)
+    """Input payload for the evaluation graph. Read-only once passed into AgentState."""
+
+    user_id: str = Field(..., description="Identifier of the user whose portfolio is being evaluated.")
+    portfolio: List[PortfolioItem] = Field(
+        ...,
+        description="List of crypto assets held: symbol, quantity, and current price per asset.",
+    )
+    stablecoin_reserve: float = Field(
+        ...,
+        ge=0,
+        description="Amount of stablecoins (USDT, USDC, etc.) held as reserve, in USD or base unit.",
+    )
+    market_data: MarketData = Field(
+        ...,
+        description="Technical indicators for the evaluated market (RVOL, MA50, RSI, Bollinger Bands, OBV). Used by TA agent.",
+    )
+    news_headlines: List[str] = Field(
+        default_factory=list,
+        description="Recent news headlines to feed sentiment analysis. Used by sentiment agent.",
+    )
+    social_dominance: float = Field(
+        default=0.0,
+        ge=0,
+        le=100,
+        description="Social/market dominance metric (e.g. 0–100). Used by sentiment or risk agents.",
+    )
