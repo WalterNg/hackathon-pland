@@ -44,6 +44,17 @@ function isPositiveNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
+function triggerPortfolioRiskRefresh(request: Request, portfolioName: string): void {
+  const snapshotUrl = new URL(`/api/binance/portfolio?name=${encodeURIComponent(portfolioName)}`, request.url);
+  const cookie = request.headers.get("cookie") ?? "";
+
+  void fetch(snapshotUrl.toString(), {
+    method: "GET",
+    headers: cookie ? { cookie } : undefined,
+    cache: "no-store"
+  }).catch(() => undefined);
+}
+
 export async function GET(request: Request) {
   const supabase = await createSupabaseServerClient();
   const {
@@ -139,6 +150,8 @@ export async function POST(request: Request) {
   if (!created) {
     return NextResponse.json({ error: "Unable to create transaction." }, { status: 500 });
   }
+
+  triggerPortfolioRiskRefresh(request, portfolioName);
 
   return NextResponse.json({ transaction: created }, { status: 201 });
 }

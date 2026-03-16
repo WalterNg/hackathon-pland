@@ -38,6 +38,7 @@ export type JournalSummaryPayload = {
     netPnlBtc: number;
     netPnlChangePercent: number | null;
     averageRiskReward: number | null;
+    sharpeRatio30d: number | null;
   };
   dailyPerformance: JournalDailyPoint[];
   trades: JournalTradeItem[];

@@ -9,10 +9,12 @@ import { PortfolioAssetsTable } from "../components/portfolio/portfolio-assets-t
 import { PortfolioCharts } from "@/app/components/portfolio/portfolio-charts";
 import { PortfolioHeader } from "../components/portfolio/portfolio-header";
 import { PortfolioMetrics } from "../components/portfolio/portfolio-metrics";
+import { RiskMonitorPanel } from "../components/portfolio/risk-monitor-panel";
 import { PortfolioSummary } from "../components/portfolio/portfolio-summary";
 import { SelectCoinModal } from "../components/portfolio/select-coin-modal";
 import { Sidebar } from "../components/ui/sidebar";
 import { usePortfolios } from "../hooks/use-portfolios";
+import { useRiskEvents } from "../hooks/use-risk-events";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
@@ -21,6 +23,13 @@ function PortfolioContent() {
   const searchParams = useSearchParams();
   const portfolioName = searchParams.get("name")?.trim() || DEFAULT_PORTFOLIO_NAME;
   const { snapshot, isLoading, error, reload } = usePortfolioSnapshot(portfolioName);
+  const {
+    profile: riskProfile,
+    events: riskEvents,
+    isLoading: isRiskLoading,
+    error: riskError,
+    reload: reloadRisk,
+  } = useRiskEvents(portfolioName);
   const { createPortfolio, portfolios } = usePortfolios();
   const [isSelectCoinOpen, setSelectCoinOpen] = useState(false);
   const [isAddDialogOpen, setAddDialogOpen] = useState(false);
@@ -60,6 +69,7 @@ function PortfolioContent() {
 
   const handleTransactionCreated = async () => {
     await reload();
+    await reloadRisk();
   };
 
   return (
@@ -90,6 +100,13 @@ function PortfolioContent() {
             {snapshot && (
               <>
                 <PortfolioSummary summary={snapshot.summary} metrics={snapshot.metrics} />
+                <RiskMonitorPanel
+                  metrics={snapshot.metrics}
+                  profile={riskProfile}
+                  events={riskEvents}
+                  isLoading={isRiskLoading}
+                  error={riskError}
+                />
                 <PortfolioMetrics metrics={snapshot.metrics} btcPriceUsd={snapshot.summary.btcPriceUsd} />
                 {showCharts && (
                   <PortfolioCharts
