@@ -27,7 +27,7 @@ export function PortfolioSummary({ summary, metrics }: PortfolioSummaryProps) {
             <MaterialIcon
               name={isProfitPositive ? "arrow_upward" : "arrow_downward"}
               outlined={false}
-              className="text-base"
+              className="text-xs"
             />
             <span className="typo-body-sm font-semibold">{allTimeProfitPercentLabel}</span>
           </div>

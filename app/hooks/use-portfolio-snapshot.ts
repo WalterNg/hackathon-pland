@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type PortfolioSnapshot } from "@/app/lib/portfolio-types";
+import {
+  calculateCompositeRiskScore,
+  calculateConcentrationHerfindahl,
+  calculateMaxDrawdownFromSeries,
+  calculateVolatilityFromSeries,
+} from "@/app/lib/risk-calculator";
 
 type UsePortfolioSnapshotResult = {
   snapshot: PortfolioSnapshot | null;
@@ -100,6 +106,19 @@ function applyRealtimeTicker(
     }
   }
 
+  const chartWindow = chart.slice(-90);
+  const navSeriesUsd = chartWindow.map((point) => point.totalValueUsd);
+  const concentrationIndex = calculateConcentrationHerfindahl(assetsWithAllocation.map((asset) => asset.allocationPercent));
+  const maxDrawdownPercent = calculateMaxDrawdownFromSeries(navSeriesUsd);
+  const volatilityPercent = calculateVolatilityFromSeries(navSeriesUsd);
+  const sharpeRatio30d = currentSnapshot.metrics.sharpeRatio30d ?? null;
+  const riskScore = calculateCompositeRiskScore({
+    maxDrawdownPercent,
+    volatilityPercent,
+    concentrationIndex,
+    sharpeRatio30d,
+  });
+
   return {
     ...currentSnapshot,
     summary: {
@@ -120,9 +139,14 @@ function applyRealtimeTicker(
         : null,
       worstPerformer24h: worstPerformer
         ? { symbol: worstPerformer.symbol, change24hPercent: worstPerformer.change24hPercent }
-        : null
+        : null,
+      maxDrawdownPercent,
+      volatilityPercent,
+      concentrationIndex,
+      riskScore,
+      lastRiskUpdatedAt: nowIso
     },
-    chart: chart.slice(-90),
+    chart: chartWindow,
     assets: assetsWithAllocation
   };
 }
