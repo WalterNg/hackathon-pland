@@ -91,11 +91,46 @@ In the app, OAuth uses `window.location.origin` to build redirect URLs, so local
 
 ## Run in development
 
+### Frontend (Next.js)
+
 ```bash
 npm run dev
 ```
 
 Open http://localhost:3000
+
+### Backend (AI Trading Advisor)
+
+The backend uses FastAPI and LangGraph to orchestrate multiple AI agents (TA, Sentiment, Risk).
+
+1. **Prerequisites**: Python 3.11+, and a Google Gemini API Key.
+2. **Setup**:
+   ```bash
+   python -m venv .venv
+   # Windows:
+   .\.venv\Scripts\activate
+   # Mac/Linux:
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+3. **Environment**: Ensure `GEMINI_API_KEY` is set in the root `.env` file.
+4. **Run Server**:
+   ```bash
+   uvicorn backend.main:app --reload
+   ```
+5. **Test API**:
+   - **Using cURL**:
+     ```bash
+     curl -X POST http://localhost:8000/api/evaluate \
+          -H "Content-Type: application/json" \
+          -d @backend/tests/mock_payload.json
+     ```
+   - **Using Postman**:
+     - **Method**: `POST`
+     - **URL**: `http://localhost:8000/api/evaluate`
+     - **Headers**: Set `Content-Type` to `application/json`
+     - **Body**: Select `raw` and `JSON` format. Copy-paste the contents of `backend/tests/mock_payload.json`.
+     - **Expected Response**: A JSON object with `status: "success"` and the comprehensive AI evaluation data.
 
 ## Build for production
 
