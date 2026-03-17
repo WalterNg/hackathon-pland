@@ -20,6 +20,9 @@ export async function savePortfolioSnapshotCache(
   portfolioId: string,
   snapshot: PortfolioSnapshot
 ): Promise<void> {
+  const drawdownPercent = snapshot.metrics.maxDrawdownPercent ?? null;
+  const riskScore = snapshot.metrics.riskScore ?? null;
+
   await supabase.from("portfolio_snapshots").insert({
     user_id: userId,
     portfolio_id: portfolioId,
@@ -28,11 +31,11 @@ export async function savePortfolioSnapshotCache(
     total_exposure_usd: snapshot.summary.totalValueUsd,
     unrealized_pnl_usd: snapshot.metrics.allTimeProfitUsd,
     realized_pnl_usd: 0,
-    drawdown_pct: null,
+    drawdown_pct: drawdownPercent,
     win_rate: null,
     total_trades: 0,
     open_positions: snapshot.metrics.activeAssets,
-    risk_score: null,
+    risk_score: riskScore,
     metadata: snapshot
   });
 }

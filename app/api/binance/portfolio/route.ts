@@ -1,10 +1,18 @@
 import { NextResponse } from "next/server";
 
 import { buildBinancePortfolioSnapshot } from "@/app/lib/binance-portfolio";
+import type { PortfolioRiskViolation } from "@/app/lib/portfolio-types";
 import {
   getLatestPortfolioSnapshotCache,
   savePortfolioSnapshotCache
 } from "@/app/lib/repositories/portfolio-snapshots-repo";
+import {
+  applyRiskLimitOverrides,
+  evaluateRiskViolations,
+  getActiveRiskProfileByPortfolio,
+  listRiskLimitsByProfile,
+  logRiskViolations,
+} from "@/app/lib/repositories/risk-repo";
 import { hasSupabaseEnv } from "@/app/lib/supabase/env";
 import { createSupabaseServerClient } from "@/app/lib/supabase/server";
 import { getUserPortfolioPositions } from "@/app/lib/repositories/portfolio-repo";
@@ -40,8 +48,43 @@ export async function GET(request: Request) {
 
   try {
     const snapshot = await buildBinancePortfolioSnapshot(name, positionsOverride ?? undefined);
-    await savePortfolioSnapshotCache(supabase, user.id, portfolio.id, snapshot);
-    return NextResponse.json(snapshot);
+    const nowIso = new Date().toISOString();
+    const riskProfile = await getActiveRiskProfileByPortfolio(supabase, user.id, portfolio.id);
+    let riskViolations: PortfolioRiskViolation[] = [];
+
+    if (riskProfile) {
+      const limits = await listRiskLimitsByProfile(supabase, user.id, riskProfile.id);
+      const effectiveProfile = applyRiskLimitOverrides(riskProfile, limits);
+      const violations = evaluateRiskViolations(snapshot, effectiveProfile);
+
+      if (violations.length > 0) {
+        await logRiskViolations(supabase, user.id, portfolio.id, effectiveProfile.id, violations);
+      }
+
+      riskViolations = violations.map((violation) => ({
+        eventType: violation.eventType,
+        severity: violation.severity,
+        title: violation.title,
+        message: violation.message,
+        observedValue: violation.observedValue,
+        thresholdValue: violation.thresholdValue,
+        symbol: violation.symbol,
+        occurredAt: nowIso,
+      }));
+    }
+
+    const snapshotWithRisk = {
+      ...snapshot,
+      metrics: {
+        ...snapshot.metrics,
+        violatedRulesCount: riskViolations.length,
+        lastRiskUpdatedAt: nowIso,
+      },
+      riskViolations,
+    };
+
+    await savePortfolioSnapshotCache(supabase, user.id, portfolio.id, snapshotWithRisk);
+    return NextResponse.json(snapshotWithRisk);
   } catch {
     const cached = await getLatestPortfolioSnapshotCache(supabase, user.id, portfolio.id);
     if (cached) {

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import type { JournalSummaryPayload } from "@/app/lib/journal-types";
+import { getLatestPortfolioSnapshotCache } from "@/app/lib/repositories/portfolio-snapshots-repo";
 import {
   type RealizedSellEvent,
   listRealizedSellEventsSince
 } from "@/app/lib/repositories/portfolio-transactions-repo";
+import { MAIN_PORTFOLIO_NAME, resolveUserPortfolioByName } from "@/app/lib/repositories/portfolios-repo";
 import { createSupabaseServerClient } from "@/app/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -234,6 +236,13 @@ export async function GET(request: Request) {
   const currentEvents = filterByWindow(events, currentStart.getTime(), nowMs, true);
   const previousEvents = filterByWindow(events, previousStart.getTime(), currentStart.getTime(), false);
 
+  let sharpeRatio30d: number | null = null;
+  const mainPortfolio = await resolveUserPortfolioByName(supabase, user.id, MAIN_PORTFOLIO_NAME);
+  if (mainPortfolio?.id) {
+    const latestSnapshot = await getLatestPortfolioSnapshotCache(supabase, user.id, mainPortfolio.id);
+    sharpeRatio30d = latestSnapshot?.metrics.sharpeRatio30d ?? null;
+  }
+
   const netPnlUsd = sumPnl(currentEvents);
   const netPnlBtc = sumPnlBtc(currentEvents, btcPriceByDay);
   const previousNetPnlUsd = sumPnl(previousEvents);
@@ -248,7 +257,8 @@ export async function GET(request: Request) {
       netPnlUsd,
       netPnlBtc,
       netPnlChangePercent,
-      averageRiskReward: null
+      averageRiskReward: null,
+      sharpeRatio30d
     },
     dailyPerformance: buildDailyPerformance(currentEvents, btcPriceByDay),
     trades: currentEvents

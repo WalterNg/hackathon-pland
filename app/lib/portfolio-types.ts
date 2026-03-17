@@ -43,6 +43,24 @@ export type PortfolioMetrics = {
   allTimeProfitPercent: number;
   bestPerformer24h: PortfolioPerformer | null;
   worstPerformer24h: PortfolioPerformer | null;
+  maxDrawdownPercent?: number;
+  volatilityPercent?: number;
+  concentrationIndex?: number;
+  sharpeRatio30d?: number | null;
+  riskScore?: number;
+  violatedRulesCount?: number;
+  lastRiskUpdatedAt?: string;
+};
+
+export type PortfolioRiskViolation = {
+  eventType: string;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  message: string;
+  observedValue: number;
+  thresholdValue: number | null;
+  symbol?: string;
+  occurredAt: string;
 };
 
 export type PortfolioChartPoint = {
@@ -69,6 +87,7 @@ export type PortfolioSnapshot = {
   metrics: PortfolioMetrics;
   chart: PortfolioChartPoint[];
   assets: PortfolioAssetRow[];
+  riskViolations?: PortfolioRiskViolation[];
 };
 
 export type DashboardRecentTransaction = {

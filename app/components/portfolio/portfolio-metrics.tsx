@@ -59,7 +59,6 @@ export function PortfolioMetrics({ metrics, btcPriceUsd }: PortfolioMetricsProps
         </div>
 
         <p className="mb-1 text-2xl font-bold text-strong">{formatBtc(metrics.totalCostBasisUsd, btcPriceUsd)}</p>
-        <div className="text-xs text-subtle">Total invested</div>
       </article>
 
       <article className="rounded-2xl border-2 border-gray-100 bg-card-light p-5 sm:p-6">
@@ -67,7 +66,7 @@ export function PortfolioMetrics({ metrics, btcPriceUsd }: PortfolioMetricsProps
           <h3 className="typo-body-sm font-medium text-muted">Best Performer</h3>
         </div>
 
-        <p className="mb-1 text-lg font-bold text-strong">
+        <p className="mb-1 text-2xl font-bold text-strong">
           {best ? `${symbolNames[best.symbol] ?? best.symbol.replace("USDT", "")} (${best.symbol.replace("USDT", "")})` : "N/A"}
         </p>
         <div className="w-max rounded-md bg-success-soft px-2 py-1 text-xs text-success">
@@ -80,7 +79,7 @@ export function PortfolioMetrics({ metrics, btcPriceUsd }: PortfolioMetricsProps
           <h3 className="typo-body-sm font-medium text-muted">Worst Performer</h3>
         </div>
 
-        <p className="mb-1 text-lg font-bold text-strong">
+        <p className="mb-1 text-2xl font-bold text-strong">
           {worst ? `${symbolNames[worst.symbol] ?? worst.symbol.replace("USDT", "")} (${worst.symbol.replace("USDT", "")})` : "N/A"}
         </p>
         <div className="w-max rounded-md bg-danger-soft px-2 py-1 text-xs text-danger">

@@ -19,6 +19,7 @@ export function JournalKpis({ summary, isLoading }: JournalKpisProps) {
   const pnlBtc = summary?.kpis.netPnlBtc ?? 0;
   const pnlChange = summary?.kpis.netPnlChangePercent;
   const avgRr = summary?.kpis.averageRiskReward;
+  const sharpeRatio30d = summary?.kpis.sharpeRatio30d;
 
   const kpis = [
     {
@@ -52,11 +53,40 @@ export function JournalKpis({ summary, isLoading }: JournalKpisProps) {
       subtitle: "Risk to Reward Ratio",
       progress: 0,
       icon: "analytics"
+    },
+    {
+      title: "Sharpe 30d",
+      value: sharpeRatio30d !== null && sharpeRatio30d !== undefined ? sharpeRatio30d.toFixed(3) : "N/A",
+      note:
+        sharpeRatio30d !== null && sharpeRatio30d !== undefined
+          ? sharpeRatio30d >= 1
+            ? "Healthy"
+            : "Watch"
+          : "Preparing",
+      subtitle: "Risk-adjusted return",
+      progress: 0,
+      icon: "trending_up"
     }
   ];
 
+  const getBadgeClass = (note: string): string => {
+    if (note === "Optimal" || note === "Healthy") {
+      return "bg-info-soft text-info";
+    }
+
+    if (note === "Watch") {
+      return "bg-orange-100 text-warning";
+    }
+
+    if (note === "Preparing" || note === "N/A") {
+      return "bg-gray-100 text-muted";
+    }
+
+    return "bg-success-soft text-success";
+  };
+
   return (
-    <div className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {kpis.map((kpi) => (
         <article key={kpi.title} className="group relative flex flex-col justify-between overflow-hidden rounded-2xl bg-sidebar-dark p-5 text-inverse shadow-lg sm:p-6">
           <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 transform opacity-5 transition-transform group-hover:scale-110">
@@ -65,7 +95,7 @@ export function JournalKpis({ summary, isLoading }: JournalKpisProps) {
 
           <div className="z-10 flex items-start justify-between">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-subtle">{kpi.title}</h3>
-            <span className={`rounded-full px-2 py-0.5 text-xs ${kpi.note === "Optimal" ? "bg-info-soft text-info" : "bg-success-soft text-success"}`}>
+            <span className={`rounded-full px-2 py-0.5 text-xs ${getBadgeClass(kpi.note)}`}>
               {kpi.note}
             </span>
           </div>

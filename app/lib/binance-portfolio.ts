@@ -5,8 +5,10 @@ import {
   type PortfolioPosition,
   type PortfolioSnapshot,
 } from "./portfolio-types";
+import { calculateRiskMetricsFromPortfolio } from "./risk-calculator";
 
 const BINANCE_BASE_URL = "https://api.binance.com";
+const KLINE_HISTORY_DAYS = 35;
 
 type Kline = {
   openTime: number;
@@ -99,7 +101,7 @@ async function fetch24hTickers(
 async function fetchSymbolKlines(symbol: string): Promise<Kline[]> {
   try {
     const response = await fetch(
-      `${BINANCE_BASE_URL}/api/v3/klines?symbol=${symbol}&interval=1d&limit=8`,
+      `${BINANCE_BASE_URL}/api/v3/klines?symbol=${symbol}&interval=1d&limit=${KLINE_HISTORY_DAYS}`,
       { cache: "no-store" }
     );
 
@@ -225,7 +227,14 @@ export async function buildBinancePortfolioSnapshot(
         allTimeProfitUsd: 0,
         allTimeProfitPercent: 0,
         bestPerformer24h: null,
-        worstPerformer24h: null
+        worstPerformer24h: null,
+        maxDrawdownPercent: 0,
+        volatilityPercent: 0,
+        concentrationIndex: 0,
+        sharpeRatio30d: null,
+        riskScore: 0,
+        violatedRulesCount: 0,
+        lastRiskUpdatedAt: new Date().toISOString()
       },
       chart: [],
       assets: []
@@ -306,6 +315,11 @@ export async function buildBinancePortfolioSnapshot(
   const sortedBy24h = [...assets].sort((a, b) => b.change24hPercent - a.change24hPercent);
   const best = sortedBy24h[0] ?? null;
   const worst = sortedBy24h[sortedBy24h.length - 1] ?? null;
+  const chart = buildChart(heldSymbols, klinesMap, prices, positions);
+  const navSeriesUsd = chart.map((point) => point.totalValueUsd);
+  const allocationsPercent = assets.map((asset) => asset.allocationPercent);
+  const riskMetrics = calculateRiskMetricsFromPortfolio(navSeriesUsd, allocationsPercent);
+  const riskUpdatedAt = new Date().toISOString();
 
   return {
     summary: {
@@ -328,8 +342,15 @@ export async function buildBinancePortfolioSnapshot(
       worstPerformer24h: worst
         ? { symbol: worst.symbol, change24hPercent: worst.change24hPercent }
         : null,
+      maxDrawdownPercent: riskMetrics.maxDrawdownPercent,
+      volatilityPercent: riskMetrics.volatilityPercent,
+      concentrationIndex: riskMetrics.concentrationIndex,
+      sharpeRatio30d: riskMetrics.sharpeRatio30d,
+      riskScore: riskMetrics.riskScore,
+      violatedRulesCount: 0,
+      lastRiskUpdatedAt: riskUpdatedAt,
     },
-    chart: buildChart(heldSymbols, klinesMap, prices, positions),
+    chart,
     assets,
   };
 }
