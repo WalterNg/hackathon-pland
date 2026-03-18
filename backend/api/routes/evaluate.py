@@ -46,7 +46,9 @@ async def evaluate_portfolio(payload: EvaluationPayload):
         data = {
             "final_decision": decision.model_dump(),
             "components": {
-                "ta_result": final_state.get("ta_result").model_dump() if final_state.get("ta_result") else None
+                "ta_result": final_state.get("ta_result").model_dump() if final_state.get("ta_result") else None,
+                "sentiment_result": final_state.get("sentiment_result").model_dump() if final_state.get("sentiment_result") else None,
+                "risk_result": final_state.get("risk_result").model_dump() if final_state.get("risk_result") else None,
             }
         }
         

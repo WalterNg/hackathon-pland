@@ -41,7 +41,7 @@ def mock_state(mock_payload):
 # ─── TA Agent ─────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_analyze_technical_success(mock_state):
+async def test_run_agent_ta_success(mock_state):
     from agents.ta_agent.agent import TAAgent
     agent = TAAgent()
     expected = TAResult(
@@ -58,7 +58,7 @@ async def test_analyze_technical_success(mock_state):
 
 
 @pytest.mark.asyncio
-async def test_analyze_technical_api_error(mock_state):
+async def test_run_agent_ta_api_error(mock_state):
     from agents.ta_agent.agent import TAAgent
     agent = TAAgent()
     with patch.object(agent, "run", new_callable=AsyncMock, side_effect=AgentError("Gemini API error")):

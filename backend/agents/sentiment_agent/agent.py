@@ -44,5 +44,5 @@ class SentimentAgent(BaseAgent):
 # Singleton node function for LangGraph
 _agent = SentimentAgent()
 
-async def analyze_sentiment(state: AgentState) -> AgentState:
+async def run_agent(state: AgentState) -> AgentState:
     return await _agent.run_node(state)

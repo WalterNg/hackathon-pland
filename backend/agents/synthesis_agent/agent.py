@@ -86,5 +86,5 @@ class SynthesisAgent(BaseAgent):
 # Singleton node function for LangGraph
 _agent = SynthesisAgent()
 
-async def synthesize(state: AgentState) -> AgentState:
+async def run_agent(state: AgentState) -> AgentState:
     return await _agent.run_node(state)

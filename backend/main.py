@@ -6,6 +6,9 @@ backend_dir = Path(__file__).parent.absolute()
 if str(backend_dir) not in sys.path:
     sys.path.append(str(backend_dir))
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from core.logger import setup_logger
 
 setup_logger()
@@ -13,7 +16,7 @@ setup_logger()
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from core.exceptions import global_exception_handler, validation_exception_handler
-from api.routes import evaluate, ta_agent, sentiment_agent
+from api.routes import evaluate, ta_agent, sentiment_agent, risk_agent
 import logging
 
 logger = logging.getLogger("hackathon-pland")
@@ -32,6 +35,7 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.include_router(evaluate.router, prefix="/api", tags=["Evaluation"])
 app.include_router(ta_agent.router, prefix="/api", tags=["TA Agent"])
 app.include_router(sentiment_agent.router, prefix="/api", tags=["Sentiment Agent"])
+app.include_router(risk_agent.router, prefix="/api", tags=["Risk Agent"])
 
 @app.get("/health")
 async def health_check():

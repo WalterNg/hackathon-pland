@@ -47,5 +47,5 @@ class RiskAgent(BaseAgent):
 # Singleton node function for LangGraph
 _agent = RiskAgent()
 
-async def analyze_risk(state: AgentState) -> AgentState:
+async def run_agent(state: AgentState) -> AgentState:
     return await _agent.run_node(state)

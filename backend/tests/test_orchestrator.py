@@ -144,7 +144,7 @@ def test_guardrail_custom_rule():
 @pytest.mark.asyncio
 async def test_synthesis_agent_passthrough_on_error(mock_payload):
     """Error state should be passed through without calling the LLM."""
-    from agents.synthesis_agent.agent import synthesize
+    from agents.synthesis_agent.agent import run_agent
 
     state = AgentState(
         payload=mock_payload,
@@ -154,14 +154,14 @@ async def test_synthesis_agent_passthrough_on_error(mock_payload):
         final_decision=None,
         error="TA Agent failed",
     )
-    result = await synthesize(state)
+    result = await run_agent(state)
     assert result.get("error") == "TA Agent failed"
 
 
 @pytest.mark.asyncio
 async def test_synthesis_agent_missing_ta_returns_error(mock_payload):
     """Missing TA result should return an error state."""
-    from agents.synthesis_agent.agent import synthesize
+    from agents.synthesis_agent.agent import run_agent
 
     state = AgentState(
         payload=mock_payload,
@@ -171,7 +171,7 @@ async def test_synthesis_agent_missing_ta_returns_error(mock_payload):
         final_decision=None,
         error=None,
     )
-    result = await synthesize(state)
+    result = await run_agent(state)
     assert "error" in result
 
 

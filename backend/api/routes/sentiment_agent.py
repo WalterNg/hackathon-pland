@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from schemas.input import EvaluationPayload, MarketData
 from schemas.state import AgentState
 from schemas.output import SentimentResult
-from agents.sentiment_agent.agent import analyze_sentiment
+from agents.sentiment_agent.agent import run_agent
 from services.news_rss import fetch_crypto_news_from_rss
 from services.sentiment_sources import fetch_fear_greed_index
 
@@ -83,7 +83,7 @@ async def analyze_sentiment_api(payload: SentimentAnalyzePayload) -> SentimentAn
     }
 
     try:
-        final_state = await analyze_sentiment(initial_state)
+        final_state = await run_agent(initial_state)
     except Exception as e:
         logger.exception("Sentiment Agent failed")
         raise HTTPException(status_code=500, detail=f"Sentiment Agent failed: {str(e)}")

@@ -5,7 +5,7 @@ from typing import Optional
 from schemas.input import EvaluationPayload
 from schemas.state import AgentState
 from schemas.output import TAResult
-from agents.ta_agent.agent import analyze_technical
+from agents.ta_agent.agent import run_agent
 from services.binance import BinanceService
 import logging
 
@@ -59,7 +59,7 @@ async def analyze_ta(payload: TAAnalyzePayload):
     }
 
     try:
-        final_state = await analyze_technical(initial_state)
+        final_state = await run_agent(initial_state)
     except Exception as e:
         logger.exception("TA Agent failed")
         raise HTTPException(status_code=500, detail=f"TA Agent failed: {str(e)}")
