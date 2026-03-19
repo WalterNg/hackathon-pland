@@ -1,43 +1,40 @@
-from pydantic import BaseModel, Field
 from typing import List, Literal
 
-class TAResult(BaseModel):
-    trend: Literal["Bullish", "Bearish", "Neutral"] = Field(
-        ..., description="Market trend derived from technical indicators."
-    )
-    signal_strength: int = Field(
-        ge=1, le=10, description="Strength of the signal from 1 (weak) to 10 (strong)."
-    )
-    reasons: List[str] = Field(
-        min_length=2, description="At least two technical reasons supporting the trend and action."
-    )
-    recommended_action: Literal["Accumulate", "Take Profit", "Stop Loss", "Hold"] = Field(
-        ..., description="Suggested action based on TA: Accumulate, Take Profit, Stop Loss, or Hold."
-    )
+from pydantic import BaseModel, Field
 
-class SentimentResult(BaseModel):
-    sentiment_score: int = Field(
-        ge=1,
-        le=100,
-        description="Overall market sentiment score (1 = Extreme Fear, 100 = Extreme Greed).",
-    )
-    narrative_summary: str = Field(
-        ...,
-        description="Short natural-language summary of the dominant market narrative based on recent news and sentiment signals.",
-    )
-    bias: Literal["Bullish", "Bearish", "Neutral"] = Field(
-        ...,
-        description='High-level sentiment classification: "Bullish", "Bearish", or "Neutral".',
-    )
 
-class RiskResult(BaseModel):
+class PortfolioTAResult(BaseModel):
+    portfolio_trend: Literal["Bullish", "Bearish", "Neutral"]
+    signal_strength: int = Field(..., ge=1, le=10)
+    strongest_positions: List[str] = Field(default_factory=list)
+    weakest_positions: List[str] = Field(default_factory=list)
+    reasons: List[str] = Field(..., min_length=2)
+    recommended_action: Literal["Accumulate", "Hold", "Reduce Risk", "Rebalance"]
+
+
+class PortfolioNewsMarketResult(BaseModel):
+    market_bias: Literal["Bullish", "Bearish", "Neutral"]
+    confidence: int = Field(..., ge=1, le=10)
+    key_catalysts: List[str] = Field(default_factory=list)
+    portfolio_headwinds: List[str] = Field(default_factory=list)
+    narrative_summary: str
+
+
+class PortfolioRiskResult(BaseModel):
     risk_level: Literal["Low", "Moderate", "High", "Critical"]
-    recommended_constraints: List[str]
+    risk_alerts: List[str] = Field(default_factory=list)
+    recommended_constraints: List[str] = Field(default_factory=list)
+    capital_preservation_bias: Literal["Bullish", "Neutral", "Defensive"]
 
-class FinalDecision(BaseModel):
-    action: Literal["Accumulate", "Take Profit", "Stop Loss", "Hold"]
-    reasoning: str
-    
+
+class PortfolioDecision(BaseModel):
+    action: Literal["Accumulate", "Hold", "Reduce Risk", "Rebalance", "Stop Loss"]
+    confidence: int = Field(..., ge=1, le=10)
+    summary: str
+    reasoning: List[str] = Field(..., min_length=2)
+    portfolio_actions: List[str] = Field(default_factory=list)
+
+
 class EvaluationResponse(BaseModel):
     status: str = "success"
     data: dict
