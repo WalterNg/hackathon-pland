@@ -1,26 +1,24 @@
-from typing import Union, Literal, Optional
+from typing import Literal, Optional, Union
 
 import logging
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from schemas.input import EvaluationPayload, MarketData
-from schemas.state import AgentState
-from schemas.output import SentimentResult
 from agents.sentiment_agent.agent import run_agent
+from schemas.input import EvaluationPayload, PortfolioItem, PortfolioNewsMarketInput
+from schemas.output import PortfolioNewsMarketResult
+from schemas.state import create_agent_state
+from services.portfolio_snapshot import build_graph_meta, normalize_symbol
 from services.news_rss import fetch_crypto_news_from_rss
 from services.sentiment_sources import fetch_fear_greed_index
-
 
 router = APIRouter()
 logger = logging.getLogger("hackathon-pland")
 
 
 class SentimentAnalyzePayload(BaseModel):
-    """
-    Empty payload – backend always fetches news & sentiment sources itself.
-    """
-    pass
+    user_id: str = Field(default="news-market-test-user")
+    portfolio: list[PortfolioItem] = Field(default_factory=list)
 
 
 class ErrorPayload(BaseModel):
@@ -29,23 +27,16 @@ class ErrorPayload(BaseModel):
 
 class SentimentAnalyzeResponse(BaseModel):
     status: Literal["success", "error"]
-    data: Union[SentimentResult, ErrorPayload]
+    data: Union[PortfolioNewsMarketResult, ErrorPayload]
 
 
 @router.post("/sentiment-agent/analyze", response_model=SentimentAnalyzeResponse)
-async def analyze_sentiment_api(payload: SentimentAnalyzePayload) -> SentimentAnalyzeResponse:  # payload kept for future extensibility
-    """
-    Run the Sentiment Agent standalone.
+async def analyze_sentiment_api(payload: SentimentAnalyzePayload) -> SentimentAnalyzeResponse:
+    logger.info("News market analyze request")
 
-    - If news_headlines is not provided, fetch recent crypto news via RSS.
-    - If social_dominance is not provided, fetch Fear & Greed Index.
-    """
-    logger.info("Sentiment analyze request")
-
-    # 1) Build sentiment inputs (news + social) – always from backend sources
     try:
         articles = fetch_crypto_news_from_rss(limit_per_feed=5)
-        headlines = [a["title"] for a in articles]
+        headlines = [article["title"] for article in articles]
     except Exception:
         logger.exception("Failed to fetch crypto news from RSS")
         headlines = []
@@ -55,54 +46,36 @@ async def analyze_sentiment_api(payload: SentimentAnalyzePayload) -> SentimentAn
         logger.warning("Fear & Greed Index fetch failed, defaulting to 50 (Neutral)")
         social = 50.0
 
-    # 2) Build minimal EvaluationPayload (SentimentAgent only cares about news_headlines + social_dominance)
-    dummy_market_data = MarketData(
-        rvol=1.0,
-        ma50=1.0,
-        rsi=50.0,
-        bollinger_bands="middle",
-        obv=0.0,
-    )
-
     eval_payload = EvaluationPayload(
-        user_id="sentiment-test-user",
-        portfolio=[],
+        user_id=payload.user_id,
+        portfolio=payload.portfolio,
         stablecoin_reserve=0.0,
-        market_data=dummy_market_data,
         news_headlines=headlines,
         social_dominance=social,
     )
 
-    initial_state: AgentState = {
-        "payload": eval_payload,
-        "ta_result": None,
-        "sentiment_result": None,
-        "risk_result": None,
-        "final_decision": None,
-        "error": None,
-    }
+    meta = build_graph_meta(eval_payload, portfolio_id=f"{payload.user_id}-news-only")
+    news_market_input = PortfolioNewsMarketInput(
+        portfolio_symbols=[normalize_symbol(item.asset) for item in payload.portfolio],
+        news_headlines=headlines,
+        social_sentiment_score=social,
+        dominant_narrative=headlines[0] if headlines else "Market context is neutral due to limited external information.",
+        macro_context={"market_regime": "Neutral"},
+    )
+
+    initial_state = create_agent_state(meta=meta, news_market_input=news_market_input)
 
     try:
         final_state = await run_agent(initial_state)
     except Exception as e:
-        logger.exception("Sentiment Agent failed")
-        raise HTTPException(status_code=500, detail=f"Sentiment Agent failed: {str(e)}")
+        logger.exception("News Market Agent failed")
+        raise HTTPException(status_code=500, detail=f"News Market Agent failed: {str(e)}")
 
     if final_state.get("error"):
-        return SentimentAnalyzeResponse(
-            status="error",
-            data=ErrorPayload(message=final_state["error"]),
-        )
+        return SentimentAnalyzeResponse(status="error", data=ErrorPayload(message=final_state["error"]))
 
-    sentiment: Optional[SentimentResult] = final_state.get("sentiment_result")
-    if not sentiment:
-        return SentimentAnalyzeResponse(
-            status="error",
-            data=ErrorPayload(message="No sentiment result returned"),
-        )
+    result: Optional[PortfolioNewsMarketResult] = final_state.get("news_market_result")
+    if not result:
+        return SentimentAnalyzeResponse(status="error", data=ErrorPayload(message="No news market result returned"))
 
-    return SentimentAnalyzeResponse(
-        status="success",
-        data=sentiment,
-    )
-
+    return SentimentAnalyzeResponse(status="success", data=result)

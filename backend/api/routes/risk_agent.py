@@ -1,25 +1,25 @@
-from typing import Union, Literal, Optional
+from typing import Literal, Optional, Union
 
 import logging
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from schemas.input import EvaluationPayload, MarketData
-from schemas.state import AgentState
-from schemas.output import RiskResult
 from agents.risk_agent.agent import run_agent
-
+from schemas.input import EvaluationPayload, PortfolioItem
+from schemas.output import PortfolioRiskResult
+from schemas.state import create_agent_state
+from services.binance import BinanceService
+from services.portfolio_snapshot import build_graph_meta, build_risk_input, build_ta_input, fetch_market_data_map
 
 router = APIRouter()
 logger = logging.getLogger("hackathon-pland")
+_binance_service = BinanceService()
 
 
 class RiskAnalyzePayload(BaseModel):
-    """
-    Empty payload - backend constructs EvaluationPayload internally for the Risk Agent.
-    """
-
-    pass
+    user_id: str = Field(default="risk-test-user")
+    portfolio: list[PortfolioItem]
+    stablecoin_reserve: float = Field(default=0.0, ge=0)
 
 
 class ErrorPayload(BaseModel):
@@ -28,69 +28,44 @@ class ErrorPayload(BaseModel):
 
 class RiskAnalyzeResponse(BaseModel):
     status: Literal["success", "error"]
-    data: Union[RiskResult, ErrorPayload]
+    data: Union[PortfolioRiskResult, ErrorPayload]
 
 
 @router.post("/risk-agent/analyze", response_model=RiskAnalyzeResponse)
 async def analyze_risk(payload: RiskAnalyzePayload) -> RiskAnalyzeResponse:
-    """
-    Run the Risk Agent standalone.
-
-    Backend builds a minimal EvaluationPayload; client does not provide raw TA/Sentiment/portfolio data.
-    """
     logger.info("Risk analyze request")
-
-    # Build dummy EvaluationPayload
-    dummy_market_data = MarketData(
-        rvol=1.0,
-        ma50=1.0,
-        rsi=50.0,
-        bollinger_bands="middle",
-        obv=0.0,
-    )
+    if not payload.portfolio:
+        raise HTTPException(status_code=422, detail="Portfolio must contain at least one asset.")
 
     eval_payload = EvaluationPayload(
-        user_id="risk-test-user",
-        portfolio=[],
-        stablecoin_reserve=0.0,
-        market_data=dummy_market_data,
+        user_id=payload.user_id,
+        portfolio=payload.portfolio,
+        stablecoin_reserve=payload.stablecoin_reserve,
         news_headlines=[],
         social_dominance=0.0,
     )
 
-    # Build initial AgentState
-    initial_state: AgentState = {
-        "payload": eval_payload,
-        "ta_result": None,
-        "sentiment_result": None,
-        "risk_result": None,
-        "final_decision": None,
-        "error": None,
-    }
+    try:
+        market_data_map = await fetch_market_data_map(eval_payload.portfolio, _binance_service)
+        meta = build_graph_meta(eval_payload, portfolio_id=f"{payload.user_id}-risk-only")
+        ta_input = build_ta_input(eval_payload, market_data_map)
+        risk_input = build_risk_input(ta_input)
+        initial_state = create_agent_state(meta=meta, risk_input=risk_input)
+    except Exception as e:
+        logger.exception("Failed to prepare Risk input")
+        raise HTTPException(status_code=502, detail=f"Risk preprocessing failed: {str(e)}")
 
-    # Call Risk Agent node
     try:
         final_state = await run_agent(initial_state)
     except Exception as e:
         logger.exception("Risk Agent failed")
         raise HTTPException(status_code=500, detail=f"Risk Agent failed: {str(e)}")
 
-    # 4) Normalize errors and missing result to unified response
     if final_state.get("error"):
-        return RiskAnalyzeResponse(
-            status="error",
-            data=ErrorPayload(message=final_state["error"]),
-        )
+        return RiskAnalyzeResponse(status="error", data=ErrorPayload(message=final_state["error"]))
 
-    risk_result: Optional[RiskResult] = final_state.get("risk_result")
+    risk_result: Optional[PortfolioRiskResult] = final_state.get("risk_result")
     if not risk_result:
-        return RiskAnalyzeResponse(
-            status="error",
-            data=ErrorPayload(message="No risk result returned"),
-        )
+        return RiskAnalyzeResponse(status="error", data=ErrorPayload(message="No risk result returned"))
 
-    return RiskAnalyzeResponse(
-        status="success",
-        data=risk_result,
-    )
-
+    return RiskAnalyzeResponse(status="success", data=risk_result)

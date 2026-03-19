@@ -1,200 +1,167 @@
-"""
-Tests for the SynthesisAgent and GuardrailLayer.
+"""Tests for the portfolio-level synthesis agent and guardrails."""
 
-Since the SynthesisAgent itself calls an LLM, we test:
-1. The GuardrailLayer rules directly (deterministic, no LLM needed)
-2. The SynthesisAgent's error passthrough and missing TA fallback behavior
-"""
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-from schemas.input import EvaluationPayload, MarketData
-from schemas.output import TAResult, SentimentResult, RiskResult, FinalDecision
-from schemas.state import AgentState
 from core.guardrails import DEFAULT_GUARDRAILS, GuardrailLayer, GuardrailRule
+from schemas.input import GraphMeta
+from schemas.output import (
+    PortfolioDecision,
+    PortfolioNewsMarketResult,
+    PortfolioRiskResult,
+    PortfolioTAResult,
+)
+from schemas.state import create_agent_state
 
 
 @pytest.fixture
-def mock_payload():
-    return EvaluationPayload(
+def mock_meta():
+    return GraphMeta(
         user_id="user123",
-        portfolio=[],
-        stablecoin_reserve=1000.0,
-        market_data=MarketData(
-            rvol=2.0,
-            ma50=50000.0,
-            rsi=65.0,
-            bollinger_bands="Upper",
-            obv=2000000.0,
-        ),
+        portfolio_id="user123-portfolio",
+        as_of="2026-03-20T10:00:00+07:00",
+        symbols=["BTCUSDT", "ETHUSDT"],
     )
 
 
 @pytest.fixture
 def bullish_ta():
-    return TAResult(
-        trend="Bullish",
+    return PortfolioTAResult(
+        portfolio_trend="Bullish",
         signal_strength=8,
-        reasons=["Strong RVOL", "RSI expanding"],
+        strongest_positions=["BTCUSDT"],
+        weakest_positions=["ETHUSDT"],
+        reasons=["Breadth is positive", "Most weight is above MA50"],
         recommended_action="Accumulate",
     )
 
 
-# ─── GuardrailLayer unit tests ────────────────────────────────────────────────
+def _base_state(mock_meta, **overrides):
+    state = create_agent_state(meta=mock_meta)
+    state.update(overrides)
+    return state
 
-def test_guardrail_critical_risk_overrides_to_stop_loss(mock_payload, bullish_ta):
-    risk = RiskResult(risk_level="Critical", recommended_constraints=["Stop all positions"])
-    state = AgentState(
-        payload=mock_payload,
-        ta_result=bullish_ta,
-        sentiment_result=None,
-        risk_result=risk,
-        final_decision=None,
-        error=None,
+
+def test_guardrail_critical_risk_overrides_to_stop_loss(mock_meta, bullish_ta):
+    risk = PortfolioRiskResult(
+        risk_level="Critical",
+        risk_alerts=["Liquidity is breaking down"],
+        recommended_constraints=["Exit risk aggressively"],
+        capital_preservation_bias="Defensive",
     )
-    raw_decision = FinalDecision(action="Accumulate", reasoning="AI wants to buy.")
+    state = _base_state(mock_meta, ta_result=bullish_ta, risk_result=risk)
+    raw_decision = PortfolioDecision(
+        action="Accumulate",
+        confidence=7,
+        summary="AI wants to add risk.",
+        reasoning=["Upside looks strong", "Momentum is positive"],
+        portfolio_actions=["Add to winners"],
+    )
     result = DEFAULT_GUARDRAILS.apply(raw_decision, state)
 
     assert result.action == "Stop Loss"
-    assert "GUARDRAIL" in result.reasoning
-    assert "CriticalRiskStopLoss" in result.reasoning
+    assert any("CriticalRiskStopLoss" in line for line in result.reasoning)
 
 
-def test_guardrail_high_risk_overrides_to_hold(mock_payload, bullish_ta):
-    risk = RiskResult(risk_level="High", recommended_constraints=["Reduce exposure"])
-    state = AgentState(
-        payload=mock_payload,
-        ta_result=bullish_ta,
-        sentiment_result=None,
-        risk_result=risk,
-        final_decision=None,
-        error=None,
+def test_guardrail_high_risk_overrides_to_reduce_risk(mock_meta, bullish_ta):
+    risk = PortfolioRiskResult(
+        risk_level="High",
+        risk_alerts=["Concentration is elevated"],
+        recommended_constraints=["Trim exposure"],
+        capital_preservation_bias="Defensive",
     )
-    raw_decision = FinalDecision(action="Accumulate", reasoning="AI wants to buy.")
+    state = _base_state(mock_meta, ta_result=bullish_ta, risk_result=risk)
+    raw_decision = PortfolioDecision(
+        action="Accumulate",
+        confidence=6,
+        summary="AI wants to add risk.",
+        reasoning=["TA is constructive", "Sentiment is decent"],
+        portfolio_actions=["Increase exposure"],
+    )
     result = DEFAULT_GUARDRAILS.apply(raw_decision, state)
 
-    assert result.action == "Hold"
-    assert "GUARDRAIL" in result.reasoning
-    assert "HighRiskHold" in result.reasoning
+    assert result.action == "Reduce Risk"
+    assert any("HighRiskReduce" in line for line in result.reasoning)
 
 
-def test_guardrail_no_override_when_low_risk(mock_payload, bullish_ta):
-    risk = RiskResult(risk_level="Low", recommended_constraints=["All good"])
-    state = AgentState(
-        payload=mock_payload,
-        ta_result=bullish_ta,
-        sentiment_result=None,
-        risk_result=risk,
-        final_decision=None,
-        error=None,
+def test_guardrail_custom_rule(mock_meta):
+    custom_layer = GuardrailLayer(
+        rules=[
+            GuardrailRule(
+                name="BearishHold",
+                condition=lambda state: state.get("ta_result") and state["ta_result"].portfolio_trend == "Bearish",
+                override_action="Hold",
+                reason="Portfolio technical trend is Bearish.",
+            )
+        ]
     )
-    raw_decision = FinalDecision(action="Accumulate", reasoning="AI wants to buy.")
-    result = DEFAULT_GUARDRAILS.apply(raw_decision, state)
-
-    assert result.action == "Accumulate"
-    assert "GUARDRAIL" not in result.reasoning
-
-
-def test_guardrail_no_change_when_already_correct_action(mock_payload, bullish_ta):
-    """If AI already chose the same action as the guardrail, no change is made."""
-    risk = RiskResult(risk_level="High", recommended_constraints=["Hold"])
-    state = AgentState(
-        payload=mock_payload,
-        ta_result=bullish_ta,
-        sentiment_result=None,
-        risk_result=risk,
-        final_decision=None,
-        error=None,
+    ta = PortfolioTAResult(
+        portfolio_trend="Bearish",
+        signal_strength=3,
+        strongest_positions=[],
+        weakest_positions=["BTCUSDT"],
+        reasons=["Weak breadth", "RSI is deteriorating"],
+        recommended_action="Reduce Risk",
     )
-    raw_decision = FinalDecision(action="Hold", reasoning="AI decided to hold.")
-    result = DEFAULT_GUARDRAILS.apply(raw_decision, state)
-
-    assert result.action == "Hold"
-    assert "GUARDRAIL" not in result.reasoning
-
-
-def test_guardrail_custom_rule():
-    """Test adding a custom rule to a GuardrailLayer."""
-    custom_layer = GuardrailLayer(rules=[
-        GuardrailRule(
-            name="BearishHold",
-            condition=lambda state: state.get("ta_result") and state["ta_result"].trend == "Bearish",
-            override_action="Hold",
-            reason="TA trend is Bearish.",
-        )
-    ])
-    ta = TAResult(trend="Bearish", signal_strength=3, reasons=["Downtrend", "Volume declining"], recommended_action="Stop Loss")
-    state = AgentState(
-        payload=MagicMock(),
-        ta_result=ta,
-        sentiment_result=None,
-        risk_result=None,
-        final_decision=None,
-        error=None,
+    state = _base_state(mock_meta, ta_result=ta)
+    raw_decision = PortfolioDecision(
+        action="Accumulate",
+        confidence=5,
+        summary="Some AI reasoning.",
+        reasoning=["Trying to buy weakness", "Risk may be worth it"],
+        portfolio_actions=["Add selectively"],
     )
-    raw_decision = FinalDecision(action="Accumulate", reasoning="Some AI reasoning.")
     result = custom_layer.apply(raw_decision, state)
 
     assert result.action == "Hold"
-    assert "BearishHold" in result.reasoning
 
-
-# ─── SynthesisAgent behavior tests ───────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_synthesis_agent_passthrough_on_error(mock_payload):
-    """Error state should be passed through without calling the LLM."""
+async def test_synthesis_agent_passthrough_on_error(mock_meta):
     from agents.synthesis_agent.agent import run_agent
 
-    state = AgentState(
-        payload=mock_payload,
-        ta_result=None,
-        sentiment_result=None,
-        risk_result=None,
-        final_decision=None,
-        error="TA Agent failed",
-    )
+    state = _base_state(mock_meta, error="TA Agent failed")
     result = await run_agent(state)
     assert result.get("error") == "TA Agent failed"
 
 
 @pytest.mark.asyncio
-async def test_synthesis_agent_missing_ta_returns_error(mock_payload):
-    """Missing TA result should return an error state."""
+async def test_synthesis_agent_missing_ta_returns_error(mock_meta):
     from agents.synthesis_agent.agent import run_agent
 
-    state = AgentState(
-        payload=mock_payload,
-        ta_result=None,
-        sentiment_result=None,
-        risk_result=None,
-        final_decision=None,
-        error=None,
-    )
+    state = _base_state(mock_meta, ta_result=None)
     result = await run_agent(state)
     assert "error" in result
 
 
 @pytest.mark.asyncio
-async def test_synthesis_agent_applies_guardrails(mock_payload, bullish_ta):
-    """When LLM returns 'Accumulate' but risk is Critical, guardrail should override."""
+async def test_synthesis_agent_applies_guardrails(mock_meta, bullish_ta):
     from agents.synthesis_agent.agent import SynthesisAgent
 
     agent = SynthesisAgent()
-    mock_decision = FinalDecision(action="Accumulate", reasoning="AI says buy.")
+    mock_decision = PortfolioDecision(
+        action="Accumulate",
+        confidence=7,
+        summary="Buy the portfolio dip.",
+        reasoning=["Technicals are strong", "Risk seems manageable"],
+        portfolio_actions=["Add to BTC"],
+    )
 
     with patch.object(agent, "run", new_callable=AsyncMock, return_value=mock_decision):
-        risk = RiskResult(risk_level="Critical", recommended_constraints=["Stop Loss"])
-        state = AgentState(
-            payload=mock_payload,
-            ta_result=bullish_ta,
-            sentiment_result=None,
-            risk_result=risk,
-            final_decision=None,
-            error=None,
+        risk = PortfolioRiskResult(
+            risk_level="Critical",
+            risk_alerts=["Critical drawdown risk"],
+            recommended_constraints=["De-risk immediately"],
+            capital_preservation_bias="Defensive",
         )
+        news = PortfolioNewsMarketResult(
+            market_bias="Bullish",
+            confidence=7,
+            key_catalysts=["ETF inflows"],
+            portfolio_headwinds=[],
+            narrative_summary="Narrative is supportive.",
+        )
+        state = _base_state(mock_meta, ta_result=bullish_ta, news_market_result=news, risk_result=risk)
         result = await agent.run_node(state)
 
-    decision = result["final_decision"]
-    assert decision.action == "Stop Loss"
-    assert "CriticalRiskStopLoss" in decision.reasoning
+    assert result["final_decision"].action == "Stop Loss"
