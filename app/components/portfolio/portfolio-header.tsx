@@ -4,6 +4,9 @@ type PortfolioHeaderProps = {
   portfolioName: string;
   primaryActionLabel: string;
   onPrimaryAction: () => void;
+  onAnalyzeWithAI: () => void;
+  isAnalyzeDisabled?: boolean;
+  isAnalyzing?: boolean;
   showCharts: boolean;
   onToggleShowCharts: () => void;
 };
@@ -12,6 +15,9 @@ export function PortfolioHeader({
   portfolioName,
   primaryActionLabel,
   onPrimaryAction,
+  onAnalyzeWithAI,
+  isAnalyzeDisabled = false,
+  isAnalyzing = false,
   showCharts,
   onToggleShowCharts
 }: PortfolioHeaderProps) {
@@ -25,6 +31,16 @@ export function PortfolioHeader({
         </div>
 
         <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={onAnalyzeWithAI}
+            disabled={isAnalyzeDisabled || isAnalyzing}
+            className="typo-body-sm inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2 font-semibold text-strong shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <MaterialIcon name={isAnalyzing ? "hourglass_top" : "auto_awesome"} outlined={false} className="text-sm" />
+            Analyze with AI
+          </button>
+
           <div className="flex items-center gap-2 rounded-lg border border-gray-100 bg-white px-3 py-1.5 shadow-sm">
             <span className="typo-body-sm text-muted">Show charts</span>
             <button

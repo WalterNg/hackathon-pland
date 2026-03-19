@@ -4,6 +4,7 @@ import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { MaterialIcon } from "../components/dashboard/material-icon";
 import { AddTransactionDialog } from "../components/portfolio/add-transaction-dialog";
+import { AIRecommendationCard } from "../components/portfolio/ai-recommendation-card";
 import { CreatePortfolioDialog } from "../components/portfolio/create-portfolio-dialog";
 import { PortfolioAssetsTable } from "../components/portfolio/portfolio-assets-table";
 import { PortfolioCharts } from "@/app/components/portfolio/portfolio-charts";
@@ -13,6 +14,7 @@ import { RiskMonitorPanel } from "../components/portfolio/risk-monitor-panel";
 import { PortfolioSummary } from "../components/portfolio/portfolio-summary";
 import { SelectCoinModal } from "../components/portfolio/select-coin-modal";
 import { Sidebar } from "../components/ui/sidebar";
+import { usePortfolioAIAnalysis } from "../hooks/use-portfolio-ai-analysis";
 import { usePortfolios } from "../hooks/use-portfolios";
 import { useRiskEvents } from "../hooks/use-risk-events";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
@@ -36,6 +38,7 @@ function PortfolioContent() {
   const [isCreatePortfolioOpen, setCreatePortfolioOpen] = useState(false);
   const [showCharts, setShowCharts] = useState(true);
   const [selectedCoin, setSelectedCoin] = useState<{ symbol: string; baseAsset: string; quoteAsset: string } | null>(null);
+  const { recommendation, isAnalyzing, activeStepId, error: aiError, analyze, steps } = usePortfolioAIAnalysis();
 
   const isMainPortfolio = useMemo(() => portfolioName === DEFAULT_PORTFOLIO_NAME, [portfolioName]);
   const primaryActionLabel = isMainPortfolio ? "Create Portfolio" : "Add Transaction";
@@ -72,6 +75,15 @@ function PortfolioContent() {
     await reloadRisk();
   };
 
+  const handleAnalyzeWithAI = () => {
+    analyze({
+      snapshot,
+      profile: riskProfile,
+      events: riskEvents,
+      portfolioName,
+    });
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-white">
       <Sidebar />
@@ -81,6 +93,9 @@ function PortfolioContent() {
           portfolioName={portfolioName}
           primaryActionLabel={primaryActionLabel}
           onPrimaryAction={openTransactionFlow}
+          onAnalyzeWithAI={handleAnalyzeWithAI}
+          isAnalyzeDisabled={!snapshot || isLoading}
+          isAnalyzing={isAnalyzing}
           showCharts={showCharts}
           onToggleShowCharts={() => setShowCharts((prev) => !prev)}
         />
@@ -100,6 +115,16 @@ function PortfolioContent() {
             {snapshot && (
               <>
                 <PortfolioSummary summary={snapshot.summary} metrics={snapshot.metrics} />
+                <AIRecommendationCard
+                  recommendation={recommendation}
+                  snapshot={snapshot}
+                  isAnalyzing={isAnalyzing}
+                  activeStepId={activeStepId}
+                  steps={steps}
+                  error={aiError}
+                  onAnalyze={handleAnalyzeWithAI}
+                  isDisabled={!snapshot || isLoading}
+                />
                 <RiskMonitorPanel
                   metrics={snapshot.metrics}
                   profile={riskProfile}
