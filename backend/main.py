@@ -16,7 +16,7 @@ setup_logger()
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from core.exceptions import global_exception_handler, validation_exception_handler
-from api.routes import evaluate, ta_agent, sentiment_agent, risk_agent
+from api.routes import debug_market, evaluate, ta_agent, sentiment_agent, risk_agent
 import logging
 
 logger = logging.getLogger("hackathon-pland")
@@ -36,6 +36,7 @@ app.include_router(evaluate.router, prefix="/api", tags=["Evaluation"])
 app.include_router(ta_agent.router, prefix="/api", tags=["TA Agent"])
 app.include_router(sentiment_agent.router, prefix="/api", tags=["Sentiment Agent"])
 app.include_router(risk_agent.router, prefix="/api", tags=["Risk Agent"])
+app.include_router(debug_market.router, prefix="/api", tags=["Debug"])
 
 @app.get("/health")
 async def health_check():
