@@ -153,9 +153,6 @@ function PortfolioContent() {
               onRemovePortfolio={handleRemovePortfolio}
               showRemovePortfolio={!isMainPortfolio}
               isRemovingPortfolio={isRemovingPortfolio}
-              onAnalyzeWithAI={handleAnalyzeWithAI}
-              isAnalyzeDisabled={!snapshot || isLoading}
-              isAnalyzing={isAnalyzing}
               showCharts={showCharts}
               onToggleShowCharts={() => setShowCharts((prev) => !prev)}
             />

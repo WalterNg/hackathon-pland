@@ -49,18 +49,18 @@ function actionClasses(action: PortfolioAIRecommendation["action"]): string {
 
 function actionHeroClasses(action: PortfolioAIRecommendation["action"]): string {
   if (action === "Accumulate") {
-    return "from-emerald-50 to-white border-emerald-100";
+    return "border-emerald-500/20 bg-[linear-gradient(135deg,rgba(60,227,106,0.16),rgba(25,28,34,0.98))]";
   }
 
   if (action === "Hold") {
-    return "from-sky-50 to-white border-sky-100";
+    return "border-sky-500/20 bg-[linear-gradient(135deg,rgba(136,180,255,0.14),rgba(25,28,34,0.98))]";
   }
 
   if (action === "Rebalance") {
-    return "from-teal-50 to-white border-teal-100";
+    return "border-teal-500/20 bg-[linear-gradient(135deg,rgba(60,227,106,0.12),rgba(25,28,34,0.98))]";
   }
 
-  return "from-rose-50 to-white border-rose-100";
+  return "border-rose-500/20 bg-[linear-gradient(135deg,rgba(235,68,70,0.14),rgba(25,28,34,0.98))]";
 }
 
 function formatTimestamp(value: string): string {
@@ -186,29 +186,29 @@ export function AIRecommendationCard({
       riskSignal?.tone === "Cautious");
 
   return (
-    <section className="mb-6 overflow-hidden rounded-3xl border border-gray-100 bg-card-light shadow-sm lg:mb-8">
-      <div className="border-b border-gray-100 px-5 py-5 sm:px-6">
+    <section className="panel-base mb-6 overflow-hidden lg:mb-8">
+      <div className="border-b border-white/6 px-5 py-5 sm:px-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
+          <div className="max-w-3xl">
             <div className="mb-2 flex items-center gap-2">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-sidebar-dark text-inverse">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/6 bg-(--surface-container-low) text-primary shadow-sm">
                 <MaterialIcon name="auto_awesome" outlined={false} className="text-lg" />
               </span>
               <div>
-                <h3 className="text-lg font-bold text-strong">AI Recommendation</h3>
+                <h3 className="section-title">AI Recommendation</h3>
                 <p className="typo-body-sm text-muted">Portfolio-level recommendation built from TA, market context, and risk.</p>
               </div>
             </div>
 
             {recommendation && !isAnalyzing && (
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-muted">
+                <span className="rounded-full border border-white/6 bg-white/5 px-3 py-1 text-xs font-semibold text-muted">
                   Confidence {recommendation.confidence}/10
                 </span>
-                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-muted">
+                <span className="rounded-full border border-white/6 bg-white/5 px-3 py-1 text-xs font-semibold text-muted">
                   Analyzed at {formatTimestamp(recommendation.analyzedAt)}
                 </span>
-                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-muted">
+                <span className="rounded-full border border-white/6 bg-white/5 px-3 py-1 text-xs font-semibold text-muted">
                   Binance snapshot {formatTimestamp(recommendation.snapshotTimestamp)}
                 </span>
               </div>
@@ -219,7 +219,7 @@ export function AIRecommendationCard({
             type="button"
             onClick={onAnalyze}
             disabled={isDisabled || isAnalyzing}
-            className="text-on-primary typo-body-sm inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 font-semibold shadow-md shadow-primary/20 transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+            className="typo-body-sm inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-(--surface-container-low) px-5 py-3 font-semibold text-strong shadow-sm transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <MaterialIcon name={isAnalyzing ? "hourglass_top" : "auto_awesome"} outlined={false} className="text-sm" />
             Analyze with AI
@@ -229,7 +229,7 @@ export function AIRecommendationCard({
 
       {isAnalyzing && (
         <div className="px-5 py-5 sm:px-6">
-          <div className="mb-5 rounded-2xl bg-gray-50 p-4">
+          <div className="mb-5 rounded-2xl border border-white/6 bg-(--surface-container-low) p-4">
             <p className="text-sm font-semibold text-strong">Thinking through the portfolio...</p>
             <p className="mt-1 text-sm text-muted">The recommendation will update with a fresh timestamp when this run finishes.</p>
           </div>
@@ -252,17 +252,17 @@ export function AIRecommendationCard({
                     status === "active"
                       ? "border-primary bg-mint-light"
                       : status === "completed"
-                        ? "border-gray-100 bg-gray-50"
-                        : "border-gray-100 bg-white"
+                        ? "border-white/6 bg-(--surface-container-low)"
+                        : "border-white/6 bg-(--surface-container-low)"
                   }`}
                 >
                   <span
                     className={`mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
                       status === "completed"
                         ? "bg-success-soft text-success"
-                        : status === "active"
+                      : status === "active"
                           ? "bg-sidebar-dark text-inverse"
-                          : "bg-gray-100 text-muted"
+                          : "bg-white/5 text-muted"
                     }`}
                   >
                     <MaterialIcon
@@ -288,7 +288,10 @@ export function AIRecommendationCard({
 
       {!isAnalyzing && !recommendation && (
         <div className="px-5 py-8 sm:px-6">
-          <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-6 text-center">
+          <div className="rounded-2xl border border-dashed border-white/10 bg-(--surface-container-low) px-5 py-8 text-center">
+            <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/6 bg-white/5 text-primary">
+              <MaterialIcon name="auto_awesome" outlined={false} className="text-lg" />
+            </div>
             <p className="text-base font-semibold text-strong">No AI recommendation yet</p>
             <p className="mt-2 text-sm text-muted">
               Run a portfolio-level analysis to generate one recommendation with TA, market context, risk checks, and a timestamp.
@@ -308,7 +311,7 @@ export function AIRecommendationCard({
 
       {recommendation && !isAnalyzing && (
         <div className="px-5 py-5 sm:px-6">
-          <div className={`mb-5 rounded-3xl border bg-gradient-to-r p-5 sm:p-6 ${actionHeroClasses(recommendation.action)}`}>
+          <div className={`mb-5 rounded-3xl border p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-6 ${actionHeroClasses(recommendation.action)}`}>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-3xl">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -331,11 +334,11 @@ export function AIRecommendationCard({
               </div>
 
               <div className="grid grid-cols-2 gap-3 sm:w-auto">
-                <div className="rounded-2xl bg-white/80 px-4 py-3 shadow-sm">
+                <div className="rounded-2xl border border-white/8 bg-(--surface-container) px-4 py-3 shadow-sm">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted">Confidence</p>
                   <p className="mt-1 text-2xl font-bold text-strong">{recommendation.confidence}/10</p>
                 </div>
-                <div className="rounded-2xl bg-white/80 px-4 py-3 shadow-sm">
+                <div className="rounded-2xl border border-white/8 bg-(--surface-container) px-4 py-3 shadow-sm">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted">Risk signal</p>
                   <p className="mt-1 text-2xl font-bold text-strong">{riskSignal?.tone ?? "Neutral"}</p>
                 </div>
@@ -347,8 +350,8 @@ export function AIRecommendationCard({
             {recommendation.signals.map((signal) => (
               <article
                 key={signal.label}
-                className={`rounded-2xl border p-4 ${
-                  signal.label === "Risk" ? "border-danger-soft bg-rose-50 lg:col-span-2" : "border-gray-100"
+                className={`rounded-2xl border border-white/6 bg-(--surface-container-low) p-4 ${
+                  signal.label === "Risk" ? "lg:col-span-2" : ""
                 }`}
               >
                 <div className="mb-3 flex items-center justify-between gap-3">
@@ -362,20 +365,20 @@ export function AIRecommendationCard({
             ))}
           </div>
 
-          <div className="mb-5 rounded-2xl border border-gray-100 p-5">
+          <div className="mb-5 rounded-2xl border border-white/6 bg-(--surface-container-low) p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <h4 className="text-base font-bold text-strong">Live market facts from Binance</h4>
                 <p className="mt-1 text-sm text-muted">Evidence pulled from the latest live portfolio snapshot and Binance market prices.</p>
               </div>
-              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-muted">
+              <span className="rounded-full border border-white/6 bg-white/5 px-3 py-1 text-xs font-semibold text-muted">
                 Snapshot {formatTimestamp(recommendation.snapshotTimestamp)}
               </span>
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {liveFacts.map((fact) => (
-                <article key={fact.label} className="rounded-2xl bg-gray-50 px-4 py-4">
+                <article key={fact.label} className="rounded-2xl border border-white/6 bg-(--surface-container-low) px-4 py-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted">{fact.label}</p>
                   <p className="mt-2 text-xl font-bold text-strong">{fact.value}</p>
                   <p className="mt-1 text-sm text-muted">{fact.detail}</p>
@@ -385,11 +388,11 @@ export function AIRecommendationCard({
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_0.9fr]">
-            <article className="rounded-2xl border border-gray-100 p-5">
+            <article className="rounded-2xl border border-white/6 bg-(--surface-container-low) p-5">
               <h4 className="mb-4 text-base font-bold text-strong">Why AI recommends this</h4>
               <div className="space-y-3">
                 {explanation.map((item) => (
-                  <div key={item.title} className="rounded-2xl bg-gray-50 p-4">
+                  <div key={item.title} className="rounded-2xl border border-white/6 bg-(--surface-container) p-4">
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-strong">{item.title}</p>
                       <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${signalToneClasses(item.tone as SignalTone)}`}>
@@ -401,12 +404,12 @@ export function AIRecommendationCard({
                 ))}
               </div>
 
-              <div className="mt-4 rounded-2xl border border-gray-100 p-4">
+              <div className="mt-4 rounded-2xl border border-white/6 bg-(--surface-container) p-4">
                 <p className="mb-3 text-sm font-semibold text-strong">Detailed reasoning</p>
                 <div className="space-y-2">
                   {recommendation.reasoning.map((reason, index) => (
                     <div key={`${reason}-${index}`} className="flex items-start gap-2 text-sm text-body">
-                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-sidebar-dark" />
+                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                       <span>{reason}</span>
                     </div>
                   ))}
@@ -414,14 +417,14 @@ export function AIRecommendationCard({
               </div>
             </article>
 
-            <article className="rounded-2xl border border-gray-100 p-5">
+            <article className="rounded-2xl border border-white/6 bg-(--surface-container-low) p-5">
               <h4 className="mb-4 text-base font-bold text-strong">What to do now</h4>
               <div className="space-y-3">
                 {recommendation.portfolioActions.map((action, index) => (
                   <div
                     key={`${action}-${index}`}
                     className={`rounded-2xl px-4 py-4 text-sm leading-6 ${
-                      index === 0 ? "bg-sidebar-dark text-inverse" : "bg-gray-50 text-body"
+                      index === 0 ? "border border-primary/30 bg-mint-light text-strong" : "border border-white/6 bg-(--surface-container) text-body"
                     }`}
                   >
                     {action}

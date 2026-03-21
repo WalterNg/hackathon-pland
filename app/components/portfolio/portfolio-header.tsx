@@ -4,9 +4,6 @@ type PortfolioHeaderProps = {
   portfolioName: string;
   primaryActionLabel: string;
   onPrimaryAction: () => void;
-  onAnalyzeWithAI: () => void;
-  isAnalyzeDisabled?: boolean;
-  isAnalyzing?: boolean;
   onRemovePortfolio?: () => void;
   showRemovePortfolio?: boolean;
   isRemovingPortfolio?: boolean;
@@ -18,14 +15,11 @@ export function PortfolioHeader({
   portfolioName,
   primaryActionLabel,
   onPrimaryAction,
-  onAnalyzeWithAI,
-  isAnalyzeDisabled = false,
-  isAnalyzing = false,
   onRemovePortfolio,
   showRemovePortfolio = false,
   isRemovingPortfolio = false,
   showCharts,
-  onToggleShowCharts,
+  onToggleShowCharts
 }: PortfolioHeaderProps) {
   return (
     <section className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -34,7 +28,7 @@ export function PortfolioHeader({
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 rounded-lg border border-gray-100 bg-white px-3 py-1.5 shadow-sm">
+        <div className="flex items-center gap-3 px-1 py-2">
           <span className="typo-body-sm text-muted">Show charts</span>
           <button
             type="button"
@@ -50,16 +44,6 @@ export function PortfolioHeader({
             />
           </button>
         </div>
-
-        <button
-          type="button"
-          onClick={onAnalyzeWithAI}
-          disabled={isAnalyzeDisabled || isAnalyzing}
-          className="typo-body-sm inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2 font-semibold text-strong shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <MaterialIcon name={isAnalyzing ? "hourglass_top" : "auto_awesome"} outlined={false} className="text-sm" />
-          Analyze with AI
-        </button>
 
         <button
           type="button"
