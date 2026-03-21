@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import type { PortfolioAssetRow, PortfolioChartPoint } from "@/app/lib/portfolio-types";
-import { MaterialIcon } from "../dashboard/material-icon";
 
 type PortfolioChartsProps = {
   chart: PortfolioChartPoint[];
@@ -249,13 +248,10 @@ export function PortfolioCharts({ chart, assets, allTimeProfitPercent }: Portfol
 
   return (
     <section className="mb-6 grid grid-cols-1 gap-4 md:gap-6 lg:mb-8 lg:grid-cols-3">
-      <article className="rounded-2xl border border-gray-100 bg-card-light p-5 shadow-sm sm:p-6">
+      <article className="panel-base p-5 sm:p-6">
         <div className="mb-6 flex items-center justify-between">
-          <h3 className="flex items-center gap-2 font-bold text-strong">
-            History
-            <MaterialIcon name="info" outlined={false} className="text-sm text-gray-300" />
-          </h3>
-          <div className="flex rounded-lg bg-gray-100 p-1">
+          <h3 className="section-title">History</h3>
+          <div className="panel-high flex rounded-xl p-1">
             {timeframes.map((option) => (
               <button
                 key={option}
@@ -263,8 +259,8 @@ export function PortfolioCharts({ chart, assets, allTimeProfitPercent }: Portfol
                 onClick={() => setTimeframe(option)}
                 className={
                   option === timeframe
-                    ? "rounded bg-white px-2 py-1 text-xs font-medium text-strong shadow-sm"
-                    : "px-2 py-1 text-xs font-medium text-muted"
+                    ? "rounded-lg bg-(--surface-bright) px-3 py-1 text-[0.58rem] font-medium text-strong"
+                    : "px-3 py-1 text-[0.58rem] font-medium text-muted"
                 }
               >
                 {option}
@@ -306,12 +302,9 @@ export function PortfolioCharts({ chart, assets, allTimeProfitPercent }: Portfol
         </div>
       </article>
 
-      <article className="rounded-2xl border border-gray-100 bg-card-light p-5 shadow-sm sm:p-6">
+      <article className="panel-base p-5 sm:p-6">
         <div className="mb-6 flex items-center justify-between">
-          <h3 className="flex items-center gap-2 font-bold text-strong">
-            Performance
-            <MaterialIcon name="info" outlined={false} className="text-sm text-gray-300" />
-          </h3>
+          <h3 className="section-title">Performance</h3>
         </div>
 
         <div className="mb-4 flex gap-4 text-xs">
@@ -325,7 +318,7 @@ export function PortfolioCharts({ chart, assets, allTimeProfitPercent }: Portfol
           </div>
         </div>
 
-        <div className="relative h-48 overflow-hidden rounded-lg border border-gray-100">
+        <div className="relative h-48 overflow-hidden rounded-xl bg-(--surface-container-low)">
           <svg viewBox="0 0 100 50" preserveAspectRatio="none" className="h-full w-full pr-14">
             <defs>
               <linearGradient id="btc-performance-gradient" x1="0" y1="0" x2="0" y2="1">
@@ -369,13 +362,13 @@ export function PortfolioCharts({ chart, assets, allTimeProfitPercent }: Portfol
         </div>
       </article>
 
-      <article className="flex flex-col rounded-2xl border border-gray-100 bg-card-light p-5 shadow-sm sm:p-6">
+      <article className="panel-base flex flex-col p-5 sm:p-6">
         <div className="mb-6 flex items-center justify-between">
-          <h3 className="font-bold text-strong">Allocation</h3>
+          <h3 className="section-title">Allocation</h3>
         </div>
 
         <div className="flex flex-1 items-center justify-center gap-8">
-          <div className="relative h-40 w-40 text-gray-200">
+          <div className="relative h-40 w-40 text-(--surface-container-highest)">
             <svg viewBox="0 0 160 160" className="h-full w-full -rotate-90 transform">
               <circle cx="80" cy="80" r={radius} fill="none" stroke="currentColor" strokeWidth="16" />
 

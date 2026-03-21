@@ -17,15 +17,11 @@ function formatBtc(value: number | null | undefined, fractionDigits = 6): string
 export function JournalKpis({ summary, isLoading }: JournalKpisProps) {
   const winRate = summary?.kpis.winRate;
   const pnlBtc = summary?.kpis.netPnlBtc ?? 0;
-  const pnlChange = summary?.kpis.netPnlChangePercent;
-  const avgRr = summary?.kpis.averageRiskReward;
-  const sharpeRatio30d = summary?.kpis.sharpeRatio30d;
 
   const kpis = [
     {
       title: "Win Rate",
       value: winRate !== null && winRate !== undefined ? `${winRate.toFixed(2)}%` : "N/A",
-      note: isLoading ? "Loading" : winRate !== null && winRate !== undefined ? `${winRate.toFixed(2)}%` : "No closed trades",
       progress: winRate ?? 0,
       subtitle: "Closed trades win ratio",
       icon: "emoji_events"
@@ -33,77 +29,28 @@ export function JournalKpis({ summary, isLoading }: JournalKpisProps) {
     {
       title: "Profit/Loss",
       value: formatBtc(pnlBtc),
-      note:
-        pnlChange !== null && pnlChange !== undefined
-          ? `${pnlChange >= 0 ? "+" : ""}${pnlChange.toFixed(2)}%`
-          : "N/A",
       subtitle: `Net P&L (${summary?.range.days ?? 30} days)`,
       progress: 0,
       icon: "attach_money"
-    },
-    {
-      title: "Avg. R:R",
-      value: avgRr !== null && avgRr !== undefined ? `1:${avgRr.toFixed(2)}` : "N/A",
-      note:
-        avgRr !== null && avgRr !== undefined
-          ? avgRr >= 2
-            ? "Optimal"
-            : "Needs work"
-          : "N/A",
-      subtitle: "Risk to Reward Ratio",
-      progress: 0,
-      icon: "analytics"
-    },
-    {
-      title: "Sharpe 30d",
-      value: sharpeRatio30d !== null && sharpeRatio30d !== undefined ? sharpeRatio30d.toFixed(3) : "N/A",
-      note:
-        sharpeRatio30d !== null && sharpeRatio30d !== undefined
-          ? sharpeRatio30d >= 1
-            ? "Healthy"
-            : "Watch"
-          : "Preparing",
-      subtitle: "Risk-adjusted return",
-      progress: 0,
-      icon: "trending_up"
     }
   ];
 
-  const getBadgeClass = (note: string): string => {
-    if (note === "Optimal" || note === "Healthy") {
-      return "bg-info-soft text-info";
-    }
-
-    if (note === "Watch") {
-      return "bg-orange-100 text-warning";
-    }
-
-    if (note === "Preparing" || note === "N/A") {
-      return "bg-gray-100 text-muted";
-    }
-
-    return "bg-success-soft text-success";
-  };
-
   return (
-    <div className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2">
       {kpis.map((kpi) => (
-        <article key={kpi.title} className="group relative flex flex-col justify-between overflow-hidden rounded-2xl bg-sidebar-dark p-5 text-inverse shadow-lg sm:p-6">
+        <article key={kpi.title} className="group relative flex flex-col justify-between overflow-hidden rounded-[1.35rem] bg-sidebar-dark p-5 text-inverse shadow-[0_24px_60px_rgba(0,0,0,0.34)] sm:p-6">
           <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 transform opacity-5 transition-transform group-hover:scale-110">
             <MaterialIcon name={kpi.icon} className="text-9xl" />
           </div>
 
-          <div className="z-10 flex items-start justify-between">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-subtle">{kpi.title}</h3>
-            <span className={`rounded-full px-2 py-0.5 text-xs ${getBadgeClass(kpi.note)}`}>
-              {kpi.note}
-            </span>
+          <div className="z-10">
+            <h3 className="eyebrow text-subtle">{kpi.title}</h3>
           </div>
 
           <div className="z-10 mt-4">
-            <span className="text-3xl font-bold">{kpi.value}</span>
+            <span className="typo-metric">{kpi.value}</span>
             {kpi.title === "Win Rate" ? (
-              <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-gray-700">
+              <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
                 <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(100, kpi.progress))}%` }} />
               </div>
             ) : (
