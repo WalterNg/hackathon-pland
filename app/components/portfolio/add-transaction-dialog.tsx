@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MaterialIcon } from "../dashboard/material-icon";
 import { type TransactionAction, type TransferDirection, useAddTransaction } from "@/app/hooks/use-add-transaction";
 
@@ -52,6 +52,20 @@ export function AddTransactionDialog({
   const [dateTime, setDateTime] = useState(nowLocalDateTimeValue());
   const { isSubmitting, error, submitTransaction } = useAddTransaction();
 
+  useEffect(() => {
+    if (!open || !coin) {
+      return;
+    }
+
+    setAction("buy");
+    setTransferDirection("in");
+    setQuantity("0");
+    setPriceUsd("0");
+    setFeeUsd("0");
+    setNote("");
+    setDateTime(nowLocalDateTimeValue());
+  }, [open, coin?.symbol]);
+
   const quantityNumber = Number(quantity) || 0;
   const priceNumber = Number(priceUsd) || 0;
   const totalSpent = useMemo(() => {
@@ -93,16 +107,16 @@ export function AddTransactionDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/30 px-4">
-      <div className="w-full max-w-xl rounded-3xl bg-white p-8 shadow-soft">
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-4xl font-bold text-strong">Add Transaction</h2>
-          <button type="button" onClick={onClose} className="text-muted transition hover:text-body" aria-label="Close add transaction">
-            <MaterialIcon name="close" outlined={false} className="text-2xl" />
+    <div className="modal-backdrop z-[90]">
+      <div className="modal-shell max-w-lg p-5 sm:p-6">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <h2 className="text-xl font-bold text-strong">Add Transaction</h2>
+          <button type="button" onClick={onClose} className="icon-button h-10 w-10" aria-label="Close add transaction">
+            <MaterialIcon name="close" outlined={false} className="text-xl" />
           </button>
         </div>
 
-        <div className="mb-5 grid grid-cols-3 rounded-xl border border-gray-200 bg-gray-100 p-1">
+        <div className="mb-5 grid grid-cols-3 rounded-xl bg-(--surface-container-highest) p-1">
           {actionTabs.map((tab) => (
             <button
               key={tab.value}
@@ -110,8 +124,8 @@ export function AddTransactionDialog({
               onClick={() => setAction(tab.value)}
               className={
                 action === tab.value
-                  ? "rounded-lg bg-white py-2 text-sm font-semibold text-strong"
-                  : "py-2 text-sm font-semibold text-muted"
+                  ? "rounded-lg bg-(--surface-bright) py-2 text-xs font-semibold text-strong sm:text-sm"
+                  : "py-2 text-xs font-semibold text-muted sm:text-sm"
               }
             >
               {tab.label}
@@ -122,28 +136,28 @@ export function AddTransactionDialog({
         <button
           type="button"
           onClick={onChangeCoin}
-          className="mb-5 flex w-full items-center justify-between rounded-xl border border-gray-200 bg-gray-100 px-4 py-3"
+          className="mb-5 flex w-full items-center justify-between rounded-xl bg-(--surface-container-highest) px-3.5 py-3"
         >
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-500">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-(--surface-bright) text-xs font-bold text-warning">
               {shortSymbol.slice(0, 1)}
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-xl font-semibold text-strong">{coin.baseAsset}</span>
-              <span className="text-lg font-semibold text-muted">{shortSymbol}</span>
+              <span className="text-lg font-semibold text-strong">{coin.baseAsset}</span>
+              <span className="text-sm font-semibold text-muted">{shortSymbol}</span>
             </div>
           </div>
           <MaterialIcon name="expand_more" outlined={false} className="text-muted" />
         </button>
 
         {action === "transfer" && (
-          <div className="mb-5">
-            <label className="mb-2 block text-xl font-semibold text-body">Transfer</label>
+          <div className="mb-4">
+            <label className="field-label">Transfer</label>
             <div className="relative">
               <select
                 value={transferDirection}
                 onChange={(event) => setTransferDirection(event.target.value as TransferDirection)}
-                className="w-full appearance-none rounded-xl border border-gray-200 bg-gray-100 px-4 py-3 text-xl font-semibold text-strong outline-none"
+                className="field-select appearance-none pr-12"
               >
                 <option value="in">Transfer In</option>
                 <option value="out">Transfer Out</option>
@@ -153,77 +167,86 @@ export function AddTransactionDialog({
           </div>
         )}
 
-        <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
           <div>
-            <label className="mb-2 block text-xl font-semibold text-body">Quantity</label>
+            <label className="field-label">Quantity</label>
             <input
               type="number"
               min="0"
               step="any"
               value={quantity}
               onChange={(event) => setQuantity(event.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-gray-100 px-4 py-3 text-xl font-semibold text-strong outline-none ring-primary focus:ring-2"
+              className="field-input"
             />
           </div>
 
           {action !== "transfer" ? (
             <div>
-              <label className="mb-2 block text-xl font-semibold text-body">Price Per Coin</label>
+              <label className="field-label">Price Per Coin</label>
               <input
                 type="number"
                 min="0"
                 step="any"
                 value={priceUsd}
                 onChange={(event) => setPriceUsd(event.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-gray-100 px-4 py-3 text-xl font-semibold text-strong outline-none ring-primary focus:ring-2"
+                className="field-input"
               />
             </div>
           ) : (
-            <div className="flex items-end rounded-xl border border-gray-200 bg-gray-100 px-4 py-3 text-xl font-semibold text-muted">
+            <div className="field-static items-end">
               Price is not required for transfer
             </div>
           )}
         </div>
 
-        <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-3">
-          <input
-            type="datetime-local"
-            value={dateTime}
-            onChange={(event) => setDateTime(event.target.value)}
-            className="rounded-xl border border-gray-200 bg-gray-100 px-4 py-3 text-sm font-semibold text-body outline-none ring-primary focus:ring-2"
-          />
-          <input
-            type="number"
-            min="0"
-            step="any"
-            value={feeUsd}
-            onChange={(event) => setFeeUsd(event.target.value)}
-            placeholder="Fee"
-            className="rounded-xl border border-gray-200 bg-gray-100 px-4 py-3 text-sm font-semibold text-body outline-none ring-primary focus:ring-2"
-          />
-          <input
-            type="text"
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="Notes"
-            className="rounded-xl border border-gray-200 bg-gray-100 px-4 py-3 text-sm font-semibold text-body outline-none ring-primary focus:ring-2"
-          />
+        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div>
+            <label className="field-label">Executed At</label>
+            <input
+              type="datetime-local"
+              value={dateTime}
+              onChange={(event) => setDateTime(event.target.value)}
+              className="field-input"
+            />
+          </div>
+          <div>
+            <label className="field-label">Fee</label>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={feeUsd}
+              onChange={(event) => setFeeUsd(event.target.value)}
+              placeholder="Optional"
+              className="field-input"
+            />
+          </div>
+          <div>
+            <label className="field-label">Note</label>
+            <input
+              type="text"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Optional"
+              className="field-input"
+            />
+          </div>
         </div>
 
-        <div className="mb-5 rounded-xl border border-gray-200 bg-gray-100 p-4">
-          <div className="text-2xl text-muted">Total Spent</div>
-          <div className="text-5xl font-bold text-strong">
+        <div className="mb-4 rounded-xl bg-(--surface-container-low) p-3.5 sm:p-4">
+          <div className="mb-1.5 text-xs font-medium text-muted sm:text-sm">Total Spent</div>
+          <div className="text-3xl font-bold tracking-tight text-strong sm:text-4xl">
             {coin.quoteAsset} {totalSpent.toFixed(4)}
           </div>
         </div>
 
-        {error && <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3 text-sm text-danger">{error}</div>}
+        {error && <div className="panel-low mb-3 p-3 text-xs text-danger sm:text-sm">{error}</div>}
 
         <button
           type="button"
           onClick={submit}
           disabled={!canSubmit || isSubmitting}
-          className="text-on-primary w-full rounded-xl bg-primary px-5 py-3 text-2xl font-semibold transition hover:bg-primary-hover disabled:opacity-60"
+          className="ui-button-primary w-full text-base disabled:opacity-60"
         >
           {isSubmitting ? "Saving..." : "Add Transaction"}
         </button>

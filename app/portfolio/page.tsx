@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MaterialIcon } from "../components/dashboard/material-icon";
+import { AppTopNavigation } from "../components/ui/app-top-navigation";
 import { AddTransactionDialog } from "../components/portfolio/add-transaction-dialog";
 import { CreatePortfolioDialog } from "../components/portfolio/create-portfolio-dialog";
 import { PortfolioAssetsTable } from "../components/portfolio/portfolio-assets-table";
@@ -20,8 +21,11 @@ import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
 
 function PortfolioContent() {
+  const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const portfolioName = searchParams.get("name")?.trim() || DEFAULT_PORTFOLIO_NAME;
+  const shouldOpenCreatePortfolio = searchParams.get("createPortfolio") === "1";
   const { snapshot, isLoading, error, reload } = usePortfolioSnapshot(portfolioName);
   const {
     profile: riskProfile,
@@ -30,16 +34,36 @@ function PortfolioContent() {
     error: riskError,
     reload: reloadRisk,
   } = useRiskEvents(portfolioName);
-  const { createPortfolio, portfolios } = usePortfolios();
+  const { createPortfolio, removePortfolio, portfolios } = usePortfolios();
   const [isSelectCoinOpen, setSelectCoinOpen] = useState(false);
   const [isAddDialogOpen, setAddDialogOpen] = useState(false);
   const [isCreatePortfolioOpen, setCreatePortfolioOpen] = useState(false);
+  const [isRemovingPortfolio, setRemovingPortfolio] = useState(false);
   const [showCharts, setShowCharts] = useState(true);
   const [selectedCoin, setSelectedCoin] = useState<{ symbol: string; baseAsset: string; quoteAsset: string } | null>(null);
 
   const isMainPortfolio = useMemo(() => portfolioName === DEFAULT_PORTFOLIO_NAME, [portfolioName]);
-  const primaryActionLabel = isMainPortfolio ? "Create Portfolio" : "Add Transaction";
+  const primaryActionLabel = isMainPortfolio ? "Create portfolio" : "Add transaction";
   const defaultPortfolioName = useMemo(() => `Portfolio ${portfolios.length + 1}`, [portfolios.length]);
+
+  useEffect(() => {
+    if (shouldOpenCreatePortfolio) {
+      setCreatePortfolioOpen(true);
+    }
+  }, [shouldOpenCreatePortfolio]);
+
+  const closeCreatePortfolioDialog = () => {
+    setCreatePortfolioOpen(false);
+
+    if (!shouldOpenCreatePortfolio) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("createPortfolio");
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
+  };
 
   const handleCreatePortfolio = async (name: string) => {
     const result = await createPortfolio(name);
@@ -48,7 +72,7 @@ function PortfolioContent() {
     }
 
     const newName = result.portfolioName ?? name;
-    setCreatePortfolioOpen(false);
+    closeCreatePortfolioDialog();
     window.location.assign(`/portfolio?name=${encodeURIComponent(newName)}`);
   };
 
@@ -72,27 +96,61 @@ function PortfolioContent() {
     await reloadRisk();
   };
 
+  const handleRemovePortfolio = async () => {
+    if (isMainPortfolio || isRemovingPortfolio) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Remove portfolio \"${portfolioName}\"? This action cannot be undone.`);
+    if (!confirmed) {
+      return;
+    }
+
+    setRemovingPortfolio(true);
+
+    try {
+      const result = await removePortfolio(portfolioName);
+      if (!result.ok) {
+        window.alert(result.message ?? "Unable to remove portfolio.");
+        return;
+      }
+
+      window.location.assign(`/portfolio?name=${encodeURIComponent(DEFAULT_PORTFOLIO_NAME)}`);
+    } finally {
+      setRemovingPortfolio(false);
+    }
+  };
+
   return (
-    <div className="flex h-screen overflow-hidden bg-white">
-      <Sidebar />
+    <>
+      <header className="page-header shrink-0 px-4 sm:px-6 lg:px-8">
+        <div className="w-full">
+          <AppTopNavigation portfolioHref={`/portfolio?name=${encodeURIComponent(portfolioName)}`} />
+        </div>
+      </header>
 
-      <main className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden bg-white">
-        <PortfolioHeader
-          portfolioName={portfolioName}
-          primaryActionLabel={primaryActionLabel}
-          onPrimaryAction={openTransactionFlow}
-          showCharts={showCharts}
-          onToggleShowCharts={() => setShowCharts((prev) => !prev)}
-        />
+      <div className="app-shell flex overflow-hidden">
+        <Sidebar />
 
-        <div className="flex-1 overflow-y-auto px-4 pb-6 pt-0 sm:px-6 sm:pb-8 lg:px-8">
-          <div className="content-shell">
+        <main className="app-main overflow-y-auto px-4 pb-6 pt-5 sm:px-6 sm:pb-8 lg:px-8">
+          <div className="content-shell pb-6">
+            <PortfolioHeader
+              portfolioName={portfolioName}
+              primaryActionLabel={primaryActionLabel}
+              onPrimaryAction={openTransactionFlow}
+              onRemovePortfolio={handleRemovePortfolio}
+              showRemovePortfolio={!isMainPortfolio}
+              isRemovingPortfolio={isRemovingPortfolio}
+              showCharts={showCharts}
+              onToggleShowCharts={() => setShowCharts((prev) => !prev)}
+            />
+
             {isLoading && (
-              <div className="mb-6 rounded-2xl border border-gray-100 bg-card-light p-5 text-sm text-muted">Loading portfolio snapshot…</div>
+              <div className="panel-low mb-6 p-5 text-sm text-muted">Loading portfolio snapshot…</div>
             )}
 
             {error && (
-              <div className="mb-6 rounded-2xl border border-gray-100 bg-card-light p-5 text-sm text-danger">
+              <div className="panel-low mb-6 p-5 text-sm text-danger">
                 Unable to load live data: {error}
               </div>
             )}
@@ -119,13 +177,13 @@ function PortfolioContent() {
               </>
             )}
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
 
       <button
         type="button"
         onClick={openTransactionFlow}
-        className="text-on-primary fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-lg md:hidden"
+        className="ui-button-primary fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full p-0 md:hidden"
       >
         <MaterialIcon name="add" outlined={false} />
       </button>
@@ -151,10 +209,10 @@ function PortfolioContent() {
       <CreatePortfolioDialog
         open={isCreatePortfolioOpen}
         defaultName={defaultPortfolioName}
-        onClose={() => setCreatePortfolioOpen(false)}
+        onClose={closeCreatePortfolioDialog}
         onSubmit={handleCreatePortfolio}
       />
-    </div>
+    </>
   );
 }
 
@@ -162,16 +220,23 @@ export default function PortfolioPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-screen overflow-hidden bg-white">
-          <Sidebar />
-          <main className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden bg-white p-4 sm:p-6 lg:p-8">
+        <>
+          <header className="page-header shrink-0 px-4 sm:px-6 lg:px-8">
             <div className="content-shell">
-              <div className="rounded-2xl border border-gray-100 bg-card-light p-5 text-sm text-muted">
-                Loading portfolio...
-              </div>
+              <div className="panel-low p-5 text-sm text-muted">Loading portfolio header...</div>
             </div>
-          </main>
-        </div>
+          </header>
+          <div className="app-shell flex overflow-hidden">
+            <Sidebar />
+            <main className="app-main overflow-hidden p-4 pt-7 sm:p-6 lg:p-8">
+              <div className="content-shell">
+                <div className="panel-low p-5 text-sm text-muted">
+                  Loading portfolio...
+                </div>
+              </div>
+            </main>
+          </div>
+        </>
       }
     >
       <PortfolioContent />

@@ -56,11 +56,14 @@ export function JournalActivity({ summary, isLoading }: JournalActivityProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-4 sm:pr-1">
-      <div className="flex min-h-75 flex-1 flex-col overflow-hidden rounded-2xl bg-card-light shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-gray-100 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-          <h3 className="text-lg font-bold text-strong">Trade Logs</h3>
+      <div className="panel-base flex min-h-75 flex-1 flex-col overflow-hidden">
+        <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div>
+            <div className="eyebrow mb-2">Execution Trail</div>
+            <h3 className="section-title">Trade Logs</h3>
+          </div>
           <div className="flex space-x-2">
-            <input type="text" placeholder="Search pair..." className="w-32 rounded-lg bg-gray-50 px-3 py-1.5 text-xs text-body focus:ring-1 focus:ring-primary sm:w-40" />
+            <input type="text" placeholder="Search pair..." className="w-32 rounded-xl bg-[var(--surface-container-low)] px-3 py-2 text-xs text-body sm:w-40" />
             <button className="text-muted transition hover:text-body">
               <MaterialIcon name="filter_list" className="text-lg" />
             </button>
@@ -70,7 +73,7 @@ export function JournalActivity({ summary, isLoading }: JournalActivityProps) {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left">
             <thead>
-              <tr className="bg-primary/20 text-xs uppercase tracking-wider text-muted">
+              <tr className="bg-[var(--surface-container-low)] text-xs uppercase tracking-wider text-muted">
                 <th className="px-6 py-4 font-semibold">Date</th>
                 <th className="px-6 py-4 font-semibold">Pair</th>
                 <th className="px-6 py-4 font-semibold">Type</th>
@@ -80,7 +83,7 @@ export function JournalActivity({ summary, isLoading }: JournalActivityProps) {
                 <th className="px-6 py-4 text-center font-semibold">Notes</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 text-sm">
+            <tbody className="text-sm">
               {isLoading && (
                 <tr>
                   <td colSpan={7} className="px-6 py-8 text-center text-muted">
@@ -98,14 +101,14 @@ export function JournalActivity({ summary, isLoading }: JournalActivityProps) {
               )}
 
               {trades.map((trade) => (
-                <tr key={trade.id} className="group transition-colors hover:bg-gray-50">
+                <tr key={trade.id} className="group transition-colors hover:bg-[var(--surface-container-low)]">
                   <td className="px-6 py-4 text-muted">{trade.date}</td>
                   <td className="flex items-center gap-2 px-6 py-4 font-medium text-strong">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/30 text-xs font-bold text-on-primary">{trade.symbol}</div>
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/25 text-xs font-bold text-on-primary">{trade.symbol}</div>
                     {trade.pair}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`rounded px-2 py-1 text-xs font-semibold ${sideBadgeClass(trade.side)}`}>
+                    <span className={`status-pill ${sideBadgeClass(trade.side)}`}>
                       {trade.side}
                     </span>
                   </td>

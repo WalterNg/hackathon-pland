@@ -69,8 +69,9 @@ export function RightColumn({ assets, portfolioName }: RightColumnProps) {
 
   return (
     <div className="space-y-4 lg:col-span-4 lg:space-y-6">
-      <div className="rounded-2xl bg-mint-card p-5 shadow-soft sm:p-6">
-        <h3 className="typo-section text-strong mb-6">Recent Transaction</h3>
+      <div className="panel-high p-5 sm:p-6">
+        <div className="eyebrow mb-2">Flow Ledger</div>
+        <h3 className="section-title mb-6">Recent Transaction</h3>
         <div className="space-y-6">
           {isTransactionsLoading && <div className="text-muted typo-caption">Loading transactions…</div>}
 
@@ -97,7 +98,9 @@ export function RightColumn({ assets, portfolioName }: RightColumnProps) {
         </div>
       </div>
 
-      <div className="max-h-82 overflow-y-auto rounded-2xl bg-card-light p-5 shadow-soft sm:p-6">
+      <div className="panel-base max-h-82 overflow-y-auto p-5 sm:p-6">
+        <div className="eyebrow mb-2">Leaders</div>
+        <h3 className="section-title mb-6">Top Holdings</h3>
         <div className="space-y-6">
           {topAssets.map((asset) => (
             <div key={asset.symbol} className="group flex cursor-pointer items-center justify-between">

@@ -34,16 +34,19 @@ function RegisterContent() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 sm:px-6">
-      <div className="w-full max-w-md rounded-2xl border border-gray-100 bg-card-light p-6 shadow-soft sm:p-8">
-        <h1 className="mb-6 text-center text-2xl font-bold text-strong">Sign up</h1>
+      <div className="panel-glass w-full max-w-md p-6 sm:p-8">
+        <div className="mb-6 text-center">
+          <div className="eyebrow mb-3">Access Portal</div>
+          <h1 className="typo-display text-center text-strong">Sign up</h1>
+        </div>
 
-        {authError && <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3 text-xs text-danger">{authError}</div>}
+        {authError && <div className="panel-low mb-4 p-3 text-xs text-danger">{authError}</div>}
 
         <button
           type="button"
           onClick={signUpWithGoogle}
           disabled={loadingGoogle}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-on-primary transition hover:bg-primary-hover disabled:opacity-70"
+          className="ui-button-primary flex w-full items-center justify-center gap-2 disabled:opacity-70"
         >
           {loadingGoogle ? "Redirecting..." : "Continue with Google"}
         </button>
@@ -57,7 +60,7 @@ export default function RegisterPage() {
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-background px-4 sm:px-6">
-          <div className="w-full max-w-md rounded-2xl border border-gray-100 bg-card-light p-6 shadow-soft sm:p-8">
+          <div className="panel-glass w-full max-w-md p-6 sm:p-8">
             <p className="text-sm text-muted">Loading sign up...</p>
           </div>
         </div>

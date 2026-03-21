@@ -14,8 +14,9 @@ export function JournalInsights({ summary, isLoading }: JournalInsightsProps) {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto pb-4 lg:min-w-75">
-      <section className="rounded-2xl bg-card-light p-5 shadow-sm sm:p-6">
-        <h3 className="mb-4 self-start text-lg font-bold text-strong">Trade Distribution</h3>
+      <section className="panel-base p-5 sm:p-6">
+        <div className="eyebrow mb-2">Composition</div>
+        <h3 className="mb-4 self-start section-title">Trade Distribution</h3>
 
         <div className="relative mx-auto h-48 w-48">
           <div className="h-full w-full rounded-full bg-distribution-ring" />
@@ -42,9 +43,12 @@ export function JournalInsights({ summary, isLoading }: JournalInsightsProps) {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-primary/20 bg-primary/20 p-5 shadow-sm sm:p-6">
+      <section className="panel-high p-5 sm:p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-strong">Mental State</h3>
+          <div>
+            <div className="eyebrow mb-2">Reflection</div>
+            <h3 className="section-title">Mental State</h3>
+          </div>
           <MaterialIcon name="psychology" className="text-primary" />
         </div>
 
@@ -53,7 +57,7 @@ export function JournalInsights({ summary, isLoading }: JournalInsightsProps) {
           {!isLoading && emotions.length === 0 && <div className="text-sm text-muted">No emotion data.</div>}
 
           {emotions.map((state) => (
-            <div key={state.label} className="flex items-center justify-between rounded-xl bg-card-light p-3 shadow-sm">
+            <div key={state.label} className="flex items-center justify-between rounded-xl bg-(--surface-container) p-3 shadow-sm">
               <div className="flex items-center gap-3">
                 <span className="text-2xl">🧠</span>
                 <div>
@@ -68,7 +72,7 @@ export function JournalInsights({ summary, isLoading }: JournalInsightsProps) {
           ))}
         </div>
 
-        <button className="mt-4 w-full rounded-lg border border-sidebar-dark py-2 text-sm font-medium text-sidebar-dark transition-colors hover:bg-sidebar-dark hover:text-inverse">
+        <button className="ui-button-secondary mt-4 w-full justify-center">
           View Detailed Analysis
         </button>
       </section>

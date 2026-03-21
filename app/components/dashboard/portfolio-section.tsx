@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import type { PortfolioAssetRow, PortfolioChartPoint } from "@/app/lib/portfolio-types";
-import { MaterialIcon } from "./material-icon";
 import { PortfolioChart } from "./portfolio-chart";
 
 type PortfolioSectionProps = {
@@ -65,15 +64,17 @@ export function PortfolioSection({ chart, assets }: PortfolioSectionProps) {
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-7 md:gap-6">
-      <div className="rounded-2xl bg-card-light p-5 shadow-soft sm:p-6 md:col-span-5">
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="typo-section text-strong">Portfolio Stats</h3>
+      <div className="panel-base p-5 sm:p-6 md:col-span-5">
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div>
+            <div className="eyebrow mb-2">Market Motion</div>
+            <h3 className="section-title">Portfolio Stats</h3>
+          </div>
           <div className="flex gap-3">
-            <button className="typo-body-xs text-body flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 transition hover:bg-gray-50">
+            <div className="panel-high typo-body-xs text-body flex items-center gap-2 rounded-xl px-3 py-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-orange-400" /> Bitcoin
-              <MaterialIcon name="expand_more" className="text-sm" />
-            </button>
-            <div className="flex rounded-lg border border-gray-200 p-1">
+            </div>
+            <div className="panel-high flex rounded-xl p-1">
               {timeframes.map((option) => (
                 <button
                   key={option}
@@ -81,8 +82,8 @@ export function PortfolioSection({ chart, assets }: PortfolioSectionProps) {
                   onClick={() => setTimeframe(option)}
                   className={
                     option === timeframe
-                      ? "typo-body-xs rounded-md bg-gray-100 px-2 py-1 font-semibold text-strong"
-                      : "typo-body-xs rounded-md px-2 py-1 text-muted transition hover:text-body"
+                      ? "typo-body-xs rounded-lg bg-[var(--surface-bright)] px-3 py-1.5 font-semibold text-strong"
+                      : "typo-body-xs rounded-lg px-3 py-1.5 text-muted transition hover:text-body"
                   }
                 >
                   {option}
@@ -93,13 +94,13 @@ export function PortfolioSection({ chart, assets }: PortfolioSectionProps) {
         </div>
 
         <div className="chart-container relative mt-4">
-          <div className="text-inverse pointer-events-none absolute left-[35%] top-[20%] z-10 min-w-35 -translate-x-1/2 transform rounded-lg bg-sidebar-dark p-3 shadow-xl">
+          <div className="panel-glass text-inverse pointer-events-none absolute left-[35%] top-[20%] z-10 min-w-35 -translate-x-1/2 transform p-3">
             <div className="text-subtle typo-caption mb-1">Latest Snapshot</div>
             <div className="typo-body-sm flex items-center gap-1.5 font-bold">
               <span className="h-2 w-2 rounded-full bg-primary" />
               Value {usdFormatter.format(latestPoint?.totalValueUsd ?? totalValue)}
             </div>
-            <div className="absolute -bottom-1 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 transform bg-sidebar-dark" />
+            <div className="absolute -bottom-1 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 transform bg-[var(--surface-glass)]" />
           </div>
           <PortfolioChart chart={filteredChart} />
         </div>
@@ -114,8 +115,9 @@ export function PortfolioSection({ chart, assets }: PortfolioSectionProps) {
       </div>
 
       <div className="flex flex-col gap-4 md:col-span-2 md:gap-6">
-        <div className="flex flex-1 flex-col justify-center rounded-2xl bg-card-light p-5 shadow-soft sm:p-6">
-          <h3 className="typo-body-xs text-strong mb-5 uppercase tracking-wide font-bold">Current Stats</h3>
+        <div className="panel-base flex flex-1 flex-col justify-center p-5 sm:p-6">
+          <div className="eyebrow mb-2">Allocation Pulse</div>
+          <h3 className="section-title mb-5">Current Stats</h3>
           <div className="space-y-5">
             {currentStats.map((item) => (
               <div key={item.label}>
@@ -126,7 +128,7 @@ export function PortfolioSection({ chart, assets }: PortfolioSectionProps) {
                   </span>
                   <span className="text-strong font-bold">{item.value}</span>
                 </div>
-                <div className="h-1 w-full overflow-hidden rounded-full bg-gray-100">
+                <div className="h-1 w-full overflow-hidden rounded-full bg-[var(--surface-container-highest)]">
                   <div className={`h-1 rounded-full ${item.colorClass}`} style={{ width: item.progress }} />
                 </div>
               </div>
@@ -134,16 +136,13 @@ export function PortfolioSection({ chart, assets }: PortfolioSectionProps) {
           </div>
         </div>
 
-        <div className="group flex h-24 cursor-pointer items-center justify-between rounded-2xl bg-mint-card p-5 shadow-soft">
-          <div className="pr-2">
+        <div className="panel-high flex h-24 items-center p-5">
+          <div>
             <p className="typo-body-sm text-body leading-snug">
               Learn To Invest Daily,
               <br />
               Weekly, Or Monthly
             </p>
-          </div>
-          <div className="text-accent flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm transition-transform group-hover:scale-105">
-            <MaterialIcon name="chevron_right" className="text-sm" />
           </div>
         </div>
       </div>

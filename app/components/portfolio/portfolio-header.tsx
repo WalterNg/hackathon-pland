@@ -4,6 +4,9 @@ type PortfolioHeaderProps = {
   portfolioName: string;
   primaryActionLabel: string;
   onPrimaryAction: () => void;
+  onRemovePortfolio?: () => void;
+  showRemovePortfolio?: boolean;
+  isRemovingPortfolio?: boolean;
   showCharts: boolean;
   onToggleShowCharts: () => void;
 };
@@ -12,50 +15,59 @@ export function PortfolioHeader({
   portfolioName,
   primaryActionLabel,
   onPrimaryAction,
+  onRemovePortfolio,
+  showRemovePortfolio = false,
+  isRemovingPortfolio = false,
   showCharts,
   onToggleShowCharts
 }: PortfolioHeaderProps) {
   return (
-    <header className="h-20 shrink-0 px-4 sm:h-24 sm:px-6 lg:px-8">
-      <div className="content-shell flex h-full items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-bold text-strong">My Portfolio</h1>
-          <span className="text-subtle">/</span>
-          <span className="typo-body-sm text-muted">{portfolioName}</span>
-        </div>
+    <section className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+      <div>
+        <h1 className="typo-h1 text-strong">{portfolioName}</h1>
+      </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 rounded-lg border border-gray-100 bg-white px-3 py-1.5 shadow-sm">
-            <span className="typo-body-sm text-muted">Show charts</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={showCharts}
-              aria-label="Show charts"
-              onClick={onToggleShowCharts}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${showCharts ? "bg-primary" : "bg-gray-300"}`}
-            >
-              <span className="sr-only">Show charts</span>
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${showCharts ? "translate-x-6" : "translate-x-1"}`}
-              />
-            </button>
-          </div>
-
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-3 px-1 py-2">
+          <span className="typo-body-sm text-muted">Show charts</span>
           <button
             type="button"
-            onClick={onPrimaryAction}
-            className="text-on-primary typo-body-sm flex items-center gap-2 rounded-xl bg-primary px-5 py-2 font-semibold shadow-md shadow-primary/30 transition-colors hover:bg-primary-hover"
+            role="switch"
+            aria-checked={showCharts}
+            aria-label="Show charts"
+            onClick={onToggleShowCharts}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${showCharts ? "bg-primary" : "bg-(--surface-bright)"}`}
           >
-            <MaterialIcon name="add" outlined={false} className="text-sm" />
-            {primaryActionLabel}
-          </button>
-
-          <button className="rounded-xl border border-gray-100 bg-white p-2 shadow-sm transition-colors hover:bg-gray-50">
-            <MaterialIcon name="download" outlined={false} className="text-muted" />
+            <span className="sr-only">Show charts</span>
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${showCharts ? "translate-x-6" : "translate-x-1"}`}
+            />
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={onPrimaryAction}
+          className="ui-button-primary flex items-center gap-1.5 px-4! py-2.5! text-[0.78rem]! normal-case tracking-normal!"
+          style={{ textTransform: "none", letterSpacing: "normal" }}
+        >
+          <MaterialIcon name="add" outlined={false} className="text-[0.95rem]" />
+          {primaryActionLabel}
+        </button>
+
+        {showRemovePortfolio && onRemovePortfolio ? (
+          <button
+            type="button"
+            onClick={onRemovePortfolio}
+            disabled={isRemovingPortfolio}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-danger-soft text-danger transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label={isRemovingPortfolio ? "Removing portfolio" : "Remove portfolio"}
+            title={isRemovingPortfolio ? "Removing portfolio" : "Remove portfolio"}
+          >
+            <MaterialIcon name={isRemovingPortfolio ? "hourglass_top" : "delete"} outlined={false} className="text-base" />
+          </button>
+        ) : null}
       </div>
-    </header>
+    </section>
   );
 }

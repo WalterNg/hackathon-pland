@@ -9,12 +9,14 @@ type PortfolioResponseRow = {
   name: string;
   isDefault: boolean;
   createdAt: string;
+  totalValueBtc: number | null;
 };
 
 export type PortfolioItem = {
   id: string;
   name: string;
   isDefault: boolean;
+  totalValueBtc: number | null;
 };
 
 type UsePortfoliosResult = {
@@ -22,6 +24,7 @@ type UsePortfoliosResult = {
   isLoading: boolean;
   error: string | null;
   createPortfolio: (name: string) => Promise<{ ok: boolean; message?: string; portfolioName?: string }>;
+  removePortfolio: (name: string) => Promise<{ ok: boolean; message?: string }>;
   reload: () => Promise<void>;
 };
 
@@ -44,17 +47,18 @@ export function usePortfolios(): UsePortfoliosResult {
       const nextPortfolios = (payload.portfolios ?? []).map((item) => ({
         id: item.id,
         name: item.name,
-        isDefault: item.isDefault
+        isDefault: item.isDefault,
+        totalValueBtc: item.totalValueBtc
       }));
 
       if (nextPortfolios.length === 0) {
-        setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true }]);
+        setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true, totalValueBtc: null }]);
       } else {
         setPortfolios(nextPortfolios);
       }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load portfolios");
-      setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true }]);
+      setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true, totalValueBtc: null }]);
     } finally {
       setLoading(false);
     }
@@ -82,11 +86,28 @@ export function usePortfolios(): UsePortfoliosResult {
     return { ok: true, portfolioName: payload.portfolio?.name };
   }, [loadPortfolios]);
 
+  const removePortfolio = useCallback(async (name: string) => {
+    const response = await fetch("/api/portfolios", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      return { ok: false, message: payload?.error ?? "Unable to remove portfolio." };
+    }
+
+    await loadPortfolios();
+    return { ok: true };
+  }, [loadPortfolios]);
+
   return {
     portfolios,
     isLoading,
     error,
     createPortfolio,
+    removePortfolio,
     reload: loadPortfolios
   };
 }

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getLatestPortfolioSnapshotCache } from "./portfolio-snapshots-repo";
 
 const MAIN_PORTFOLIO_NAME = "Main Portfolio";
 
@@ -7,6 +8,7 @@ export type UserPortfolio = {
   name: string;
   isDefault: boolean;
   createdAt: string;
+  totalValueBtc: number | null;
 };
 
 type PortfolioRow = {
@@ -21,7 +23,8 @@ function toUserPortfolio(row: PortfolioRow): UserPortfolio {
     id: row.id,
     name: row.name,
     isDefault: row.is_default,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    totalValueBtc: null
   };
 }
 
@@ -88,7 +91,20 @@ export async function listUserPortfolios(
     return [];
   }
 
-  return (data as PortfolioRow[]).map(toUserPortfolio);
+  const basePortfolios = (data as PortfolioRow[]).map(toUserPortfolio);
+
+  const portfoliosWithTotals = await Promise.all(
+    basePortfolios.map(async (portfolio) => {
+      const snapshot = await getLatestPortfolioSnapshotCache(supabase, userId, portfolio.id);
+
+      return {
+        ...portfolio,
+        totalValueBtc: snapshot?.summary.totalValueBtc ?? null
+      };
+    })
+  );
+
+  return portfoliosWithTotals;
 }
 
 export async function createUserPortfolio(
@@ -123,6 +139,52 @@ export async function createUserPortfolio(
   }
 
   return { portfolio: toUserPortfolio(data as PortfolioRow), errorCode: null };
+}
+
+export async function deleteUserPortfolio(
+  supabase: SupabaseClient,
+  userId: string,
+  inputName: string
+): Promise<{ success: boolean; errorCode: "invalid-name" | "default-portfolio" | "not-found" | "unknown" | null }> {
+  const name = inputName.trim();
+  if (!name) {
+    return { success: false, errorCode: "invalid-name" };
+  }
+
+  if (name === MAIN_PORTFOLIO_NAME) {
+    return { success: false, errorCode: "default-portfolio" };
+  }
+
+  const { data: targetPortfolio, error: selectError } = await supabase
+    .from("portfolios")
+    .select("id, is_default")
+    .eq("user_id", userId)
+    .eq("name", name)
+    .maybeSingle();
+
+  if (selectError) {
+    return { success: false, errorCode: "unknown" };
+  }
+
+  if (!targetPortfolio?.id) {
+    return { success: false, errorCode: "not-found" };
+  }
+
+  if (targetPortfolio.is_default) {
+    return { success: false, errorCode: "default-portfolio" };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("portfolios")
+    .delete()
+    .eq("id", targetPortfolio.id)
+    .eq("user_id", userId);
+
+  if (deleteError) {
+    return { success: false, errorCode: "unknown" };
+  }
+
+  return { success: true, errorCode: null };
 }
 
 export async function resolveUserPortfolioByName(

@@ -25,21 +25,22 @@ export function OverviewTable({ summary, metrics, assets }: OverviewTableProps) 
   const isPositive24h = weighted24hChange >= 0;
 
   return (
-    <div className="rounded-2xl bg-mint-card p-5 shadow-soft sm:p-6">
-      <h3 className="typo-section text-strong mb-4">Overview</h3>
+    <div className="panel-high p-5 sm:p-6">
+      <div className="eyebrow mb-2">Portfolio Readout</div>
+      <h3 className="section-title mb-6">Overview</h3>
       <div className="overflow-x-auto">
         <table className="typo-body-sm w-full text-left">
-          <thead className="text-muted typo-body-xs border-b border-gray-200/50 uppercase">
+          <thead className="text-muted typo-body-xs uppercase">
             <tr>
-              <th className="text-subtle py-3 font-medium">Market Value</th>
-              <th className="text-subtle py-3 font-medium">Net Cost</th>
-              <th className="text-subtle py-3 font-medium">Holdings</th>
-              <th className="text-subtle py-3 font-medium">Profit/Loss</th>
+              <th className="text-subtle py-3 pr-4 font-medium">Market Value</th>
+              <th className="text-subtle py-3 pr-4 font-medium">Net Cost</th>
+              <th className="text-subtle py-3 pr-4 font-medium">Holdings</th>
+              <th className="text-subtle py-3 pr-4 font-medium">Profit/Loss</th>
               <th className="text-subtle py-3 text-right font-medium">Change (24H)</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
+            <tr className="align-top">
               <td className="text-strong py-4 text-base font-bold">
                 {usdFormatter.format(marketValue)}
                 <div className="text-muted typo-caption mt-1 font-normal">Live portfolio valuation</div>
@@ -65,7 +66,7 @@ export function OverviewTable({ summary, metrics, assets }: OverviewTableProps) 
               </td>
               <td className="py-4 text-right">
                 <span
-                  className={`typo-body-xs inline-flex items-center gap-1 rounded px-2 py-1 font-bold ${isPositive24h ? "bg-mint-light text-success" : "bg-danger-soft text-danger"}`}
+                  className={`status-pill ${isPositive24h ? "status-pill-positive" : "status-pill-negative"}`}
                 >
                   <MaterialIcon name={isPositive24h ? "arrow_drop_up" : "arrow_drop_down"} className="text-[10px]" />
                   {Math.abs(weighted24hChange).toFixed(2)}%

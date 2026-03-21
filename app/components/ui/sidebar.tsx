@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { MaterialIcon } from "../dashboard/material-icon";
@@ -8,9 +8,13 @@ import { usePortfolios } from "@/app/hooks/use-portfolios";
 
 const DEFAULT_PORTFOLIOS = ["Main Portfolio"];
 
-const navItems = [
-  { label: "Journal", icon: "book", href: "/journal" }
-] as const;
+function formatPortfolioTotal(totalValueBtc: number | null | undefined): string {
+  if (totalValueBtc === null || totalValueBtc === undefined || !Number.isFinite(totalValueBtc)) {
+    return "0 BTC";
+  }
+
+  return `${totalValueBtc.toFixed(2)} BTC`;
+}
 
 function normalizePath(path: string): string {
   if (path === "/") {
@@ -23,7 +27,7 @@ function normalizePath(path: string): string {
 export function Sidebar() {
   return (
     <Suspense
-      fallback={<aside className="text-inverse z-20 m-0 hidden w-52 shrink-0 bg-sidebar-dark md:flex" />}
+      fallback={<aside className="sidebar-container text-inverse z-20 mb-4 hidden w-64 shrink-0 md:flex" />}
     >
       <SidebarContent />
     </Suspense>
@@ -33,11 +37,18 @@ export function Sidebar() {
 function SidebarContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [isPortfolioOpen, setPortfolioOpen] = useState(true);
   const { portfolios } = usePortfolios();
 
   const currentPath = normalizePath(pathname);
   const selectedPortfolio = searchParams.get("name")?.trim() || DEFAULT_PORTFOLIOS[0];
+  const mainPortfolio = portfolios.find((portfolio) => portfolio.isDefault) ?? portfolios[0] ?? {
+    id: "main",
+    name: DEFAULT_PORTFOLIOS[0],
+    isDefault: true
+  };
+  const mainPortfolioHref = `/portfolio?name=${encodeURIComponent(mainPortfolio.name)}`;
+  const createPortfolioHref = `/portfolio?name=${encodeURIComponent(mainPortfolio.name)}&createPortfolio=1`;
+  const secondaryPortfolios = portfolios.filter((portfolio) => portfolio.id !== mainPortfolio.id);
 
   const isActive = (href: string) => {
     const normalizedHref = normalizePath(href);
@@ -45,98 +56,75 @@ function SidebarContent() {
   };
 
   const portfolioActive = isActive("/portfolio");
+  const isMainPortfolioActive = portfolioActive && selectedPortfolio === mainPortfolio.name;
 
   return (
-    <aside className="text-inverse z-20 m-0 hidden w-52 shrink-0 flex-col justify-between bg-sidebar-dark transition-all duration-300 md:flex">
+    <aside className="sidebar-container text-inverse z-20 mb-4 hidden w-64 shrink-0 flex-col justify-between p-4 transition-all duration-300 md:flex">
       <div>
-        <div className="flex h-24 items-center px-8">
-          <div className="flex items-center gap-3">
-            <img src="/logo.svg" alt="Pland" className="h-8 w-8" />
-            <span className="text-inverse text-xl font-bold tracking-tight">Pland</span>
-          </div>
-        </div>
-        <nav className="mt-4 space-y-4 px-6">
-          <div>
-            <div
-              className={
-                portfolioActive
-                  ? "typo-body-sm text-on-primary flex items-center gap-2 rounded-xl bg-primary px-3 py-3 shadow-sm transition-colors"
-                  : "text-subtle typo-body-sm flex items-center gap-2 rounded-xl px-3 py-3 transition-colors hover:bg-gray-800 hover:text-inverse"
-              }
-            >
-              <Link href="/portfolio" className="flex min-w-0 flex-1 items-center gap-3">
-                <MaterialIcon
-                  name="pie_chart"
-                  outlined={false}
-                  className={portfolioActive ? "text-xl" : "text-xl"}
-                />
-                <span>Portfolios</span>
-              </Link>
+        <nav className="space-y-6 px-2">
+          <Link
+            href={mainPortfolioHref}
+            className={
+              isMainPortfolioActive
+                ? "flex items-center gap-3 rounded-3xl bg-linear-to-r from-[#3f66ff] to-[#3352d9] px-4 py-4 text-white shadow-[0_18px_40px_rgba(52,87,255,0.28)] transition-transform hover:-translate-y-0.5"
+                : "flex items-center gap-3 rounded-3xl bg-(--surface-container-low) px-4 py-4 text-inverse transition-colors hover:bg-(--surface-container)"
+            }
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/16">
+              <MaterialIcon name="grid_view" outlined={false} className="text-[1.35rem]" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="typo-body-sm font-semibold leading-tight">{mainPortfolio.name}</div>
+              <div className={isMainPortfolioActive ? "typo-body-sm text-white/72" : "typo-body-sm text-muted"}>Overview</div>
+            </div>
+          </Link>
 
-              <button
-                type="button"
-                onClick={() => setPortfolioOpen((openState) => !openState)}
-                className="flex h-6 w-6 items-center justify-center rounded-md bg-white/20 transition hover:bg-white/30"
-                aria-label={isPortfolioOpen ? "Hide portfolios" : "Show portfolios"}
-              >
-                <MaterialIcon
-                  name={isPortfolioOpen ? "expand_less" : "expand_more"}
-                  outlined={false}
-                  className="text-sm"
-                />
-              </button>
+          <div className="space-y-2">
+            <div className="px-1 typo-body font-semibold text-strong">My portfolios ({secondaryPortfolios.length})</div>
+
+            <div className="space-y-1.5">
+              {secondaryPortfolios.map((portfolio) => {
+                const portfolioName = portfolio.name;
+                const portfolioHref = `/portfolio?name=${encodeURIComponent(portfolioName)}`;
+                const isSelected = portfolioActive && selectedPortfolio === portfolioName;
+
+                return (
+                  <Link
+                    key={portfolioName}
+                    href={portfolioHref}
+                    className={
+                      isSelected
+                        ? "flex items-center gap-3 rounded-2xl bg-(--surface-container-highest) px-3 py-3 text-inverse"
+                        : "flex items-center gap-3 rounded-2xl px-3 py-3 text-subtle transition-colors hover:bg-(--surface-container) hover:text-inverse"
+                    }
+                  >
+                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-on-primary">
+                      <span className="text-sm font-semibold uppercase">{portfolioName.slice(0, 2)}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="typo-body truncate font-semibold text-current">{portfolioName}</div>
+                      <div className="typo-body-sm text-muted">{formatPortfolioTotal(portfolio.totalValueBtc)}</div>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
 
-            {isPortfolioOpen && (
-              <div className="mt-2 space-y-1 pl-8">
-                {portfolios.map((portfolio) => {
-                  const portfolioName = portfolio.name;
-                  const portfolioHref = `/portfolio?name=${encodeURIComponent(portfolioName)}`;
-                  const isSelected = portfolioActive && selectedPortfolio === portfolioName;
-
-                  return (
-                    <Link
-                      key={portfolioName}
-                      href={portfolioHref}
-                      className={
-                        isSelected
-                          ? "typo-body-xs text-sidebar-dark block rounded-lg bg-card-light px-3 py-2"
-                          : "typo-body-xs text-subtle block rounded-lg px-3 py-2 transition-colors hover:bg-gray-800 hover:text-inverse"
-                      }
-                    >
-                      {portfolioName}
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {navItems.map((item) => (
             <Link
-              key={item.label}
-              href={item.href}
-              className={
-                isActive(item.href)
-                  ? "typo-body-sm text-on-primary flex items-center gap-4 rounded-xl bg-primary px-4 py-3 shadow-sm transition-colors"
-                  : "text-subtle typo-body-sm group flex items-center gap-4 rounded-xl px-4 py-3 transition-colors hover:bg-gray-800 hover:text-inverse"
-              }
+              href={createPortfolioHref}
+              className="flex items-center justify-center gap-2 rounded-2xl px-3 py-3 text-sm font-semibold text-primary transition-colors hover:bg-(--surface-container-low)"
             >
-              <MaterialIcon
-                name={item.icon}
-                outlined={false}
-                className={isActive(item.href) ? "text-xl" : "text-xl transition-colors group-hover:text-primary"}
-              />
-              {item.label}
+              <MaterialIcon name="add" outlined={false} className="text-xl" />
+              Create portfolio
             </Link>
-          ))}
+          </div>
         </nav>
       </div>
 
       <div className="px-6 pb-6">
         <Link
           href="/auth/logout"
-          className="text-subtle typo-body-sm group flex items-center gap-4 rounded-xl px-4 py-3 transition-colors hover:bg-gray-800 hover:text-inverse"
+          className="text-subtle typo-body-sm group flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-(--surface-container-highest) hover:text-inverse"
         >
           <MaterialIcon name="logout" outlined={false} className="text-xl transition-colors group-hover:text-primary" />
           Logout
