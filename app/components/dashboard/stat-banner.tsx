@@ -27,16 +27,16 @@ function BannerBlock({ title, icon, value, secondary, changePercent }: BannerBlo
 
   return (
     <div className="flex h-full flex-1 flex-col justify-center">
-      <div className="text-subtle typo-body-xs mb-1 flex items-center gap-3 uppercase tracking-wider">
+      <div className="eyebrow mb-3 flex items-center gap-3 text-subtle">
         <MaterialIcon name={icon} className="text-sm" />
         {title}
       </div>
-      <div className="flex items-end justify-between">
+      <div className="flex items-end justify-between gap-4">
         <div>
           <h2 className="typo-metric text-inverse">{value}</h2>
           <div className="text-subtle typo-caption mt-1">{secondary}</div>
         </div>
-        <span className={`typo-caption flex items-center gap-1 rounded-full px-3 py-1 font-bold ${isPositive ? "bg-mint-light text-success" : "bg-danger-soft text-danger"}`}>
+        <span className={`status-pill ${isPositive ? "status-pill-positive" : "status-pill-negative"}`}>
           <MaterialIcon name={isPositive ? "arrow_drop_up" : "arrow_drop_down"} className="text-[10px]" />
           {Math.abs(changePercent).toFixed(2)}%
         </span>
@@ -57,8 +57,9 @@ export function StatBanner({ totalValueBtc, totalValueUsd, btcPriceUsd, totalVol
   const totalVolume24hBtc = btcPriceUsd && btcPriceUsd > 0 ? totalVolume24hUsd / btcPriceUsd : null;
 
   return (
-    <div className="text-inverse relative flex min-h-40 flex-col items-start gap-6 overflow-hidden rounded-2xl bg-sidebar-dark p-5 shadow-lg sm:p-6 md:flex-row md:items-center md:gap-0 lg:p-8">
-      <div className="flex h-full w-full flex-1 flex-col justify-center border-b border-gray-700/50 pb-5 md:w-auto md:border-b-0 md:border-r md:pb-0 md:pr-12">
+    <div className="text-inverse relative flex min-h-40 flex-col items-start gap-8 overflow-hidden rounded-[1.5rem] bg-sidebar-dark p-6 shadow-[0_24px_60px_rgba(0,0,0,0.34)] sm:p-7 md:flex-row md:items-center lg:p-10">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(60,227,106,0.18),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(136,180,255,0.12),transparent_24%)]" />
+      <div className="relative flex h-full w-full flex-1 flex-col justify-center md:w-auto md:pr-12">
         <BannerBlock
           title="Portfolio Value"
           icon="bar_chart"
@@ -67,7 +68,8 @@ export function StatBanner({ totalValueBtc, totalValueUsd, btcPriceUsd, totalVol
           changePercent={allTimeProfitPercent}
         />
       </div>
-      <div className="flex h-full w-full flex-1 flex-col justify-center md:w-auto md:pl-12">
+      <div className="relative h-px w-full bg-white/6 md:h-28 md:w-px" />
+      <div className="relative flex h-full w-full flex-1 flex-col justify-center md:w-auto md:pl-12">
         <BannerBlock
           title="Volume (24H)"
           icon="tune"

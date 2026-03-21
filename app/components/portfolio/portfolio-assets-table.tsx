@@ -24,14 +24,14 @@ const symbolNames: Record<string, string> = {
 
 export function PortfolioAssetsTable({ assets, btcPriceUsd }: PortfolioAssetsTableProps) {
   return (
-    <section className="mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-card-light shadow-sm lg:mb-8">
-      <div className="border-b border-gray-100 p-5 sm:p-6">
-        <h3 className="text-lg font-bold text-strong">Assets</h3>
+    <section className="panel-base mb-6 overflow-hidden lg:mb-8">
+      <div className="p-5 sm:p-6">
+        <h3 className="section-title">Assets</h3>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-left">
-          <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wider text-muted">
+          <thead className="bg-(--surface-container-low) text-xs font-semibold uppercase tracking-wider text-muted">
             <tr>
               <th className="px-6 py-4">Name</th>
               <th className="px-6 py-4 text-right">Price</th>
@@ -41,14 +41,13 @@ export function PortfolioAssetsTable({ assets, btcPriceUsd }: PortfolioAssetsTab
               <th className="px-6 py-4 text-right">Holdings</th>
               <th className="px-6 py-4 text-right">Avg. Buy Price</th>
               <th className="px-6 py-4 text-right">Profit/Loss</th>
-              <th className="px-6 py-4 text-right">Actions</th>
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-gray-100">
+          <tbody>
             {assets.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-6 py-12 text-center">
+                <td colSpan={8} className="px-6 py-12 text-center">
                   <div className="text-lg font-semibold text-strong">This portfolio is empty</div>
                   <div className="mt-1 text-sm text-muted">Use Add Transaction to create your first position.</div>
                 </td>
@@ -64,10 +63,10 @@ export function PortfolioAssetsTable({ assets, btcPriceUsd }: PortfolioAssetsTab
               const positivePnl = asset.pnlUsd >= 0;
 
               return (
-                <tr key={asset.symbol} className="group transition-colors hover:bg-gray-50">
+                <tr key={asset.symbol} className="group transition-colors hover:bg-(--surface-container-low)">
                   <td className="whitespace-nowrap px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-orange-500">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-(--surface-container-highest) text-warning">
                         <MaterialIcon name="currency_bitcoin" outlined={false} className="text-sm" />
                       </div>
                       <div>
@@ -122,17 +121,6 @@ export function PortfolioAssetsTable({ assets, btcPriceUsd }: PortfolioAssetsTab
                         className="text-[10px]"
                       />
                       {Math.abs(asset.pnlPercent).toFixed(2)}%
-                    </div>
-                  </td>
-
-                  <td className="whitespace-nowrap px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                      <button className="text-subtle transition-colors hover:text-primary">
-                        <MaterialIcon name="add_circle_outline" outlined={false} className="text-lg" />
-                      </button>
-                      <button className="text-subtle transition-colors hover:text-body">
-                        <MaterialIcon name="more_horiz" outlined={false} className="text-lg" />
-                      </button>
                     </div>
                   </td>
                 </tr>
