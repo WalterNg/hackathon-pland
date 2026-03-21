@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 
@@ -7,13 +7,18 @@ export const metadata: Metadata = {
   description: "Crypto portfolio tracker and trading journal"
 };
 
+export const viewport: Viewport = {
+  colorScheme: "dark",
+  themeColor: "#10131a"
+};
+
 export default function RootLayout({
   children
 }: Readonly<{
   children: ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="bg-background text-body">
       <head>
         <link
           rel="preconnect"
@@ -29,8 +34,9 @@ export default function RootLayout({
           rel="stylesheet"
           href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined"
         />
+        <meta name="color-scheme" content="dark" />
       </head>
-      <body className="bg-background-light text-body antialiased transition-colors duration-200">
+      <body className="bg-background text-body antialiased transition-colors duration-200">
         {children}
       </body>
     </html>
