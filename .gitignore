@@ -38,3 +38,7 @@ venv/
 _bmad
 .agent
 .bmad-output
+
+# Agent Skills
+.codex/
+.understand-anything/
