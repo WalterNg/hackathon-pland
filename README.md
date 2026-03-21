@@ -103,7 +103,7 @@ Open http://localhost:3000
 
 The backend uses FastAPI and LangGraph to orchestrate multiple AI agents (TA, Sentiment, Risk).
 
-1. **Prerequisites**: Python 3.11+, and a Google Gemini API Key.
+1. **Prerequisites**: Python 3.11+ and a Google Gemini API key.
 2. **Setup**:
    ```bash
    python -m venv .venv
@@ -114,10 +114,11 @@ The backend uses FastAPI and LangGraph to orchestrate multiple AI agents (TA, Se
    pip install -r requirements.txt
    ```
 3. **Environment**: Ensure `GEMINI_API_KEY` is set in the root `.env` file.
-4. **Run Server**:
+4. **Run the backend server from the repo root**:
    ```bash
    uvicorn backend.main:app --reload
    ```
+   The API runs on `http://localhost:8000` by default.
 5. **Test API**:
    - **Using cURL**:
      ```bash

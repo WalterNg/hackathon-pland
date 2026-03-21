@@ -1,42 +1,41 @@
 import logging
-from core.base_agent import BaseAgent, AgentError
+
+from core.base_agent import AgentError, BaseAgent
+from schemas.output import PortfolioRiskResult
 from schemas.state import AgentState
-from schemas.output import RiskResult
+
 from .prompts import RISK_SYSTEM_PROMPT
 
 logger = logging.getLogger("RISK_AGENT")
 
 
 class RiskAgent(BaseAgent):
-    """Evaluates portfolio risk level based on market data and portfolio composition."""
+    """Evaluates portfolio-level risk using concentration, cash, and technical risk signals."""
 
     def _build_input(self, state: AgentState) -> str:
-        payload = state["payload"]
-        portfolio = payload.portfolio
-        md = payload.market_data
+        risk_input = state.get("risk_input")
+        if not risk_input:
+            raise AgentError("Risk input missing from state - cannot evaluate portfolio risk.")
 
-        total_assets_value = sum(
-            item.amount * (item.current_price or 0.0)
-            for item in portfolio
+        positions_text = "\n".join(
+            f"  - {position.symbol}: weight={position.weight:.2%}, value=${position.value_usd:.2f}"
+            for position in risk_input.positions
         )
-        total_value = total_assets_value + payload.stablecoin_reserve
 
         return (
-            f"Please evaluate the risk level for the following context:\n"
-            f"  Total Portfolio Value: ${total_value:.2f}\n"
-            f"  Stablecoin Reserve: ${payload.stablecoin_reserve:.2f}\n"
-            f"  Number of Assets: {len(portfolio)}\n"
-            f"Market Data:\n"
-            f"  RVOL: {md.rvol}\n"
-            f"  MA50: {md.ma50}\n"
-            f"  RSI: {md.rsi}"
+            "Evaluate the following portfolio-level risk snapshot.\n"
+            f"Cash Ratio: {risk_input.cash_ratio:.2%}\n"
+            f"Positions:\n{positions_text}\n"
+            f"Portfolio Metrics: {risk_input.portfolio_metrics.model_dump()}\n"
+            f"Technical Risk Signals: {risk_input.technical_risk_signals.model_dump()}\n"
+            f"Market Risk Context: {risk_input.market_risk_context.model_dump()}"
         )
 
     async def run_node(self, state: AgentState) -> AgentState:
         logger.info("Executing Risk Agent.")
         try:
-            result: RiskResult = await self.run(
-                RISK_SYSTEM_PROMPT, self._build_input(state), RiskResult
+            result: PortfolioRiskResult = await self.run(
+                RISK_SYSTEM_PROMPT, self._build_input(state), PortfolioRiskResult
             )
             return {"risk_result": result}
         except AgentError as e:
@@ -44,8 +43,8 @@ class RiskAgent(BaseAgent):
             return {"error": f"Risk Agent failed: {e}"}
 
 
-# Singleton node function for LangGraph
 _agent = RiskAgent()
 
-async def analyze_risk(state: AgentState) -> AgentState:
+
+async def run_agent(state: AgentState) -> AgentState:
     return await _agent.run_node(state)

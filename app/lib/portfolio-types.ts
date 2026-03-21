@@ -90,6 +90,32 @@ export type PortfolioSnapshot = {
   riskViolations?: PortfolioRiskViolation[];
 };
 
+export type AIAnalysisAction =
+  | "Accumulate"
+  | "Hold"
+  | "Reduce Risk"
+  | "Rebalance"
+  | "Stop Loss";
+
+export type AIAnalysisSignalTone = "Bullish" | "Neutral" | "Bearish" | "Cautious" | "Defensive";
+
+export type AIAnalysisComponentSignal = {
+  label: string;
+  tone: AIAnalysisSignalTone;
+  summary: string;
+};
+
+export type PortfolioAIRecommendation = {
+  action: AIAnalysisAction;
+  confidence: number;
+  summary: string;
+  reasoning: string[];
+  portfolioActions: string[];
+  signals: AIAnalysisComponentSignal[];
+  analyzedAt: string;
+  snapshotTimestamp: string;
+};
+
 export type DashboardRecentTransaction = {
   id: string;
   portfolioName: string;
