@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { PortfolioSnapshot, PortfolioAIRecommendation } from "@/app/lib/portfolio-types";
 import type { RiskEventRecord, RiskProfile } from "@/app/lib/risk-types";
+import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 export type AIAnalysisStepId =
   | "snapshot"
@@ -114,7 +115,7 @@ export function usePortfolioAIAnalysis(): UsePortfolioAIAnalysisResult {
     timeoutIdsRef.current.push(firstTimeoutId);
 
     try {
-      const response = await fetch("/api/ai/analyze", {
+      const response = await fetchWithSupabaseAuth("/api/ai/analyze", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

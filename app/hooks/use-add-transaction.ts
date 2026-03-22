@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 export type TransactionAction = "buy" | "sell" | "transfer";
 export type TransferDirection = "in" | "out";
@@ -32,7 +33,7 @@ export function useAddTransaction(): UseAddTransactionResult {
     setError(null);
 
     try {
-      const response = await fetch("/api/portfolio/transactions", {
+      const response = await fetchWithSupabaseAuth("/api/portfolio/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input)

@@ -4,7 +4,7 @@ import { buildBinancePortfolioSnapshot } from "@/app/lib/binance-portfolio";
 import type { PortfolioAIRecommendation } from "@/app/lib/portfolio-types";
 import { getUserPortfolioPositions } from "@/app/lib/repositories/portfolio-repo";
 import { resolveUserPortfolioByName } from "@/app/lib/repositories/portfolios-repo";
-import { createSupabaseServerClient } from "@/app/lib/supabase/server";
+import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -86,10 +86,7 @@ function normalizeSignalTone(
 }
 
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getSupabaseAuthContext(request);
 
   if (!user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { RiskEventRecord, RiskProfile } from "@/app/lib/risk-types";
+import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 type RiskEventsResponse = {
   profile: RiskProfile | null;
@@ -40,7 +41,7 @@ export function useRiskEvents(
       setError(null);
 
       try {
-        const response = await fetch(
+        const response = await fetchWithSupabaseAuth(
           `/api/risk/events?portfolioName=${encodeURIComponent(portfolioName)}&limit=6`,
           {
             cache: "no-store",

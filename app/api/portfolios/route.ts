@@ -4,21 +4,16 @@ import {
   deleteUserPortfolio,
   listUserPortfolios
 } from "@/app/lib/repositories/portfolios-repo";
-import { createSupabaseServerClient } from "@/app/lib/supabase/server";
+import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
 
 export const dynamic = "force-dynamic";
 
-async function getAuthContext() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  return { supabase, user };
+async function getAuthContext(request: Request) {
+  return getSupabaseAuthContext(request);
 }
 
-export async function GET() {
-  const { supabase, user } = await getAuthContext();
+export async function GET(request: Request) {
+  const { supabase, user } = await getAuthContext(request);
   if (!user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -28,7 +23,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { supabase, user } = await getAuthContext();
+  const { supabase, user } = await getAuthContext(request);
   if (!user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -54,7 +49,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const { supabase, user } = await getAuthContext();
+  const { supabase, user } = await getAuthContext(request);
   if (!user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

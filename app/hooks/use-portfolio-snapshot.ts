@@ -8,6 +8,7 @@ import {
   calculateMaxDrawdownFromSeries,
   calculateVolatilityFromSeries,
 } from "@/app/lib/risk-calculator";
+import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 type UsePortfolioSnapshotResult = {
   snapshot: PortfolioSnapshot | null;
@@ -192,7 +193,7 @@ export function usePortfolioSnapshot(
         if (isCancelled) break;
 
         try {
-          const response = await fetch(`/api/binance/portfolio?name=${encodeURIComponent(portfolioName)}`, {
+          const response = await fetchWithSupabaseAuth(`/api/binance/portfolio?name=${encodeURIComponent(portfolioName)}`, {
             cache: "no-store",
             signal: abortController.signal
           });

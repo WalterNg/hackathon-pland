@@ -14,7 +14,7 @@ import {
   logRiskViolations,
 } from "@/app/lib/repositories/risk-repo";
 import { hasSupabaseEnv } from "@/app/lib/supabase/env";
-import { createSupabaseServerClient } from "@/app/lib/supabase/server";
+import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
 import { getUserPortfolioPositions } from "@/app/lib/repositories/portfolio-repo";
 import { resolveUserPortfolioByName } from "@/app/lib/repositories/portfolios-repo";
 
@@ -27,10 +27,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const name = searchParams.get("name")?.trim() || "Main Portfolio";
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getSupabaseAuthContext(request);
 
   if (!user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
