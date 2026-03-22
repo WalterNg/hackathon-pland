@@ -7,6 +7,7 @@ export const PORTFOLIO_SYMBOLS = [
 ] as const;
 
 export type PortfolioSymbol = string;
+export type PortfolioMode = "manual" | "binance_connected";
 
 export type PortfolioPosition = {
   symbol: PortfolioSymbol;

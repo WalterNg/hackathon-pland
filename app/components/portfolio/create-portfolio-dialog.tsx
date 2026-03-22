@@ -2,22 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { MaterialIcon } from "../dashboard/material-icon";
+import type { PortfolioMode } from "@/app/lib/portfolio-types";
 
 type CreatePortfolioDialogProps = {
   open: boolean;
   defaultName: string;
   onClose: () => void;
-  onSubmit: (name: string) => Promise<void>;
+  onSubmit: (name: string, mode: PortfolioMode) => Promise<void>;
 };
 
 export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: CreatePortfolioDialogProps) {
   const [name, setName] = useState(defaultName);
+  const [mode, setMode] = useState<PortfolioMode>("manual");
   const [isSubmitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setName(defaultName);
+      setMode("manual");
       setError(null);
     }
   }, [open, defaultName]);
@@ -38,7 +41,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
     setError(null);
 
     try {
-      await onSubmit(trimmed);
+      await onSubmit(trimmed, mode);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to create portfolio.");
     } finally {
@@ -72,6 +75,51 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
           autoFocus
           className="field-input mb-4"
         />
+
+        <div className="mb-4">
+          <label className="field-label">Choose setup mode</label>
+          <div className="grid gap-3">
+            <button
+              type="button"
+              onClick={() => setMode("manual")}
+              className={`flex items-start gap-3 rounded-2xl border px-4 py-4 text-left transition ${
+                mode === "manual"
+                  ? "border-primary bg-(--surface-container-highest)"
+                  : "border-(--surface-outline) bg-(--surface-container-low)"
+              }`}
+            >
+              <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success-soft text-success">
+                <MaterialIcon name="edit" outlined={false} className="text-base" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-strong">Manually add transactions</span>
+                <span className="mt-1 block text-xs leading-5 text-muted">
+                  Keep full control and enter buys, sells, deposits, and withdrawals by hand.
+                </span>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMode("binance_connected")}
+              className={`flex items-start gap-3 rounded-2xl border px-4 py-4 text-left transition ${
+                mode === "binance_connected"
+                  ? "border-primary bg-(--surface-container-highest)"
+                  : "border-(--surface-outline) bg-(--surface-container-low)"
+              }`}
+            >
+              <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning">
+                <MaterialIcon name="link" outlined={false} className="text-base" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-strong">Connect Binance account</span>
+                <span className="mt-1 block text-xs leading-5 text-muted">
+                  Sync balances automatically and disable manual edits for this portfolio.
+                </span>
+              </span>
+            </button>
+          </div>
+        </div>
 
         {error && <div className="panel-low mb-3 p-3 text-xs text-danger sm:text-sm">{error}</div>}
 

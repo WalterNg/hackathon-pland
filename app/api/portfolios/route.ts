@@ -33,10 +33,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const payload = (await request.json().catch(() => null)) as { name?: string } | null;
+  const payload = (await request.json().catch(() => null)) as { name?: string; mode?: "manual" | "binance_connected" } | null;
   const nextName = payload?.name ?? "";
+  const nextMode = payload?.mode === "binance_connected" ? "binance_connected" : "manual";
 
-  const { portfolio, errorCode } = await createUserPortfolio(supabase, user.id, nextName);
+  const { portfolio, errorCode } = await createUserPortfolio(supabase, user.id, nextName, nextMode);
 
   if (errorCode === "invalid-name") {
     return NextResponse.json({ error: "Portfolio name is required." }, { status: 400 });

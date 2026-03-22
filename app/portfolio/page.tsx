@@ -19,6 +19,7 @@ import { usePortfolioAIAnalysis } from "../hooks/use-portfolio-ai-analysis";
 import { usePortfolios } from "../hooks/use-portfolios";
 import { useRiskEvents } from "../hooks/use-risk-events";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
+import type { PortfolioMode } from "@/app/lib/portfolio-types";
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
 
@@ -46,7 +47,12 @@ function PortfolioContent() {
   const { recommendation, isAnalyzing, activeStepId, error: aiError, analyze, steps } = usePortfolioAIAnalysis();
 
   const isMainPortfolio = useMemo(() => portfolioName === DEFAULT_PORTFOLIO_NAME, [portfolioName]);
-  const primaryActionLabel = isMainPortfolio ? "Create portfolio" : "Add transaction";
+  const currentPortfolio = useMemo(
+    () => portfolios.find((portfolio) => portfolio.name === portfolioName) ?? null,
+    [portfolios, portfolioName]
+  );
+  const isConnectedPortfolio = currentPortfolio?.mode === "binance_connected";
+  const primaryActionLabel = isMainPortfolio ? "Create portfolio" : isConnectedPortfolio ? "Read-only" : "Add transaction";
   const defaultPortfolioName = useMemo(() => `Portfolio ${portfolios.length + 1}`, [portfolios.length]);
 
   useEffect(() => {
@@ -68,8 +74,8 @@ function PortfolioContent() {
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
   };
 
-  const handleCreatePortfolio = async (name: string) => {
-    const result = await createPortfolio(name);
+  const handleCreatePortfolio = async (name: string, mode: PortfolioMode) => {
+    const result = await createPortfolio(name, mode);
     if (!result.ok) {
       throw new Error(result.message ?? "Unable to create portfolio.");
     }
@@ -82,6 +88,11 @@ function PortfolioContent() {
   const openTransactionFlow = () => {
     if (isMainPortfolio) {
       setCreatePortfolioOpen(true);
+      return;
+    }
+
+    if (isConnectedPortfolio) {
+      window.alert("Connected portfolios are read-only. Manual transactions are disabled.");
       return;
     }
 
@@ -148,8 +159,15 @@ function PortfolioContent() {
           <div className="content-shell pb-6">
             <PortfolioHeader
               portfolioName={portfolioName}
+              statusLabel={isConnectedPortfolio ? "Connected to Binance" : undefined}
+              statusDescription={
+                isConnectedPortfolio
+                  ? "This portfolio syncs automatically from Binance and manual edits are disabled."
+                  : undefined
+              }
               primaryActionLabel={primaryActionLabel}
               onPrimaryAction={openTransactionFlow}
+              isPrimaryActionDisabled={isConnectedPortfolio}
               onRemovePortfolio={handleRemovePortfolio}
               showRemovePortfolio={!isMainPortfolio}
               isRemovingPortfolio={isRemovingPortfolio}
@@ -205,7 +223,8 @@ function PortfolioContent() {
       <button
         type="button"
         onClick={openTransactionFlow}
-        className="ui-button-primary fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full p-0 md:hidden"
+        disabled={isConnectedPortfolio}
+        className="ui-button-primary fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full p-0 md:hidden disabled:cursor-not-allowed disabled:opacity-60"
       >
         <MaterialIcon name="add" outlined={false} />
       </button>
@@ -265,3 +284,4 @@ export default function PortfolioPage() {
     </Suspense>
   );
 }
+

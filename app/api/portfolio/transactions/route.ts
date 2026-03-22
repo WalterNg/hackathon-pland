@@ -135,6 +135,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Portfolio not found." }, { status: 404 });
   }
 
+  if (portfolio.mode === "binance_connected") {
+    return NextResponse.json(
+      { error: "Connected portfolios are read-only. Manual transactions are disabled." },
+      { status: 403 }
+    );
+  }
+
   const created = await createPortfolioTransaction(supabase, {
     userId: user.id,
     portfolioId: portfolio.id,
