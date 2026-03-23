@@ -38,3 +38,59 @@ class PortfolioDecision(BaseModel):
 class EvaluationResponse(BaseModel):
     status: str = "success"
     data: dict
+
+
+class BinanceConnectionAsset(BaseModel):
+    """Normalized Binance balance entry with free, locked, and estimated USD value."""
+
+    asset: str = Field(..., description="Normalized asset symbol returned by Binance.")
+    free: float = Field(..., ge=0, description="Available balance that can be traded or withdrawn.")
+    locked: float = Field(..., ge=0, description="Balance currently locked in orders or holds.")
+    quantity: float = Field(..., ge=0, description="Total asset quantity calculated as free plus locked.")
+    price_usd: float = Field(..., ge=0, description="Estimated USD price used for preview valuation.")
+    estimated_usd: float = Field(..., ge=0, description="Estimated USD value for this asset balance.")
+    is_stablecoin: bool = Field(default=False, description="Whether the asset is treated as a stablecoin.")
+
+
+class BinanceConnectionWarning(BaseModel):
+    """Warning emitted while building a Binance connection preview."""
+
+    code: str = Field(..., description="Machine-readable warning code.")
+    message: str = Field(..., description="Human-readable warning message.")
+    severity: Literal["info", "warning", "critical"] = Field(..., description="Warning severity level.")
+
+
+class BinanceConnectionAccountInfo(BaseModel):
+    """Account-level metadata returned by the Binance preview connector."""
+
+    account_type: str | None = Field(default=None, description="Binance account type, if available.")
+    can_trade: bool = Field(default=False, description="Whether the account can place trades.")
+    can_withdraw: bool = Field(default=False, description="Whether the account can withdraw funds.")
+    can_deposit: bool = Field(default=False, description="Whether the account can deposit funds.")
+    update_time: int | None = Field(default=None, description="Binance server timestamp for the account snapshot.")
+
+
+class BinanceConnectionTotals(BaseModel):
+    """Aggregate counts and valuation totals for a Binance connection preview."""
+
+    asset_count: int = Field(..., ge=0, description="Total number of assets included in the preview.")
+    non_zero_asset_count: int = Field(..., ge=0, description="Number of assets with a positive balance.")
+    total_estimated_usd: float = Field(..., ge=0, description="Total estimated USD value across all assets.")
+
+
+class BinanceConnectionPreviewData(BaseModel):
+    """Full preview payload for a Binance-connected portfolio setup."""
+
+    exchange: Literal["binance"] = Field(default="binance", description="Exchange source for the preview.")
+    mode: Literal["demo", "testnet"] = Field(default="demo", description="Binance environment used for the preview.")
+    account: BinanceConnectionAccountInfo = Field(..., description="Basic metadata for the connected account.")
+    assets: List[BinanceConnectionAsset] = Field(default_factory=list, description="Normalized asset balances.")
+    totals: BinanceConnectionTotals = Field(..., description="Aggregate totals for the preview.")
+    warnings: List[BinanceConnectionWarning] = Field(default_factory=list, description="Warnings surfaced during preview generation.")
+
+
+class BinanceConnectionPreviewResponse(BaseModel):
+    """API wrapper for Binance connection preview results."""
+
+    status: str = Field(default="success", description="Overall request status.")
+    data: BinanceConnectionPreviewData = Field(..., description="Preview payload returned by the Binance connector.")

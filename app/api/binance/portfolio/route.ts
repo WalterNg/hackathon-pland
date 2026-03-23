@@ -16,7 +16,11 @@ import {
 import { hasSupabaseEnv } from "@/app/lib/supabase/env";
 import { createSupabaseServerClient } from "@/app/lib/supabase/server";
 import { getUserPortfolioPositions } from "@/app/lib/repositories/portfolio-repo";
-import { resolveUserPortfolioByName } from "@/app/lib/repositories/portfolios-repo";
+import {
+  getBinanceConnectedSeedPositions,
+  resolveUserPortfolioByName,
+  updatePortfolioConnectionSyncState
+} from "@/app/lib/repositories/portfolios-repo";
 
 export const dynamic = "force-dynamic";
 
@@ -46,8 +50,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unable to resolve portfolio positions." }, { status: 500 });
   }
 
+  const positions = positionsOverride && positionsOverride.length > 0
+    ? positionsOverride
+    : portfolio.mode === "binance_connected"
+      ? getBinanceConnectedSeedPositions()
+      : positionsOverride ?? undefined;
+
   try {
-    const snapshot = await buildBinancePortfolioSnapshot(name, positionsOverride ?? undefined);
+    const snapshot = await buildBinancePortfolioSnapshot(name, positions ?? undefined);
     const nowIso = new Date().toISOString();
     const riskProfile = await getActiveRiskProfileByPortfolio(supabase, user.id, portfolio.id);
     let riskViolations: PortfolioRiskViolation[] = [];
@@ -84,6 +94,11 @@ export async function GET(request: Request) {
     };
 
     await savePortfolioSnapshotCache(supabase, user.id, portfolio.id, snapshotWithRisk);
+
+    if (portfolio.mode === "binance_connected") {
+      await updatePortfolioConnectionSyncState(supabase, user.id, portfolio.id, "active", nowIso);
+    }
+
     return NextResponse.json(snapshotWithRisk);
   } catch {
     const cached = await getLatestPortfolioSnapshotCache(supabase, user.id, portfolio.id);

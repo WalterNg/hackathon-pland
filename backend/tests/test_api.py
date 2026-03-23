@@ -5,7 +5,17 @@ from fastapi.testclient import TestClient
 
 from main import app
 from schemas.input import GraphMeta
-from schemas.output import PortfolioDecision, PortfolioNewsMarketResult, PortfolioRiskResult, PortfolioTAResult
+from schemas.output import (
+    BinanceConnectionAccountInfo,
+    BinanceConnectionAsset,
+    BinanceConnectionPreviewData,
+    BinanceConnectionTotals,
+    BinanceConnectionWarning,
+    PortfolioDecision,
+    PortfolioNewsMarketResult,
+    PortfolioRiskResult,
+    PortfolioTAResult,
+)
 
 client = TestClient(app)
 
@@ -85,3 +95,80 @@ async def test_evaluate_endpoint_success(
 def test_evaluate_endpoint_validation_error():
     response = client.post("/api/evaluate", json={"user_id": "user123"})
     assert response.status_code == 422
+
+
+@patch("api.routes.binance_connection._binance_connector.build_connection_preview", new_callable=AsyncMock)
+@pytest.mark.asyncio
+async def test_binance_connection_preview_success(mock_build_connection_preview):
+    mock_build_connection_preview.return_value = BinanceConnectionPreviewData(
+        mode="demo",
+        account=BinanceConnectionAccountInfo(
+            account_type="SPOT",
+            can_trade=True,
+            can_withdraw=False,
+            can_deposit=True,
+            update_time=1710000000000,
+        ),
+        assets=[
+            BinanceConnectionAsset(
+                asset="BTC",
+                free=0.42,
+                locked=0.0,
+                quantity=0.42,
+                price_usd=71000.0,
+                estimated_usd=29820.0,
+                is_stablecoin=False,
+            )
+        ],
+        totals=BinanceConnectionTotals(
+            asset_count=1,
+            non_zero_asset_count=1,
+            total_estimated_usd=29820.0,
+        ),
+        warnings=[
+            BinanceConnectionWarning(
+                code="price_unavailable",
+                message="Price unavailable for BTC.",
+                severity="warning",
+            )
+        ],
+    )
+
+    response = client.post(
+        "/api/binance/connection/preview",
+        json={
+            "mode": "demo",
+            "api_key": "demo-key",
+            "api_secret": "demo-secret",
+            "include_zero_balances": False,
+            "recv_window_ms": 5000,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "success"
+    assert payload["data"]["totals"]["total_estimated_usd"] == 29820.0
+    mock_build_connection_preview.assert_awaited_once()
+
+
+@patch("api.routes.binance_connection._binance_connector.build_connection_preview", new_callable=AsyncMock)
+@pytest.mark.asyncio
+async def test_binance_connection_preview_error(mock_build_connection_preview):
+    from services.binance_connector import BinanceConnectorError
+
+    mock_build_connection_preview.side_effect = BinanceConnectorError("Connector failed", status_code=400)
+
+    response = client.post(
+        "/api/binance/connection/preview",
+        json={
+            "mode": "testnet",
+            "api_key": "test-key",
+            "api_secret": "test-secret",
+            "include_zero_balances": False,
+            "recv_window_ms": 5000,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Connector failed"

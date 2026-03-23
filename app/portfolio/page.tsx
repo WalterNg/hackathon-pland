@@ -23,6 +23,18 @@ import type { PortfolioMode } from "@/app/lib/portfolio-types";
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
 
+function formatSyncTimestamp(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return "just now";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function PortfolioContent() {
   const pathname = usePathname();
   const router = useRouter();
@@ -53,6 +65,12 @@ function PortfolioContent() {
   );
   const isConnectedPortfolio = currentPortfolio?.mode === "binance_connected";
   const primaryActionLabel = isMainPortfolio ? "Create portfolio" : isConnectedPortfolio ? "Read-only" : "Add transaction";
+  const connectedStatusDescription =
+    isConnectedPortfolio && snapshot?.summary.timestamp
+      ? `This portfolio syncs automatically from Binance and manual edits are disabled. Last synced at ${formatSyncTimestamp(snapshot.summary.timestamp)}.`
+      : isConnectedPortfolio
+        ? "This portfolio syncs automatically from Binance and manual edits are disabled."
+        : undefined;
   const defaultPortfolioName = useMemo(() => `Portfolio ${portfolios.length + 1}`, [portfolios.length]);
 
   useEffect(() => {
@@ -160,11 +178,7 @@ function PortfolioContent() {
             <PortfolioHeader
               portfolioName={portfolioName}
               statusLabel={isConnectedPortfolio ? "Connected to Binance" : undefined}
-              statusDescription={
-                isConnectedPortfolio
-                  ? "This portfolio syncs automatically from Binance and manual edits are disabled."
-                  : undefined
-              }
+              statusDescription={connectedStatusDescription}
               primaryActionLabel={primaryActionLabel}
               onPrimaryAction={openTransactionFlow}
               isPrimaryActionDisabled={isConnectedPortfolio}

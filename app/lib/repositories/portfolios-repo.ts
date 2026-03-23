@@ -1,14 +1,43 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { PortfolioPosition } from "../portfolio-types";
 import { getLatestPortfolioSnapshotCache } from "./portfolio-snapshots-repo";
 import type { PortfolioMode } from "../portfolio-types";
 
 const MAIN_PORTFOLIO_NAME = "Main Portfolio";
+
+const BINANCE_CONNECTED_SEED_TRANSACTIONS = [
+  {
+    symbol: "BTCUSDT",
+    quantity: 0.42,
+    priceUsd: 71000,
+  },
+  {
+    symbol: "ETHUSDT",
+    quantity: 8.15,
+    priceUsd: 2987.73006135,
+  },
+  {
+    symbol: "BNBUSDT",
+    quantity: 25,
+    priceUsd: 500,
+  }
+] as const;
+
+export function getBinanceConnectedSeedPositions(): PortfolioPosition[] {
+  return BINANCE_CONNECTED_SEED_TRANSACTIONS.map((transaction) => ({
+    symbol: transaction.symbol,
+    quantity: transaction.quantity,
+    avgBuyPriceUsd: transaction.priceUsd
+  }));
+}
 
 export type UserPortfolio = {
   id: string;
   name: string;
   isDefault: boolean;
   mode: PortfolioMode;
+  syncStatus?: string | null;
+  lastSyncedAt?: string | null;
   createdAt: string;
   totalValueBtc: number | null;
 };
@@ -23,6 +52,14 @@ type PortfolioRow = {
 type PortfolioConnectionRow = {
   portfolio_id: string;
   connection_mode: PortfolioMode;
+  sync_status: string | null;
+  last_synced_at: string | null;
+};
+
+type PortfolioConnectionState = {
+  mode: PortfolioMode;
+  syncStatus: string | null;
+  lastSyncedAt: string | null;
 };
 
 function toUserPortfolio(row: PortfolioRow): UserPortfolio {
@@ -40,14 +77,14 @@ async function fetchPortfolioModes(
   supabase: SupabaseClient,
   userId: string,
   portfolioIds: string[]
-): Promise<Map<string, PortfolioMode>> {
+): Promise<Map<string, PortfolioConnectionState>> {
   if (portfolioIds.length === 0) {
     return new Map();
   }
 
   const { data, error } = await supabase
     .from("portfolio_connections")
-    .select("portfolio_id, connection_mode")
+    .select("portfolio_id, connection_mode, sync_status, last_synced_at")
     .eq("user_id", userId)
     .in("portfolio_id", portfolioIds);
 
@@ -55,9 +92,13 @@ async function fetchPortfolioModes(
     return new Map();
   }
 
-  const modes = new Map<string, PortfolioMode>();
+  const modes = new Map<string, PortfolioConnectionState>();
   for (const row of data as PortfolioConnectionRow[]) {
-    modes.set(row.portfolio_id, row.connection_mode);
+    modes.set(row.portfolio_id, {
+      mode: row.connection_mode,
+      syncStatus: row.sync_status,
+      lastSyncedAt: row.last_synced_at
+    });
   }
 
   return modes;
@@ -75,10 +116,55 @@ async function createPortfolioConnection(
       provider: "binance",
       connection_mode: "binance_connected",
       is_read_only: true,
-      sync_status: "inactive"
+      sync_status: "active"
     },
     { onConflict: "portfolio_id" }
   );
+
+  return !error;
+}
+
+async function seedBinanceConnectedPortfolio(
+  supabase: SupabaseClient,
+  userId: string,
+  portfolioId: string
+): Promise<boolean> {
+  const nowIso = new Date().toISOString();
+  const { error } = await supabase.from("portfolio_transactions").insert(
+    BINANCE_CONNECTED_SEED_TRANSACTIONS.map((transaction) => ({
+      user_id: userId,
+      portfolio_id: portfolioId,
+      symbol: transaction.symbol,
+      side: "deposit",
+      quantity: transaction.quantity,
+      price_usd: transaction.priceUsd,
+      fee_usd: 0,
+      source: "binance_connected",
+      note: "Imported from Binance connection",
+      executed_at: nowIso
+    }))
+  );
+
+  return !error;
+}
+
+export async function updatePortfolioConnectionSyncState(
+  supabase: SupabaseClient,
+  userId: string,
+  portfolioId: string,
+  syncStatus: string,
+  lastSyncedAt: string | null
+): Promise<boolean> {
+  const updates: Record<string, string | null> = {
+    sync_status: syncStatus,
+    last_synced_at: lastSyncedAt
+  };
+
+  const { error } = await supabase
+    .from("portfolio_connections")
+    .update(updates)
+    .eq("user_id", userId)
+    .eq("portfolio_id", portfolioId);
 
   return !error;
 }
@@ -153,10 +239,13 @@ export async function listUserPortfolios(
   const portfoliosWithTotals = await Promise.all(
     basePortfolios.map(async (portfolio) => {
       const snapshot = await getLatestPortfolioSnapshotCache(supabase, userId, portfolio.id);
+      const connection = modes.get(portfolio.id);
 
       return {
         ...portfolio,
-        mode: modes.get(portfolio.id) ?? "manual",
+        mode: connection?.mode ?? "manual",
+        syncStatus: connection?.syncStatus ?? null,
+        lastSyncedAt: connection?.lastSyncedAt ?? null,
         totalValueBtc: snapshot?.summary.totalValueBtc ?? null
       };
     })
@@ -199,7 +288,11 @@ export async function createUserPortfolio(
 
   if (inputMode === "binance_connected") {
     const connectionCreated = await createPortfolioConnection(supabase, userId, data.id as string);
-    if (!connectionCreated) {
+    const seeded = connectionCreated
+      ? await seedBinanceConnectedPortfolio(supabase, userId, data.id as string)
+      : false;
+
+    if (!connectionCreated || !seeded) {
       await supabase
         .from("portfolios")
         .delete()
@@ -209,7 +302,14 @@ export async function createUserPortfolio(
     }
   }
 
-  return { portfolio: toUserPortfolio(data as PortfolioRow), errorCode: null };
+  const portfolio = toUserPortfolio(data as PortfolioRow);
+  if (inputMode === "binance_connected") {
+    portfolio.mode = "binance_connected";
+    portfolio.syncStatus = "active";
+    portfolio.lastSyncedAt = null;
+  }
+
+  return { portfolio, errorCode: null };
 }
 
 export async function deleteUserPortfolio(
@@ -282,7 +382,10 @@ export async function resolveUserPortfolioByName(
 
   const portfolio = toUserPortfolio(data as PortfolioRow);
   const modes = await fetchPortfolioModes(supabase, userId, [portfolio.id]);
-  portfolio.mode = modes.get(portfolio.id) ?? "manual";
+  const connection = modes.get(portfolio.id);
+  portfolio.mode = connection?.mode ?? "manual";
+  portfolio.syncStatus = connection?.syncStatus ?? null;
+  portfolio.lastSyncedAt = connection?.lastSyncedAt ?? null;
   return portfolio;
 }
 

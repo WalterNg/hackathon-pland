@@ -12,16 +12,58 @@ type CreatePortfolioDialogProps = {
 };
 
 export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: CreatePortfolioDialogProps) {
+  const SERVER_DEMO_MASK = "server-demo-credential";
   const [name, setName] = useState(defaultName);
   const [mode, setMode] = useState<PortfolioMode>("manual");
+  const [connectionMode, setConnectionMode] = useState<"demo" | "testnet">("demo");
+  const [apiKey, setApiKey] = useState("");
+  const [apiSecret, setApiSecret] = useState("");
   const [isSubmitting, setSubmitting] = useState(false);
+  const [useServerDemoCredentials, setUseServerDemoCredentials] = useState(false);
+  const [isLoadingPreview, setLoadingPreview] = useState(false);
+  const [preview, setPreview] = useState<{
+    exchange: "binance";
+    mode: "demo" | "testnet";
+    account: {
+      account_type: string | null;
+      can_trade: boolean;
+      can_withdraw: boolean;
+      can_deposit: boolean;
+      update_time: number | null;
+    };
+    assets: Array<{
+      asset: string;
+      free: number;
+      locked: number;
+      quantity: number;
+      price_usd: number;
+      estimated_usd: number;
+      is_stablecoin: boolean;
+    }>;
+    totals: {
+      asset_count: number;
+      non_zero_asset_count: number;
+      total_estimated_usd: number;
+    };
+    warnings: Array<{
+      code: string;
+      message: string;
+      severity: "info" | "warning" | "critical";
+    }>;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setName(defaultName);
       setMode("manual");
+      setConnectionMode("demo");
+      setApiKey("");
+      setApiSecret("");
+      setUseServerDemoCredentials(false);
       setError(null);
+      setPreview(null);
+      setLoadingPreview(false);
     }
   }, [open, defaultName]);
 
@@ -29,7 +71,68 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
     return null;
   }
 
-  const canSubmit = name.trim().length > 0;
+  const apiKeyInputValue = useServerDemoCredentials ? SERVER_DEMO_MASK : apiKey;
+  const apiSecretInputValue = useServerDemoCredentials ? SERVER_DEMO_MASK : apiSecret;
+  const canSubmit = name.trim().length > 0 && (mode !== "binance_connected" || Boolean(preview));
+
+  const applyServerDemoCredentials = () => {
+    if (connectionMode !== "demo") {
+      return;
+    }
+
+    setApiKey("");
+    setApiSecret("");
+    setUseServerDemoCredentials(true);
+    setPreview(null);
+    setError(null);
+  };
+
+  const loadPreview = async () => {
+    const hasManualCredentials = Boolean(apiKey.trim() && apiSecret.trim());
+    const canUseServerDemo = connectionMode === "demo" && useServerDemoCredentials;
+
+    if (!hasManualCredentials && !canUseServerDemo) {
+      setError("API key and secret are required for Binance preview.");
+      return;
+    }
+
+    setLoadingPreview(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/binance/connection/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: connectionMode,
+          api_key: hasManualCredentials ? apiKey.trim() : undefined,
+          api_secret: hasManualCredentials ? apiSecret.trim() : undefined,
+          include_zero_balances: false,
+          recv_window_ms: 5000
+        })
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            status?: string;
+            data?: typeof preview;
+            error?: string;
+            detail?: string;
+          }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error ?? payload?.detail ?? "Unable to load Binance preview.");
+      }
+
+      setPreview(payload?.data ?? null);
+    } catch (previewError) {
+      setPreview(null);
+      setError(previewError instanceof Error ? previewError.message : "Unable to load Binance preview.");
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
 
   const handleSubmit = async () => {
     const trimmed = name.trim();
@@ -121,6 +224,165 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
           </div>
         </div>
 
+        {mode === "binance_connected" ? (
+          <div className="panel-low mb-4 border border-(--surface-outline) p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">Preview</p>
+                <h3 className="mt-1 text-sm font-semibold text-strong">Binance connection preview</h3>
+              </div>
+              <span className="rounded-full bg-warning-soft px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-warning">
+                {connectionMode}
+              </span>
+            </div>
+
+            <p className="mt-2 text-xs leading-5 text-muted">
+              Connect using Binance Demo or Binance Testnet, then review the balances before activation.
+            </p>
+
+            <div className="mt-4 grid gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConnectionMode("demo");
+                    setApiKey("");
+                    setApiSecret("");
+                    setUseServerDemoCredentials(false);
+                    setPreview(null);
+                    setError(null);
+                  }}
+                  className={`rounded-2xl border px-4 py-3 text-left transition ${
+                    connectionMode === "demo"
+                      ? "border-primary bg-(--surface-container-highest)"
+                      : "border-(--surface-outline) bg-(--surface-container-low)"
+                  }`}
+                >
+                  <span className="block text-sm font-semibold text-strong">Demo</span>
+                  <span className="mt-1 block text-xs leading-5 text-muted">Binance demo API.</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConnectionMode("testnet");
+                    setApiKey("");
+                    setApiSecret("");
+                    setUseServerDemoCredentials(false);
+                    setPreview(null);
+                    setError(null);
+                  }}
+                  className={`rounded-2xl border px-4 py-3 text-left transition ${
+                    connectionMode === "testnet"
+                      ? "border-primary bg-(--surface-container-highest)"
+                      : "border-(--surface-outline) bg-(--surface-container-low)"
+                  }`}
+                >
+                  <span className="block text-sm font-semibold text-strong">Testnet</span>
+                  <span className="mt-1 block text-xs leading-5 text-muted">Binance Spot testnet.</span>
+                </button>
+              </div>
+
+              <div>
+                <label className="field-label">API Key</label>
+                <input
+                  type="password"
+                  value={apiKeyInputValue}
+                  onChange={(event) => {
+                    setApiKey(event.target.value);
+                    setUseServerDemoCredentials(false);
+                    setPreview(null);
+                  }}
+                  placeholder="Binance API key"
+                  className="field-input"
+                />
+              </div>
+
+              <div>
+                <label className="field-label">API Secret</label>
+                <input
+                  type="password"
+                  value={apiSecretInputValue}
+                  onChange={(event) => {
+                    setApiSecret(event.target.value);
+                    setUseServerDemoCredentials(false);
+                    setPreview(null);
+                  }}
+                  placeholder="Binance API secret"
+                  className="field-input"
+                />
+              </div>
+
+              {connectionMode === "demo" ? (
+                <button
+                  type="button"
+                  onClick={applyServerDemoCredentials}
+                  className="ui-button-secondary w-full disabled:opacity-60"
+                >
+                  Use demo credentials
+                </button>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => void loadPreview()}
+                disabled={isLoadingPreview || (!useServerDemoCredentials && (!apiKey.trim() || !apiSecret.trim()))}
+                className="ui-button-secondary w-full disabled:opacity-60"
+              >
+                {isLoadingPreview ? "Loading preview..." : "Load preview"}
+              </button>
+
+              {preview ? (
+                <div className="rounded-2xl border border-(--surface-outline) bg-(--surface-container-low) p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">Result</p>
+                      <h4 className="mt-1 text-sm font-semibold text-strong">
+                        {preview.mode === "demo" ? "Demo balances" : "Testnet balances"}
+                      </h4>
+                    </div>
+                    <div className="text-right text-xs text-muted">
+                      <div>{preview.totals.non_zero_asset_count} active assets</div>
+                      <div>{preview.totals.total_estimated_usd.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid gap-2">
+                    {preview.assets.map((asset) => (
+                      <div
+                        key={asset.asset}
+                        className="flex items-center justify-between gap-3 rounded-2xl border border-(--surface-outline) bg-(--surface-container-highest) px-3 py-2.5"
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-strong">{asset.asset}</p>
+                          <p className="text-xs text-muted">
+                            Qty: {asset.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}
+                          </p>
+                        </div>
+                        <p className="text-sm font-semibold text-strong">
+                          {asset.estimated_usd.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {preview.warnings.length > 0 ? (
+                    <div className="mt-3 grid gap-2">
+                      {preview.warnings.map((warning) => (
+                        <div
+                          key={warning.code}
+                          className="rounded-xl border border-warning/30 bg-warning-soft/40 px-3 py-2 text-xs text-warning"
+                        >
+                          {warning.message}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         {error && <div className="panel-low mb-3 p-3 text-xs text-danger sm:text-sm">{error}</div>}
 
         <div className="flex items-center justify-end gap-3">
@@ -138,7 +400,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
             disabled={!canSubmit || isSubmitting}
             className="ui-button-primary disabled:opacity-60"
           >
-            {isSubmitting ? "Creating..." : "Create"}
+            {isSubmitting ? "Creating..." : mode === "binance_connected" ? "Connect & create" : "Create"}
           </button>
         </div>
       </div>
