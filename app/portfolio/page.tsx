@@ -92,8 +92,8 @@ function PortfolioContent() {
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
   };
 
-  const handleCreatePortfolio = async (name: string, mode: PortfolioMode) => {
-    const result = await createPortfolio(name, mode);
+  const handleCreatePortfolio = async (name: string, mode: PortfolioMode, idempotencyKey?: string) => {
+    const result = await createPortfolio(name, mode, { idempotencyKey });
     if (!result.ok) {
       throw new Error(result.message ?? "Unable to create portfolio.");
     }

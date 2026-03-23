@@ -25,7 +25,11 @@ type UsePortfoliosResult = {
   portfolios: PortfolioItem[];
   isLoading: boolean;
   error: string | null;
-  createPortfolio: (name: string, mode: "manual" | "binance_connected") => Promise<{ ok: boolean; message?: string; portfolioName?: string }>;
+  createPortfolio: (
+    name: string,
+    mode: "manual" | "binance_connected",
+    options?: { idempotencyKey?: string }
+  ) => Promise<{ ok: boolean; message?: string; portfolioName?: string }>;
   removePortfolio: (name: string) => Promise<{ ok: boolean; message?: string }>;
   reload: () => Promise<void>;
 };
@@ -71,11 +75,15 @@ export function usePortfolios(): UsePortfoliosResult {
     loadPortfolios();
   }, [loadPortfolios]);
 
-  const createPortfolio = useCallback(async (name: string, mode: "manual" | "binance_connected") => {
+  const createPortfolio = useCallback(async (
+    name: string,
+    mode: "manual" | "binance_connected",
+    options?: { idempotencyKey?: string }
+  ) => {
     const response = await fetch("/api/portfolios", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, mode })
+      body: JSON.stringify({ name, mode, idempotencyKey: options?.idempotencyKey })
     });
 
     if (!response.ok) {

@@ -33,11 +33,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const payload = (await request.json().catch(() => null)) as { name?: string; mode?: "manual" | "binance_connected" } | null;
+  const payload = (await request.json().catch(() => null)) as {
+    name?: string;
+    mode?: "manual" | "binance_connected";
+    idempotencyKey?: string;
+  } | null;
   const nextName = payload?.name ?? "";
   const nextMode = payload?.mode === "binance_connected" ? "binance_connected" : "manual";
+  const nextIdempotencyKey = payload?.idempotencyKey ?? undefined;
 
-  const { portfolio, errorCode } = await createUserPortfolio(supabase, user.id, nextName, nextMode);
+  const { portfolio, errorCode, isReplay } = await createUserPortfolio(
+    supabase,
+    user.id,
+    nextName,
+    nextMode,
+    nextIdempotencyKey
+  );
 
   if (errorCode === "invalid-name") {
     return NextResponse.json({ error: "Portfolio name is required." }, { status: 400 });
@@ -47,11 +58,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Portfolio name already exists." }, { status: 409 });
   }
 
+  if (errorCode === "idempotency-conflict") {
+    return NextResponse.json(
+      { error: "This setup key is already used for another request. Please retry from the create dialog." },
+      { status: 409 }
+    );
+  }
+
+  if (errorCode === "idempotency-expired") {
+    return NextResponse.json(
+      { error: "This setup session expired. Please retry to create the portfolio." },
+      { status: 409 }
+    );
+  }
+
+  if (errorCode === "idempotency-in-progress") {
+    return NextResponse.json(
+      { error: "Setup is already in progress for this request. Please wait a moment and retry." },
+      { status: 409 }
+    );
+  }
+
   if (errorCode || !portfolio) {
     return NextResponse.json({ error: "Unable to create portfolio." }, { status: 500 });
   }
 
-  return NextResponse.json({ portfolio }, { status: 201 });
+  return NextResponse.json({ portfolio }, { status: isReplay ? 200 : 201 });
 }
 
 export async function DELETE(request: Request) {

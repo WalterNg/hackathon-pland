@@ -8,8 +8,16 @@ type CreatePortfolioDialogProps = {
   open: boolean;
   defaultName: string;
   onClose: () => void;
-  onSubmit: (name: string, mode: PortfolioMode) => Promise<void>;
+  onSubmit: (name: string, mode: PortfolioMode, idempotencyKey?: string) => Promise<void>;
 };
+
+function createIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `setup-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: CreatePortfolioDialogProps) {
   const SERVER_DEMO_MASK = "server-demo-credential";
@@ -18,6 +26,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
   const [connectionMode, setConnectionMode] = useState<"demo" | "testnet">("demo");
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
+  const [setupIdempotencyKey, setSetupIdempotencyKey] = useState<string>(createIdempotencyKey());
   const [isSubmitting, setSubmitting] = useState(false);
   const [useServerDemoCredentials, setUseServerDemoCredentials] = useState(false);
   const [isLoadingPreview, setLoadingPreview] = useState(false);
@@ -60,6 +69,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
       setConnectionMode("demo");
       setApiKey("");
       setApiSecret("");
+      setSetupIdempotencyKey(createIdempotencyKey());
       setUseServerDemoCredentials(false);
       setError(null);
       setPreview(null);
@@ -144,9 +154,10 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
     setError(null);
 
     try {
-      await onSubmit(trimmed, mode);
+      await onSubmit(trimmed, mode, setupIdempotencyKey);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to create portfolio.");
+      setSetupIdempotencyKey(createIdempotencyKey());
     } finally {
       setSubmitting(false);
     }
@@ -160,193 +171,211 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
 
   return (
     <div className="modal-backdrop z-90">
-      <div className="modal-shell max-w-sm p-5 sm:p-6">
-        <div className="mb-5 flex items-start justify-between gap-4">
-          <h2 className="text-xl font-bold text-strong">Create Portfolio</h2>
+      <div className="modal-shell max-h-[94vh] w-full max-w-5xl overflow-hidden">
+        <div className="flex items-start justify-between gap-4 border-b border-(--surface-outline) px-5 py-4 sm:px-6">
+          <div>
+            <h2 className="text-xl font-bold text-strong">Create Portfolio</h2>
+            <p className="mt-1 text-xs text-muted">
+              Choose your setup mode and confirm connection details before activation.
+            </p>
+          </div>
           <button type="button" onClick={onClose} className="icon-button h-10 w-10" aria-label="Close">
             <MaterialIcon name="close" outlined={false} className="text-xl" />
           </button>
         </div>
 
-        <label className="field-label">Portfolio name</label>
-        <input
-          type="text"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="e.g. DeFi, Long-term holds"
-          autoFocus
-          className="field-input mb-4"
-        />
+        <div className="max-h-[calc(94vh-150px)] overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
+          <label className="field-label">Portfolio name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="e.g. DeFi, Long-term holds"
+            autoFocus
+            className="field-input mb-5"
+          />
 
-        <div className="mb-4">
-          <label className="field-label">Choose setup mode</label>
-          <div className="grid gap-3">
-            <button
-              type="button"
-              onClick={() => setMode("manual")}
-              className={`flex items-start gap-3 rounded-2xl border px-4 py-4 text-left transition ${
-                mode === "manual"
-                  ? "border-primary bg-(--surface-container-highest)"
-                  : "border-(--surface-outline) bg-(--surface-container-low)"
-              }`}
-            >
-              <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success-soft text-success">
-                <MaterialIcon name="edit" outlined={false} className="text-base" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold text-strong">Manually add transactions</span>
-                <span className="mt-1 block text-xs leading-5 text-muted">
-                  Keep full control and enter buys, sells, deposits, and withdrawals by hand.
+          <div className="mb-5">
+            <label className="field-label">Choose setup mode</label>
+            <div className="grid gap-3 md:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setMode("manual")}
+                className={`flex items-start gap-3 rounded-2xl border px-4 py-4 text-left transition ${
+                  mode === "manual"
+                    ? "border-primary bg-(--surface-container-highest)"
+                    : "border-(--surface-outline) bg-(--surface-container-low)"
+                }`}
+              >
+                <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success-soft text-success">
+                  <MaterialIcon name="edit" outlined={false} className="text-base" />
                 </span>
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setMode("binance_connected")}
-              className={`flex items-start gap-3 rounded-2xl border px-4 py-4 text-left transition ${
-                mode === "binance_connected"
-                  ? "border-primary bg-(--surface-container-highest)"
-                  : "border-(--surface-outline) bg-(--surface-container-low)"
-              }`}
-            >
-              <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning">
-                <MaterialIcon name="link" outlined={false} className="text-base" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold text-strong">Connect Binance account</span>
-                <span className="mt-1 block text-xs leading-5 text-muted">
-                  Sync balances automatically and disable manual edits for this portfolio.
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-strong">Manually add transactions</span>
+                  <span className="mt-1 block text-xs leading-5 text-muted">
+                    Keep full control and enter buys, sells, deposits, and withdrawals by hand.
+                  </span>
                 </span>
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {mode === "binance_connected" ? (
-          <div className="panel-low mb-4 border border-(--surface-outline) p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">Preview</p>
-                <h3 className="mt-1 text-sm font-semibold text-strong">Binance connection preview</h3>
-              </div>
-              <span className="rounded-full bg-warning-soft px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-warning">
-                {connectionMode}
-              </span>
-            </div>
-
-            <p className="mt-2 text-xs leading-5 text-muted">
-              Connect using Binance Demo or Binance Testnet, then review the balances before activation.
-            </p>
-
-            <div className="mt-4 grid gap-3">
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConnectionMode("demo");
-                    setApiKey("");
-                    setApiSecret("");
-                    setUseServerDemoCredentials(false);
-                    setPreview(null);
-                    setError(null);
-                  }}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
-                    connectionMode === "demo"
-                      ? "border-primary bg-(--surface-container-highest)"
-                      : "border-(--surface-outline) bg-(--surface-container-low)"
-                  }`}
-                >
-                  <span className="block text-sm font-semibold text-strong">Demo</span>
-                  <span className="mt-1 block text-xs leading-5 text-muted">Binance demo API.</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConnectionMode("testnet");
-                    setApiKey("");
-                    setApiSecret("");
-                    setUseServerDemoCredentials(false);
-                    setPreview(null);
-                    setError(null);
-                  }}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
-                    connectionMode === "testnet"
-                      ? "border-primary bg-(--surface-container-highest)"
-                      : "border-(--surface-outline) bg-(--surface-container-low)"
-                  }`}
-                >
-                  <span className="block text-sm font-semibold text-strong">Testnet</span>
-                  <span className="mt-1 block text-xs leading-5 text-muted">Binance Spot testnet.</span>
-                </button>
-              </div>
-
-              <div>
-                <label className="field-label">API Key</label>
-                <input
-                  type="password"
-                  value={apiKeyInputValue}
-                  onChange={(event) => {
-                    setApiKey(event.target.value);
-                    setUseServerDemoCredentials(false);
-                    setPreview(null);
-                  }}
-                  placeholder="Binance API key"
-                  className="field-input"
-                />
-              </div>
-
-              <div>
-                <label className="field-label">API Secret</label>
-                <input
-                  type="password"
-                  value={apiSecretInputValue}
-                  onChange={(event) => {
-                    setApiSecret(event.target.value);
-                    setUseServerDemoCredentials(false);
-                    setPreview(null);
-                  }}
-                  placeholder="Binance API secret"
-                  className="field-input"
-                />
-              </div>
-
-              {connectionMode === "demo" ? (
-                <button
-                  type="button"
-                  onClick={applyServerDemoCredentials}
-                  className="ui-button-secondary w-full disabled:opacity-60"
-                >
-                  Use demo credentials
-                </button>
-              ) : null}
+              </button>
 
               <button
                 type="button"
-                onClick={() => void loadPreview()}
-                disabled={isLoadingPreview || (!useServerDemoCredentials && (!apiKey.trim() || !apiSecret.trim()))}
-                className="ui-button-secondary w-full disabled:opacity-60"
+                onClick={() => setMode("binance_connected")}
+                className={`flex items-start gap-3 rounded-2xl border px-4 py-4 text-left transition ${
+                  mode === "binance_connected"
+                    ? "border-primary bg-(--surface-container-highest)"
+                    : "border-(--surface-outline) bg-(--surface-container-low)"
+                }`}
               >
-                {isLoadingPreview ? "Loading preview..." : "Load preview"}
+                <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning">
+                  <MaterialIcon name="link" outlined={false} className="text-base" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-strong">Connect Binance account</span>
+                  <span className="mt-1 block text-xs leading-5 text-muted">
+                    Sync balances automatically and disable manual edits for this portfolio.
+                  </span>
+                </span>
               </button>
+            </div>
+          </div>
 
-              {preview ? (
-                <div className="rounded-2xl border border-(--surface-outline) bg-(--surface-container-low) p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">Result</p>
-                      <h4 className="mt-1 text-sm font-semibold text-strong">
-                        {preview.mode === "demo" ? "Demo balances" : "Testnet balances"}
-                      </h4>
-                    </div>
+          {mode === "binance_connected" ? (
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+              <section className="panel-low rounded-2xl border border-(--surface-outline) p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">Connection</p>
+                    <h3 className="mt-1 text-sm font-semibold text-strong">Binance setup</h3>
+                  </div>
+                  <span className="rounded-full bg-warning-soft px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-warning">
+                    {connectionMode}
+                  </span>
+                </div>
+
+                <p className="mt-2 text-xs leading-5 text-muted">
+                  Use Demo or Testnet credentials, then load a preview before creating the connected portfolio.
+                </p>
+
+                <div className="mt-4 grid gap-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConnectionMode("demo");
+                        setApiKey("");
+                        setApiSecret("");
+                        setUseServerDemoCredentials(false);
+                        setPreview(null);
+                        setError(null);
+                      }}
+                      className={`rounded-2xl border px-4 py-3 text-left transition ${
+                        connectionMode === "demo"
+                          ? "border-primary bg-(--surface-container-highest)"
+                          : "border-(--surface-outline) bg-(--surface-container-low)"
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold text-strong">Demo</span>
+                      <span className="mt-1 block text-xs leading-5 text-muted">Binance demo API.</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConnectionMode("testnet");
+                        setApiKey("");
+                        setApiSecret("");
+                        setUseServerDemoCredentials(false);
+                        setPreview(null);
+                        setError(null);
+                      }}
+                      className={`rounded-2xl border px-4 py-3 text-left transition ${
+                        connectionMode === "testnet"
+                          ? "border-primary bg-(--surface-container-highest)"
+                          : "border-(--surface-outline) bg-(--surface-container-low)"
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold text-strong">Testnet</span>
+                      <span className="mt-1 block text-xs leading-5 text-muted">Binance Spot testnet.</span>
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="field-label">API Key</label>
+                    <input
+                      type="password"
+                      value={apiKeyInputValue}
+                      onChange={(event) => {
+                        setApiKey(event.target.value);
+                        setUseServerDemoCredentials(false);
+                        setPreview(null);
+                      }}
+                      placeholder="Binance API key"
+                      className="field-input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="field-label">API Secret</label>
+                    <input
+                      type="password"
+                      value={apiSecretInputValue}
+                      onChange={(event) => {
+                        setApiSecret(event.target.value);
+                        setUseServerDemoCredentials(false);
+                        setPreview(null);
+                      }}
+                      placeholder="Binance API secret"
+                      className="field-input"
+                    />
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {connectionMode === "demo" ? (
+                      <button
+                        type="button"
+                        onClick={applyServerDemoCredentials}
+                        className="ui-button-secondary w-full disabled:opacity-60"
+                      >
+                        Use demo credentials
+                      </button>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      onClick={() => void loadPreview()}
+                      disabled={isLoadingPreview || (!useServerDemoCredentials && (!apiKey.trim() || !apiSecret.trim()))}
+                      className="ui-button-secondary w-full disabled:opacity-60"
+                    >
+                      {isLoadingPreview ? "Loading preview..." : "Load preview"}
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <section className="panel-low rounded-2xl border border-(--surface-outline) p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">Result</p>
+                    <h4 className="mt-1 text-sm font-semibold text-strong">
+                      {preview ? (preview.mode === "demo" ? "Demo balances" : "Testnet balances") : "No preview loaded"}
+                    </h4>
+                  </div>
+                  {preview ? (
                     <div className="text-right text-xs text-muted">
                       <div>{preview.totals.non_zero_asset_count} active assets</div>
                       <div>{preview.totals.total_estimated_usd.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD</div>
                     </div>
-                  </div>
+                  ) : null}
+                </div>
 
-                  <div className="mt-3 grid gap-2">
+                {!preview ? (
+                  <div className="mt-4 rounded-2xl border border-dashed border-(--surface-outline) bg-(--surface-container-low) px-4 py-8 text-center">
+                    <p className="text-sm font-semibold text-strong">Preview will appear here</p>
+                    <p className="mt-1 text-xs text-muted">Load preview to validate balances before activation.</p>
+                  </div>
+                ) : (
+                  <div className="mt-4 grid gap-2">
                     {preview.assets.map((asset) => (
                       <div
                         key={asset.asset}
@@ -364,28 +393,28 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
                       </div>
                     ))}
                   </div>
+                )}
 
-                  {preview.warnings.length > 0 ? (
-                    <div className="mt-3 grid gap-2">
-                      {preview.warnings.map((warning) => (
-                        <div
-                          key={warning.code}
-                          className="rounded-xl border border-warning/30 bg-warning-soft/40 px-3 py-2 text-xs text-warning"
-                        >
-                          {warning.message}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
+                {preview && preview.warnings.length > 0 ? (
+                  <div className="mt-3 grid gap-2">
+                    {preview.warnings.map((warning) => (
+                      <div
+                        key={warning.code}
+                        className="rounded-xl border border-warning/30 bg-warning-soft/40 px-3 py-2 text-xs text-warning"
+                      >
+                        {warning.message}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
             </div>
-          </div>
-        ) : null}
+          ) : null}
 
-        {error && <div className="panel-low mb-3 p-3 text-xs text-danger sm:text-sm">{error}</div>}
+          {error ? <div className="panel-low mt-4 p-3 text-xs text-danger sm:text-sm">{error}</div> : null}
+        </div>
 
-        <div className="flex items-center justify-end gap-3">
+        <div className="flex items-center justify-end gap-3 border-t border-(--surface-outline) px-5 py-4 sm:px-6">
           <button
             type="button"
             onClick={onClose}

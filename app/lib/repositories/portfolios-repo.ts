@@ -4,6 +4,7 @@ import { getLatestPortfolioSnapshotCache } from "./portfolio-snapshots-repo";
 import type { PortfolioMode } from "../portfolio-types";
 
 const MAIN_PORTFOLIO_NAME = "Main Portfolio";
+const SETUP_SESSION_TTL_MINUTES = 10;
 
 const BINANCE_CONNECTED_SEED_TRANSACTIONS = [
   {
@@ -62,6 +63,22 @@ type PortfolioConnectionState = {
   lastSyncedAt: string | null;
 };
 
+type PortfolioSetupSessionRow = {
+  idempotency_key: string;
+  request_name: string;
+  request_mode: PortfolioMode;
+  status: "pending" | "completed";
+  portfolio_id: string | null;
+  expires_at: string;
+};
+
+type SetupSessionState = "fresh" | "replay" | "in-progress" | "expired" | "conflict" | "error";
+
+type SetupSessionResult = {
+  state: SetupSessionState;
+  portfolio?: UserPortfolio | null;
+};
+
 function toUserPortfolio(row: PortfolioRow): UserPortfolio {
   return {
     id: row.id,
@@ -71,6 +88,114 @@ function toUserPortfolio(row: PortfolioRow): UserPortfolio {
     createdAt: row.created_at,
     totalValueBtc: null
   };
+}
+
+function normalizeIdempotencyKey(rawKey: string | null | undefined): string | null {
+  const key = rawKey?.trim();
+  if (!key) {
+    return null;
+  }
+
+  return key.slice(0, 128);
+}
+
+async function reservePortfolioSetupSession(
+  supabase: SupabaseClient,
+  userId: string,
+  idempotencyKey: string,
+  requestName: string,
+  requestMode: PortfolioMode
+): Promise<SetupSessionResult> {
+  const now = Date.now();
+  const { data: existing, error: existingError } = await supabase
+    .from("portfolio_setup_sessions")
+    .select("idempotency_key, request_name, request_mode, status, portfolio_id, expires_at")
+    .eq("user_id", userId)
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle();
+
+  if (existingError) {
+    return { state: "error" };
+  }
+
+  const existingSession = existing as PortfolioSetupSessionRow | null;
+  if (existingSession) {
+    const expiresAt = new Date(existingSession.expires_at).getTime();
+    if (Number.isNaN(expiresAt) || expiresAt <= now) {
+      return { state: "expired" };
+    }
+
+    if (existingSession.request_name !== requestName || existingSession.request_mode !== requestMode) {
+      return { state: "conflict" };
+    }
+
+    if (existingSession.status === "completed" && existingSession.portfolio_id) {
+      const { data: portfolioRow, error: portfolioError } = await supabase
+        .from("portfolios")
+        .select("id, name, is_default, created_at")
+        .eq("user_id", userId)
+        .eq("id", existingSession.portfolio_id)
+        .maybeSingle();
+
+      if (portfolioError || !portfolioRow?.id) {
+        return { state: "error" };
+      }
+
+      const portfolio = toUserPortfolio(portfolioRow as PortfolioRow);
+      const modes = await fetchPortfolioModes(supabase, userId, [portfolio.id]);
+      const connection = modes.get(portfolio.id);
+      portfolio.mode = connection?.mode ?? "manual";
+      portfolio.syncStatus = connection?.syncStatus ?? null;
+      portfolio.lastSyncedAt = connection?.lastSyncedAt ?? null;
+      return { state: "replay", portfolio };
+    }
+
+    return { state: "in-progress" };
+  }
+
+  const expiresAt = new Date(now + SETUP_SESSION_TTL_MINUTES * 60 * 1000).toISOString();
+  const { error: insertError } = await supabase.from("portfolio_setup_sessions").insert({
+    user_id: userId,
+    idempotency_key: idempotencyKey,
+    request_name: requestName,
+    request_mode: requestMode,
+    status: "pending",
+    expires_at: expiresAt
+  });
+
+  if (insertError) {
+    return { state: "error" };
+  }
+
+  return { state: "fresh" };
+}
+
+async function completePortfolioSetupSession(
+  supabase: SupabaseClient,
+  userId: string,
+  idempotencyKey: string,
+  portfolioId: string
+): Promise<void> {
+  await supabase
+    .from("portfolio_setup_sessions")
+    .update({
+      status: "completed",
+      portfolio_id: portfolioId
+    })
+    .eq("user_id", userId)
+    .eq("idempotency_key", idempotencyKey);
+}
+
+async function clearPortfolioSetupSession(
+  supabase: SupabaseClient,
+  userId: string,
+  idempotencyKey: string
+): Promise<void> {
+  await supabase
+    .from("portfolio_setup_sessions")
+    .delete()
+    .eq("user_id", userId)
+    .eq("idempotency_key", idempotencyKey);
 }
 
 async function fetchPortfolioModes(
@@ -258,11 +383,42 @@ export async function createUserPortfolio(
   supabase: SupabaseClient,
   userId: string,
   inputName: string,
-  inputMode: PortfolioMode = "manual"
-): Promise<{ portfolio: UserPortfolio | null; errorCode: "invalid-name" | "duplicate" | "unknown" | null }> {
+  inputMode: PortfolioMode = "manual",
+  rawIdempotencyKey?: string
+): Promise<{
+  portfolio: UserPortfolio | null;
+  errorCode: "invalid-name" | "duplicate" | "unknown" | "idempotency-conflict" | "idempotency-expired" | "idempotency-in-progress" | null;
+  isReplay: boolean;
+}> {
   const name = inputName.trim();
+  const idempotencyKey = normalizeIdempotencyKey(rawIdempotencyKey);
+
   if (!name) {
-    return { portfolio: null, errorCode: "invalid-name" };
+    return { portfolio: null, errorCode: "invalid-name", isReplay: false };
+  }
+
+  if (inputMode === "binance_connected" && idempotencyKey) {
+    const session = await reservePortfolioSetupSession(supabase, userId, idempotencyKey, name, inputMode);
+
+    if (session.state === "replay") {
+      return { portfolio: session.portfolio ?? null, errorCode: null, isReplay: true };
+    }
+
+    if (session.state === "conflict") {
+      return { portfolio: null, errorCode: "idempotency-conflict", isReplay: false };
+    }
+
+    if (session.state === "expired") {
+      return { portfolio: null, errorCode: "idempotency-expired", isReplay: false };
+    }
+
+    if (session.state === "in-progress") {
+      return { portfolio: null, errorCode: "idempotency-in-progress", isReplay: false };
+    }
+
+    if (session.state === "error") {
+      return { portfolio: null, errorCode: "unknown", isReplay: false };
+    }
   }
 
   await ensureMainPortfolio(supabase, userId);
@@ -280,10 +436,23 @@ export async function createUserPortfolio(
   if (error || !data?.id) {
     const message = `${(error as { message?: string } | null)?.message ?? ""}`.toLowerCase();
     if (message.includes("duplicate") || message.includes("unique")) {
-      return { portfolio: null, errorCode: "duplicate" };
+      if (inputMode === "binance_connected") {
+        const existingPortfolio = await resolveUserPortfolioByName(supabase, userId, name);
+        if (existingPortfolio?.mode === "binance_connected") {
+          if (idempotencyKey) {
+            await completePortfolioSetupSession(supabase, userId, idempotencyKey, existingPortfolio.id);
+          }
+          return { portfolio: existingPortfolio, errorCode: null, isReplay: true };
+        }
+      }
+
+      return { portfolio: null, errorCode: "duplicate", isReplay: false };
     }
 
-    return { portfolio: null, errorCode: "unknown" };
+    if (idempotencyKey) {
+      await clearPortfolioSetupSession(supabase, userId, idempotencyKey);
+    }
+    return { portfolio: null, errorCode: "unknown", isReplay: false };
   }
 
   if (inputMode === "binance_connected") {
@@ -298,7 +467,10 @@ export async function createUserPortfolio(
         .delete()
         .eq("id", data.id as string)
         .eq("user_id", userId);
-      return { portfolio: null, errorCode: "unknown" };
+      if (idempotencyKey) {
+        await clearPortfolioSetupSession(supabase, userId, idempotencyKey);
+      }
+      return { portfolio: null, errorCode: "unknown", isReplay: false };
     }
   }
 
@@ -309,7 +481,11 @@ export async function createUserPortfolio(
     portfolio.lastSyncedAt = null;
   }
 
-  return { portfolio, errorCode: null };
+  if (idempotencyKey && inputMode === "binance_connected") {
+    await completePortfolioSetupSession(supabase, userId, idempotencyKey, portfolio.id);
+  }
+
+  return { portfolio, errorCode: null, isReplay: false };
 }
 
 export async function deleteUserPortfolio(
