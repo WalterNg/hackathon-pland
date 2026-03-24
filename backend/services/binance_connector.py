@@ -13,6 +13,7 @@ import httpx
 
 from schemas.input import BinanceConnectionPreviewRequest
 from schemas.output import (
+    BinanceConnectedPosition,
     BinanceConnectionAccountInfo,
     BinanceConnectionAsset,
     BinanceConnectionPreviewData,
@@ -302,3 +303,25 @@ class BinanceConnector:
             ),
             warnings=warnings,
         )
+
+    async def build_connected_positions(self, payload: BinanceConnectionPreviewRequest) -> list[BinanceConnectedPosition]:
+        preview = await self.build_connection_preview(payload)
+        positions: list[BinanceConnectedPosition] = []
+
+        for asset in preview.assets:
+            if asset.quantity <= 0:
+                continue
+
+            symbol = asset.asset if asset.is_stablecoin else self._asset_to_price_symbol(asset.asset)
+            if not symbol:
+                continue
+
+            positions.append(
+                BinanceConnectedPosition(
+                    symbol=symbol,
+                    quantity=asset.quantity,
+                    avg_buy_price_usd=asset.price_usd if asset.price_usd > 0 else 1.0,
+                )
+            )
+
+        return positions

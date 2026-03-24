@@ -41,14 +41,6 @@ function PortfolioContent() {
   const searchParams = useSearchParams();
   const portfolioName = searchParams.get("name")?.trim() || DEFAULT_PORTFOLIO_NAME;
   const shouldOpenCreatePortfolio = searchParams.get("createPortfolio") === "1";
-  const { snapshot, isLoading, error, reload } = usePortfolioSnapshot(portfolioName);
-  const {
-    profile: riskProfile,
-    events: riskEvents,
-    isLoading: isRiskLoading,
-    error: riskError,
-    reload: reloadRisk,
-  } = useRiskEvents(portfolioName);
   const { createPortfolio, removePortfolio, portfolios } = usePortfolios();
   const [isSelectCoinOpen, setSelectCoinOpen] = useState(false);
   const [isAddDialogOpen, setAddDialogOpen] = useState(false);
@@ -63,6 +55,15 @@ function PortfolioContent() {
     () => portfolios.find((portfolio) => portfolio.name === portfolioName) ?? null,
     [portfolios, portfolioName]
   );
+  const portfolioId = currentPortfolio?.id ?? null;
+  const { snapshot, isLoading, error, reload } = usePortfolioSnapshot(portfolioId, portfolioName);
+  const {
+    profile: riskProfile,
+    events: riskEvents,
+    isLoading: isRiskLoading,
+    error: riskError,
+    reload: reloadRisk,
+  } = useRiskEvents(portfolioId, portfolioName);
   const isConnectedPortfolio = currentPortfolio?.mode === "binance_connected";
   const primaryActionLabel = isMainPortfolio ? "Create portfolio" : isConnectedPortfolio ? "Read-only" : "Add transaction";
   const connectedStatusDescription =

@@ -19,6 +19,7 @@ type UsePortfolioSnapshotResult = {
 const DEFAULT_REFRESH_INTERVAL_MS = 10_000;
 const REALTIME_RECONNECT_DELAY_MS = 2_000;
 const BTC_USDT_SYMBOL = "BTCUSDT";
+const PORTFOLIO_CACHE_PREFIX = "portfolio";
 
 type BinanceTickerStreamMessage = {
   data?: {
@@ -152,6 +153,7 @@ function applyRealtimeTicker(
 }
 
 export function usePortfolioSnapshot(
+  portfolioId: string | null,
   portfolioName: string,
   refreshIntervalMs = DEFAULT_REFRESH_INTERVAL_MS
 ): UsePortfolioSnapshotResult {
@@ -160,6 +162,42 @@ export function usePortfolioSnapshot(
   const [error, setError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const isFetchingRef = useRef(false);
+  const snapshotCacheRef = useRef<Record<string, PortfolioSnapshot>>({});
+
+  const cacheKeys = useMemo(() => {
+    const keys = [
+      `${PORTFOLIO_CACHE_PREFIX}:name:${portfolioName}`,
+    ];
+
+    if (portfolioId?.trim()) {
+      keys.unshift(`${PORTFOLIO_CACHE_PREFIX}:id:${portfolioId.trim()}`);
+    }
+
+    return keys;
+  }, [portfolioId, portfolioName]);
+
+  const readCachedSnapshot = () => {
+    for (const key of cacheKeys) {
+      const cached = snapshotCacheRef.current[key];
+      if (cached) {
+        return cached;
+      }
+    }
+
+    return null;
+  };
+
+  const writeCachedSnapshot = (data: PortfolioSnapshot) => {
+    for (const key of cacheKeys) {
+      snapshotCacheRef.current[key] = data;
+    }
+  };
+
+  const clearCachedSnapshot = () => {
+    for (const key of cacheKeys) {
+      delete snapshotCacheRef.current[key];
+    }
+  };
 
   const streamSymbols = useMemo(() => {
     const symbolSet = new Set((snapshot?.assets ?? []).map((asset) => asset.symbol.toUpperCase()));
@@ -171,6 +209,40 @@ export function usePortfolioSnapshot(
     let isCancelled = false;
     const abortController = new AbortController();
 
+    const cachedSnapshot = readCachedSnapshot();
+    setSnapshot(cachedSnapshot);
+    setLoading(!cachedSnapshot);
+    setError(null);
+
+    const syncLiveSnapshot = async () => {
+      try {
+        const response = await fetch("/api/binance/portfolio", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          cache: "no-store",
+          signal: abortController.signal,
+          body: JSON.stringify({ name: portfolioName })
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data = (await response.json()) as PortfolioSnapshot;
+        if (isCancelled) {
+          return;
+        }
+
+        writeCachedSnapshot(data);
+        setSnapshot(data);
+        setError(null);
+      } catch {
+        return;
+      }
+    };
+
     const loadSnapshot = async (isBackgroundRefresh = false) => {
       if (isFetchingRef.current) {
         return;
@@ -178,7 +250,7 @@ export function usePortfolioSnapshot(
 
       isFetchingRef.current = true;
 
-      if (!isBackgroundRefresh) {
+      if (!isBackgroundRefresh && !cachedSnapshot) {
         setLoading(true);
       }
 
@@ -208,9 +280,17 @@ export function usePortfolioSnapshot(
           }
 
           const data = (await response.json()) as PortfolioSnapshot;
+          const snapshotSource = response.headers.get("x-snapshot-source");
+          const portfolioMode = response.headers.get("x-portfolio-mode");
           if (!isCancelled) {
+            writeCachedSnapshot(data);
             setSnapshot(data);
           }
+
+          if (portfolioMode === "binance_connected" && snapshotSource === "cache") {
+            void syncLiveSnapshot();
+          }
+
           lastError = null;
           break;
         } catch (fetchError) {
@@ -223,7 +303,7 @@ export function usePortfolioSnapshot(
 
       if (lastError && !isCancelled) {
         setError(lastError.message);
-        setSnapshot(null);
+        setSnapshot(readCachedSnapshot());
       }
 
       if (!isCancelled) {
@@ -331,8 +411,9 @@ export function usePortfolioSnapshot(
   }, [streamSymbols]);
 
   const reload = useCallback(async () => {
+    clearCachedSnapshot();
     setRefreshNonce((value) => value + 1);
-  }, []);
+  }, [cacheKeys]);
 
   return { snapshot, isLoading, error, reload };
 }

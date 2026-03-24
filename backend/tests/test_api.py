@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from main import app
 from schemas.input import GraphMeta
 from schemas.output import (
+    BinanceConnectedPosition,
     BinanceConnectionAccountInfo,
     BinanceConnectionAsset,
     BinanceConnectionPreviewData,
@@ -172,3 +173,28 @@ async def test_binance_connection_preview_error(mock_build_connection_preview):
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Connector failed"
+
+
+@patch("api.routes.binance_connection._binance_connector.build_connected_positions", new_callable=AsyncMock)
+@pytest.mark.asyncio
+async def test_binance_connected_positions_success(mock_build_connected_positions):
+    mock_build_connected_positions.return_value = [
+        BinanceConnectedPosition(symbol="BTCUSDT", quantity=0.42, avg_buy_price_usd=71000.0)
+    ]
+
+    response = client.post(
+        "/api/binance/connection/positions",
+        json={
+            "mode": "demo",
+            "api_key": "demo-key",
+            "api_secret": "demo-secret",
+            "include_zero_balances": False,
+            "recv_window_ms": 5000,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "success"
+    assert payload["data"][0]["symbol"] == "BTCUSDT"
+    mock_build_connected_positions.assert_awaited_once()

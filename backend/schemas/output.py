@@ -94,3 +94,21 @@ class BinanceConnectionPreviewResponse(BaseModel):
 
     status: str = Field(default="success", description="Overall request status.")
     data: BinanceConnectionPreviewData = Field(..., description="Preview payload returned by the Binance connector.")
+
+
+class BinanceConnectedPosition(BaseModel):
+    """Normalized live position used by connected portfolio sync flows."""
+
+    symbol: str = Field(..., description="Resolved trading symbol for the connected asset.")
+    quantity: float = Field(..., ge=0, description="Live quantity returned by Binance.")
+    avg_buy_price_usd: float = Field(..., ge=0, description="Reference USD price used as a temporary cost basis.")
+
+
+class BinanceConnectedPositionsResponse(BaseModel):
+    """API wrapper for normalized connected portfolio positions."""
+
+    status: str = Field(default="success", description="Overall request status.")
+    data: List[BinanceConnectedPosition] = Field(
+        default_factory=list,
+        description="Normalized connected portfolio positions ready for snapshot sync.",
+    )
