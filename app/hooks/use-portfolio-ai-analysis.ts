@@ -125,7 +125,7 @@ export function usePortfolioAIAnalysis(): UsePortfolioAIAnalysisResult {
       });
 
       const payload = (await response.json().catch(() => null)) as
-        | { recommendation?: PortfolioAIRecommendation; error?: string }
+        | { recommendation?: PortfolioAIRecommendation; error?: string; warning?: string }
         | null;
 
       if (runIdRef.current !== currentRunId) {
@@ -138,6 +138,7 @@ export function usePortfolioAIAnalysis(): UsePortfolioAIAnalysisResult {
 
       setActiveStepId(STEPS[STEPS.length - 1].id);
       setRecommendation(payload.recommendation);
+      setError(payload.warning ?? null);
 
       const finishTimeoutId = window.setTimeout(() => {
         if (runIdRef.current !== currentRunId) {

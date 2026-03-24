@@ -304,7 +304,7 @@ export function AIRecommendationCard({
       {!isAnalyzing && recommendation && error && (
         <div className="px-5 pb-0 pt-5 sm:px-6">
           <div className="rounded-2xl border border-danger-soft bg-danger-soft px-4 py-3 text-sm text-danger">
-            Latest analysis could not be refreshed: {error}
+            Analysis notice: {error}
           </div>
         </div>
       )}
