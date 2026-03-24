@@ -3,11 +3,13 @@ import os
 from pathlib import Path
 
 backend_dir = Path(__file__).parent.absolute()
+project_root = backend_dir.parent
 if str(backend_dir) not in sys.path:
     sys.path.append(str(backend_dir))
 
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(project_root / ".env.local")
+load_dotenv(project_root / ".env")
 
 from core.logger import setup_logger
 
