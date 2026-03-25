@@ -81,6 +81,8 @@ export function usePortfolioAIAnalysis(scopeKey?: string | null): UsePortfolioAI
   }, []);
 
   useEffect(() => {
+    let isCancelled = false;
+
     runIdRef.current += 1;
     timeoutIdsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
     timeoutIdsRef.current = [];
@@ -88,6 +90,36 @@ export function usePortfolioAIAnalysis(scopeKey?: string | null): UsePortfolioAI
     setAnalyzing(false);
     setActiveStepId(null);
     setError(null);
+
+    const loadLatestRecommendation = async () => {
+      if (!scopeKey?.trim()) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/ai/analyze?portfolioName=${encodeURIComponent(scopeKey)}`, {
+          cache: "no-store",
+        });
+
+        const payload = (await response.json().catch(() => null)) as
+          | { recommendation?: PortfolioAIRecommendation | null; error?: string }
+          | null;
+
+        if (isCancelled || !response.ok) {
+          return;
+        }
+
+        setRecommendation(payload?.recommendation ?? null);
+      } catch {
+        return;
+      }
+    };
+
+    void loadLatestRecommendation();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [scopeKey]);
 
   const analyze = async (input: AnalyzeInput) => {

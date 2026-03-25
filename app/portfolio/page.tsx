@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MaterialIcon } from "../components/dashboard/material-icon";
 import { AppTopNavigation } from "../components/ui/app-top-navigation";
 import { AddTransactionDialog } from "../components/portfolio/add-transaction-dialog";
-import { AIRecommendationCard } from "../components/portfolio/ai-recommendation-card";
+import { AIPortfolioRecommendationDashboard } from "../components/portfolio/ai-portfolio-recommendation-dashboard";
 import { CreatePortfolioDialog } from "../components/portfolio/create-portfolio-dialog";
 import { PortfolioAssetsTable } from "../components/portfolio/portfolio-assets-table";
 import { PortfolioCharts } from "@/app/components/portfolio/portfolio-charts";
@@ -203,7 +203,8 @@ function PortfolioContent() {
             {snapshot && (
               <>
                 <PortfolioSummary summary={snapshot.summary} metrics={snapshot.metrics} />
-                <AIRecommendationCard
+                <AIPortfolioRecommendationDashboard
+                  key={portfolioName}
                   recommendation={recommendation}
                   isAnalyzing={isAnalyzing}
                   activeStepId={activeStepId}

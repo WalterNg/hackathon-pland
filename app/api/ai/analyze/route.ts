@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { buildBinancePortfolioSnapshot } from "@/app/lib/binance-portfolio";
 import { buildPortfolioAIEvidence } from "@/app/lib/portfolio-ai-evidence";
 import type { PortfolioAIRecommendation } from "@/app/lib/portfolio-types";
+import {
+  getLatestPortfolioAIRecommendation,
+  savePortfolioAIRecommendation,
+} from "@/app/lib/repositories/portfolio-ai-recommendations-repo";
 import { getUserPortfolioPositions } from "@/app/lib/repositories/portfolio-repo";
 import { resolveUserPortfolioByName } from "@/app/lib/repositories/portfolios-repo";
 import { createSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -86,24 +90,55 @@ function normalizeSignalTone(
   return "Neutral";
 }
 
-export async function POST(request: Request) {
+async function getAuthorizedPortfolio(portfolioNameInput?: string | null) {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const portfolioName = portfolioNameInput?.trim() || "Main Portfolio";
   if (!user?.id) {
+    return { supabase, user, portfolio: null, portfolioName };
+  }
+
+  const portfolio = await resolveUserPortfolioByName(supabase, user.id, portfolioName);
+  return { supabase, user, portfolio, portfolioName };
+}
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const context = await getAuthorizedPortfolio(searchParams.get("portfolioName"));
+
+  if (!context.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = (await request.json().catch(() => ({}))) as AnalyzeRequestBody;
-  const portfolioName = body.portfolioName?.trim() || "Main Portfolio";
-
-  const portfolio = await resolveUserPortfolioByName(supabase, user.id, portfolioName);
-  if (!portfolio?.id) {
+  if (!context.portfolio?.id) {
     return NextResponse.json({ error: "Portfolio not found." }, { status: 404 });
   }
 
+  const recommendation = await getLatestPortfolioAIRecommendation(
+    context.supabase,
+    context.user.id,
+    context.portfolio.id,
+  );
+
+  return NextResponse.json({ recommendation });
+}
+
+export async function POST(request: Request) {
+  const body = (await request.json().catch(() => ({}))) as AnalyzeRequestBody;
+  const context = await getAuthorizedPortfolio(body.portfolioName);
+
+  if (!context.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!context.portfolio?.id) {
+    return NextResponse.json({ error: "Portfolio not found." }, { status: 404 });
+  }
+
+  const { supabase, user, portfolio, portfolioName } = context;
   const positions = await getUserPortfolioPositions(supabase, user.id, portfolioName);
   if (positions === null) {
     return NextResponse.json({ error: "Unable to resolve portfolio positions." }, { status: 500 });
@@ -202,6 +237,8 @@ export async function POST(request: Request) {
         },
       ],
     };
+
+    await savePortfolioAIRecommendation(supabase, user.id, portfolio.id, recommendation);
 
     return NextResponse.json({ recommendation });
   } catch (error) {
