@@ -25,9 +25,23 @@ import {
 export const dynamic = "force-dynamic";
 const DEFAULT_BACKEND_URL = "http://127.0.0.1:8000";
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
+const CONNECTED_PORTFOLIO_SYNC_INTERVAL_MS = 30_000;
 
 function backendBaseUrl(): string {
   return process.env.AI_BACKEND_URL?.trim() || process.env.BACKEND_API_URL?.trim() || DEFAULT_BACKEND_URL;
+}
+
+function isSnapshotFresh(snapshot: { summary: { timestamp: string } } | null, maxAgeMs: number): boolean {
+  if (!snapshot) {
+    return false;
+  }
+
+  const timestampMs = new Date(snapshot.summary.timestamp).getTime();
+  if (!Number.isFinite(timestampMs)) {
+    return false;
+  }
+
+  return Date.now() - timestampMs < maxAgeMs;
 }
 
 async function fetchConnectedPortfolioPositions(mode: "demo" | "testnet" = "demo"): Promise<PortfolioPosition[] | null> {
@@ -147,10 +161,15 @@ async function buildAndCachePortfolioSnapshot(
   return snapshotWithRisk;
 }
 
-function snapshotHeaders(portfolioMode: "manual" | "binance_connected", source: string) {
+function snapshotHeaders(
+  portfolioMode: "manual" | "binance_connected",
+  source: string,
+  isStale = false
+) {
   return {
     "x-portfolio-mode": portfolioMode,
-    "x-snapshot-source": source
+    "x-snapshot-source": source,
+    "x-snapshot-stale": String(isStale)
   };
 }
 
@@ -198,9 +217,10 @@ export async function GET(request: Request) {
 
   const cached = await getLatestPortfolioSnapshotCache(context.supabase, context.userId, context.portfolio.id);
   if (context.portfolio.mode === "binance_connected" && cached) {
+    const isFresh = isSnapshotFresh(cached, CONNECTED_PORTFOLIO_SYNC_INTERVAL_MS);
     return NextResponse.json(cached, {
       status: 200,
-      headers: snapshotHeaders(context.portfolio.mode, "cache")
+      headers: snapshotHeaders(context.portfolio.mode, "cache", !isFresh)
     });
   }
 

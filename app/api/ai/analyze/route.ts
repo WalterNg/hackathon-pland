@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { buildBinancePortfolioSnapshot } from "@/app/lib/binance-portfolio";
+import { buildPortfolioAIEvidence } from "@/app/lib/portfolio-ai-evidence";
 import type { PortfolioAIRecommendation } from "@/app/lib/portfolio-types";
 import { getUserPortfolioPositions } from "@/app/lib/repositories/portfolio-repo";
 import { resolveUserPortfolioByName } from "@/app/lib/repositories/portfolios-repo";
@@ -174,6 +175,7 @@ export async function POST(request: Request) {
       portfolioActions: payload.data.final_decision.portfolio_actions,
       analyzedAt: payload.data.meta?.as_of || new Date().toISOString(),
       snapshotTimestamp: snapshot.summary.timestamp,
+      evidence: buildPortfolioAIEvidence(snapshot),
       signals: [
         {
           label: "TA",

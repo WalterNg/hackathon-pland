@@ -48,7 +48,7 @@ function PortfolioContent() {
   const [isRemovingPortfolio, setRemovingPortfolio] = useState(false);
   const [showCharts, setShowCharts] = useState(true);
   const [selectedCoin, setSelectedCoin] = useState<{ symbol: string; baseAsset: string; quoteAsset: string } | null>(null);
-  const { recommendation, isAnalyzing, activeStepId, error: aiError, analyze, steps } = usePortfolioAIAnalysis();
+  const { recommendation, isAnalyzing, activeStepId, error: aiError, analyze, steps } = usePortfolioAIAnalysis(portfolioName);
 
   const isMainPortfolio = useMemo(() => portfolioName === DEFAULT_PORTFOLIO_NAME, [portfolioName]);
   const currentPortfolio = useMemo(
@@ -205,7 +205,6 @@ function PortfolioContent() {
                 <PortfolioSummary summary={snapshot.summary} metrics={snapshot.metrics} />
                 <AIRecommendationCard
                   recommendation={recommendation}
-                  snapshot={snapshot}
                   isAnalyzing={isAnalyzing}
                   activeStepId={activeStepId}
                   steps={steps}

@@ -66,7 +66,7 @@ const STEPS: AIAnalysisStep[] = [
   },
 ];
 
-export function usePortfolioAIAnalysis(): UsePortfolioAIAnalysisResult {
+export function usePortfolioAIAnalysis(scopeKey?: string | null): UsePortfolioAIAnalysisResult {
   const [recommendation, setRecommendation] = useState<PortfolioAIRecommendation | null>(null);
   const [isAnalyzing, setAnalyzing] = useState(false);
   const [activeStepId, setActiveStepId] = useState<AIAnalysisStepId | null>(null);
@@ -79,6 +79,16 @@ export function usePortfolioAIAnalysis(): UsePortfolioAIAnalysisResult {
       timeoutIdsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
     };
   }, []);
+
+  useEffect(() => {
+    runIdRef.current += 1;
+    timeoutIdsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    timeoutIdsRef.current = [];
+    setRecommendation(null);
+    setAnalyzing(false);
+    setActiveStepId(null);
+    setError(null);
+  }, [scopeKey]);
 
   const analyze = async (input: AnalyzeInput) => {
     if (!input.snapshot || isAnalyzing) {

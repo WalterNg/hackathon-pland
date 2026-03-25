@@ -17,6 +17,7 @@ type UsePortfolioSnapshotResult = {
 };
 
 const DEFAULT_REFRESH_INTERVAL_MS = 10_000;
+const BACKGROUND_SYNC_COOLDOWN_MS = 30_000;
 const REALTIME_RECONNECT_DELAY_MS = 2_000;
 const BTC_USDT_SYMBOL = "BTCUSDT";
 const PORTFOLIO_CACHE_PREFIX = "portfolio";
@@ -162,6 +163,8 @@ export function usePortfolioSnapshot(
   const [error, setError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const isFetchingRef = useRef(false);
+  const isBackgroundSyncingRef = useRef(false);
+  const lastBackgroundSyncAtRef = useRef(0);
   const snapshotCacheRef = useRef<Record<string, PortfolioSnapshot>>({});
 
   const cacheKeys = useMemo(() => {
@@ -215,6 +218,18 @@ export function usePortfolioSnapshot(
     setError(null);
 
     const syncLiveSnapshot = async () => {
+      if (isBackgroundSyncingRef.current) {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastBackgroundSyncAtRef.current < BACKGROUND_SYNC_COOLDOWN_MS) {
+        return;
+      }
+
+      isBackgroundSyncingRef.current = true;
+      lastBackgroundSyncAtRef.current = now;
+
       try {
         const response = await fetch("/api/binance/portfolio", {
           method: "POST",
@@ -240,6 +255,8 @@ export function usePortfolioSnapshot(
         setError(null);
       } catch {
         return;
+      } finally {
+        isBackgroundSyncingRef.current = false;
       }
     };
 
@@ -280,14 +297,14 @@ export function usePortfolioSnapshot(
           }
 
           const data = (await response.json()) as PortfolioSnapshot;
-          const snapshotSource = response.headers.get("x-snapshot-source");
+          const snapshotStale = response.headers.get("x-snapshot-stale") === "true";
           const portfolioMode = response.headers.get("x-portfolio-mode");
           if (!isCancelled) {
             writeCachedSnapshot(data);
             setSnapshot(data);
           }
 
-          if (portfolioMode === "binance_connected" && snapshotSource === "cache") {
+          if (portfolioMode === "binance_connected" && snapshotStale) {
             void syncLiveSnapshot();
           }
 
@@ -333,6 +350,7 @@ export function usePortfolioSnapshot(
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       isFetchingRef.current = false;
+      isBackgroundSyncingRef.current = false;
     };
   }, [portfolioName, refreshIntervalMs, refreshNonce]);
 
