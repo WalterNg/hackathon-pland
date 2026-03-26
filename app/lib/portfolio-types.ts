@@ -7,6 +7,7 @@ export const PORTFOLIO_SYMBOLS = [
 ] as const;
 
 export type PortfolioSymbol = string;
+export type PortfolioMode = "manual" | "binance_connected";
 
 export type PortfolioPosition = {
   symbol: PortfolioSymbol;
@@ -105,6 +106,19 @@ export type AIAnalysisComponentSignal = {
   summary: string;
 };
 
+export type PortfolioAIAnalysisEvidence = {
+  capturedAt: string;
+  portfolioValueUsd: number;
+  topAllocationSymbol: string | null;
+  topAllocationPercent: number | null;
+  cashBalanceUsd: number;
+  cashAllocationPercent: number;
+  volume24hUsd: number;
+  riskScore: number | null;
+  volatilityPercent: number | null;
+  maxDrawdownPercent: number | null;
+};
+
 export type PortfolioAIRecommendation = {
   action: AIAnalysisAction;
   confidence: number;
@@ -114,6 +128,7 @@ export type PortfolioAIRecommendation = {
   signals: AIAnalysisComponentSignal[];
   analyzedAt: string;
   snapshotTimestamp: string;
+  evidence: PortfolioAIAnalysisEvidence;
 };
 
 export type DashboardRecentTransaction = {

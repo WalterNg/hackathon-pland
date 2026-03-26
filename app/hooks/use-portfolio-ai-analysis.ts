@@ -66,7 +66,7 @@ const STEPS: AIAnalysisStep[] = [
   },
 ];
 
-export function usePortfolioAIAnalysis(): UsePortfolioAIAnalysisResult {
+export function usePortfolioAIAnalysis(scopeKey?: string | null): UsePortfolioAIAnalysisResult {
   const [recommendation, setRecommendation] = useState<PortfolioAIRecommendation | null>(null);
   const [isAnalyzing, setAnalyzing] = useState(false);
   const [activeStepId, setActiveStepId] = useState<AIAnalysisStepId | null>(null);
@@ -79,6 +79,48 @@ export function usePortfolioAIAnalysis(): UsePortfolioAIAnalysisResult {
       timeoutIdsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
     };
   }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    runIdRef.current += 1;
+    timeoutIdsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    timeoutIdsRef.current = [];
+    setRecommendation(null);
+    setAnalyzing(false);
+    setActiveStepId(null);
+    setError(null);
+
+    const loadLatestRecommendation = async () => {
+      if (!scopeKey?.trim()) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/ai/analyze?portfolioName=${encodeURIComponent(scopeKey)}`, {
+          cache: "no-store",
+        });
+
+        const payload = (await response.json().catch(() => null)) as
+          | { recommendation?: PortfolioAIRecommendation | null; error?: string }
+          | null;
+
+        if (isCancelled || !response.ok) {
+          return;
+        }
+
+        setRecommendation(payload?.recommendation ?? null);
+      } catch {
+        return;
+      }
+    };
+
+    void loadLatestRecommendation();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [scopeKey]);
 
   const analyze = async (input: AnalyzeInput) => {
     if (!input.snapshot || isAnalyzing) {
