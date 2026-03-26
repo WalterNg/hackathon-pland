@@ -9,6 +9,7 @@ type PortfolioResponseRow = {
   id: string;
   name: string;
   isDefault: boolean;
+  mode: "manual" | "binance_connected";
   createdAt: string;
   totalValueBtc: number | null;
 };
@@ -17,6 +18,7 @@ export type PortfolioItem = {
   id: string;
   name: string;
   isDefault: boolean;
+  mode: "manual" | "binance_connected";
   totalValueBtc: number | null;
 };
 
@@ -24,7 +26,11 @@ type UsePortfoliosResult = {
   portfolios: PortfolioItem[];
   isLoading: boolean;
   error: string | null;
-  createPortfolio: (name: string) => Promise<{ ok: boolean; message?: string; portfolioName?: string }>;
+  createPortfolio: (
+    name: string,
+    mode: "manual" | "binance_connected",
+    options?: { idempotencyKey?: string }
+  ) => Promise<{ ok: boolean; message?: string; portfolioName?: string }>;
   removePortfolio: (name: string) => Promise<{ ok: boolean; message?: string }>;
   reload: () => Promise<void>;
 };
@@ -49,17 +55,18 @@ export function usePortfolios(): UsePortfoliosResult {
         id: item.id,
         name: item.name,
         isDefault: item.isDefault,
+        mode: item.mode,
         totalValueBtc: item.totalValueBtc
       }));
 
       if (nextPortfolios.length === 0) {
-        setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true, totalValueBtc: null }]);
+        setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true, mode: "manual", totalValueBtc: null }]);
       } else {
         setPortfolios(nextPortfolios);
       }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load portfolios");
-      setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true, totalValueBtc: null }]);
+      setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true, mode: "manual", totalValueBtc: null }]);
     } finally {
       setLoading(false);
     }
@@ -69,11 +76,15 @@ export function usePortfolios(): UsePortfoliosResult {
     loadPortfolios();
   }, [loadPortfolios]);
 
-  const createPortfolio = useCallback(async (name: string) => {
+  const createPortfolio = useCallback(async (
+    name: string,
+    mode: "manual" | "binance_connected",
+    options?: { idempotencyKey?: string }
+  ) => {
     const response = await fetchWithSupabaseAuth("/api/portfolios", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name })
+      body: JSON.stringify({ name, mode, idempotencyKey: options?.idempotencyKey })
     });
 
     if (!response.ok) {

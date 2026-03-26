@@ -22,6 +22,19 @@ const symbolNames: Record<string, string> = {
   DOGEUSDT: "Dogecoin"
 };
 
+function toDisplaySymbol(symbol: string): string {
+  const normalized = symbol.trim().toUpperCase();
+  if (!normalized) {
+    return symbol;
+  }
+
+  if (normalized.endsWith("USDT") && normalized.length > 4) {
+    return normalized.slice(0, -4);
+  }
+
+  return normalized;
+}
+
 export function PortfolioAssetsTable({ assets, btcPriceUsd }: PortfolioAssetsTableProps) {
   return (
     <section className="panel-base mb-6 overflow-hidden lg:mb-8">
@@ -55,6 +68,7 @@ export function PortfolioAssetsTable({ assets, btcPriceUsd }: PortfolioAssetsTab
             )}
 
             {assets.map((asset) => {
+              const displaySymbol = toDisplaySymbol(asset.symbol);
               const change1hPercent = asset.change24hPercent / 24;
               const change7dPercent = asset.change7dPercent;
               const positive24h = asset.change24hPercent >= 0;
@@ -70,8 +84,8 @@ export function PortfolioAssetsTable({ assets, btcPriceUsd }: PortfolioAssetsTab
                         <MaterialIcon name="currency_bitcoin" outlined={false} className="text-sm" />
                       </div>
                       <div>
-                        <div className="font-bold text-strong">{symbolNames[asset.symbol] ?? asset.symbol.replace("USDT", "")}</div>
-                        <div className="text-xs text-muted">{asset.symbol.replace("USDT", "")}</div>
+                        <div className="font-bold text-strong">{symbolNames[asset.symbol] ?? displaySymbol}</div>
+                        <div className="text-xs text-muted">{displaySymbol}</div>
                       </div>
                     </div>
                   </td>
@@ -103,7 +117,7 @@ export function PortfolioAssetsTable({ assets, btcPriceUsd }: PortfolioAssetsTab
 
                   <td className="whitespace-nowrap px-6 py-4 text-right">
                     <div className="text-sm font-bold text-strong">{formatBtcValue(asset.valueUsd, btcPriceUsd)}</div>
-                    <div className="text-xs text-muted">{asset.quantity.toFixed(4)} {asset.symbol.replace("USDT", "")}</div>
+                    <div className="text-xs text-muted">{asset.quantity.toFixed(4)} {displaySymbol}</div>
                   </td>
 
                   <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium text-body">

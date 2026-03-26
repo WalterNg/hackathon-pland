@@ -2,8 +2,11 @@ import { MaterialIcon } from "../dashboard/material-icon";
 
 type PortfolioHeaderProps = {
   portfolioName: string;
+  statusLabel?: string;
+  statusDescription?: string;
   primaryActionLabel: string;
   onPrimaryAction: () => void;
+  isPrimaryActionDisabled?: boolean;
   onRemovePortfolio?: () => void;
   showRemovePortfolio?: boolean;
   isRemovingPortfolio?: boolean;
@@ -13,18 +16,31 @@ type PortfolioHeaderProps = {
 
 export function PortfolioHeader({
   portfolioName,
+  statusLabel,
+  statusDescription,
   primaryActionLabel,
   onPrimaryAction,
+  isPrimaryActionDisabled = false,
   onRemovePortfolio,
   showRemovePortfolio = false,
   isRemovingPortfolio = false,
   showCharts,
   onToggleShowCharts
 }: PortfolioHeaderProps) {
+  const isReadOnlyStatus = isPrimaryActionDisabled && primaryActionLabel === "Read-only";
+
   return (
     <section className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
       <div>
-        <h1 className="typo-h1 text-strong">{portfolioName}</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="typo-h1 text-strong">{portfolioName}</h1>
+          {statusLabel ? (
+            <span className="inline-flex items-center rounded-full border border-(--surface-outline) bg-(--surface-container-low) px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">
+              {statusLabel}
+            </span>
+          ) : null}
+        </div>
+        {statusDescription ? <p className="mt-2 max-w-xl text-sm italic text-muted">{statusDescription}</p> : null}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -45,15 +61,23 @@ export function PortfolioHeader({
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={onPrimaryAction}
-          className="ui-button-primary flex items-center gap-1.5 px-4! py-2.5! text-[0.78rem]! normal-case tracking-normal!"
-          style={{ textTransform: "none", letterSpacing: "normal" }}
-        >
-          <MaterialIcon name="add" outlined={false} className="text-[0.95rem]" />
-          {primaryActionLabel}
-        </button>
+        {isReadOnlyStatus ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-(--surface-outline) bg-(--surface-container-low) px-2.5 py-1.5 text-[0.68rem] font-semibold tracking-[0.12em] text-muted">
+            <MaterialIcon name="lock" outlined={false} className="text-[0.78rem]" />
+            {primaryActionLabel}
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onPrimaryAction}
+            disabled={isPrimaryActionDisabled}
+            className="ui-button-primary flex items-center gap-1.5 px-4! py-2.5! text-[0.78rem]! normal-case tracking-normal! disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ textTransform: "none", letterSpacing: "normal" }}
+          >
+            <MaterialIcon name="add" outlined={false} className="text-[0.95rem]" />
+            {primaryActionLabel}
+          </button>
+        )}
 
         {showRemovePortfolio && onRemovePortfolio ? (
           <button

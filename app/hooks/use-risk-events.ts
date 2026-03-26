@@ -20,6 +20,7 @@ type UseRiskEventsResult = {
 const DEFAULT_REFRESH_INTERVAL_MS = 10_000;
 
 export function useRiskEvents(
+  portfolioId: string | null,
   portfolioName: string,
   refreshIntervalMs = DEFAULT_REFRESH_INTERVAL_MS
 ): UseRiskEventsResult {
@@ -32,6 +33,11 @@ export function useRiskEvents(
   useEffect(() => {
     let isDisposed = false;
     const abortController = new AbortController();
+
+    setProfile(null);
+    setEvents([]);
+    setLoading(true);
+    setError(null);
 
     const load = async (isBackgroundRefresh = false) => {
       if (!isBackgroundRefresh) {
@@ -92,7 +98,7 @@ export function useRiskEvents(
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [portfolioName, refreshIntervalMs, refreshNonce]);
+  }, [portfolioId, portfolioName, refreshIntervalMs, refreshNonce]);
 
   const reload = useCallback(async () => {
     setRefreshNonce((value) => value + 1);
