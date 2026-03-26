@@ -7,7 +7,7 @@ import {
   MAIN_PORTFOLIO_NAME,
   resolveUserPortfolioByName
 } from "@/app/lib/repositories/portfolios-repo";
-import { createSupabaseServerClient } from "@/app/lib/supabase/server";
+import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
 
 type TransactionAction = "buy" | "sell" | "transfer";
 type TransferDirection = "in" | "out";
@@ -46,20 +46,17 @@ function isPositiveNumber(value: unknown) {
 
 function triggerPortfolioRiskRefresh(request: Request, portfolioName: string): void {
   const snapshotUrl = new URL(`/api/binance/portfolio?name=${encodeURIComponent(portfolioName)}`, request.url);
-  const cookie = request.headers.get("cookie") ?? "";
+  const authorization = request.headers.get("authorization") ?? "";
 
   void fetch(snapshotUrl.toString(), {
     method: "GET",
-    headers: cookie ? { cookie } : undefined,
+    headers: authorization ? { authorization } : undefined,
     cache: "no-store"
   }).catch(() => undefined);
 }
 
 export async function GET(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getSupabaseAuthContext(request);
 
   if (!user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -79,10 +76,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getSupabaseAuthContext(request);
 
   if (!user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { MaterialIcon } from "../dashboard/material-icon";
+import { createSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { usePortfolios } from "@/app/hooks/use-portfolios";
 
 const DEFAULT_PORTFOLIOS = ["Main Portfolio"];
@@ -38,6 +39,7 @@ function SidebarContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { portfolios } = usePortfolios();
+  const [isLoggingOut, setLoggingOut] = useState(false);
 
   const currentPath = normalizePath(pathname);
   const selectedPortfolio = searchParams.get("name")?.trim() || DEFAULT_PORTFOLIOS[0];
@@ -57,6 +59,21 @@ function SidebarContent() {
 
   const portfolioActive = isActive("/portfolio");
   const isMainPortfolioActive = portfolioActive && selectedPortfolio === mainPortfolio.name;
+
+  const handleLogout = async () => {
+    if (isLoggingOut) {
+      return;
+    }
+
+    setLoggingOut(true);
+
+    try {
+      const supabase = await createSupabaseBrowserClient();
+      await supabase.auth.signOut();
+    } finally {
+      window.location.assign("/auth/login");
+    }
+  };
 
   return (
     <aside className="sidebar-container text-inverse z-20 mb-4 hidden w-64 shrink-0 flex-col justify-between p-4 transition-all duration-300 md:flex">
@@ -122,13 +139,15 @@ function SidebarContent() {
       </div>
 
       <div className="px-6 pb-6">
-        <Link
-          href="/auth/logout"
-          className="text-subtle typo-body-sm group flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-(--surface-container-highest) hover:text-inverse"
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={isLoggingOut}
+          className="text-subtle typo-body-sm group flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-(--surface-container-highest) hover:text-inverse disabled:opacity-60"
         >
           <MaterialIcon name="logout" outlined={false} className="text-xl transition-colors group-hover:text-primary" />
-          Logout
-        </Link>
+          {isLoggingOut ? "Logging out..." : "Logout"}
+        </button>
       </div>
     </aside>
   );

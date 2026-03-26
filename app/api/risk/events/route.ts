@@ -6,15 +6,12 @@ import {
   listRiskLimitsByProfile,
 } from "@/app/lib/repositories/risk-repo";
 import { resolveUserPortfolioByName } from "@/app/lib/repositories/portfolios-repo";
-import { createSupabaseServerClient } from "@/app/lib/supabase/server";
+import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getSupabaseAuthContext(request);
 
   if (!user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

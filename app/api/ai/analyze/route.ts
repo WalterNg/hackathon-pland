@@ -9,6 +9,7 @@ import {
 } from "@/app/lib/repositories/portfolio-ai-recommendations-repo";
 import { getUserPortfolioPositions } from "@/app/lib/repositories/portfolio-repo";
 import { resolveUserPortfolioByName } from "@/app/lib/repositories/portfolios-repo";
+import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
 import { createSupabaseServerClient } from "@/app/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +55,7 @@ type BackendEvaluationResponse = {
 };
 
 const DEFAULT_BACKEND_URL = "http://127.0.0.1:8000";
+const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
 
 function backendBaseUrl(): string {
   return (
@@ -61,6 +63,21 @@ function backendBaseUrl(): string {
     process.env.BACKEND_API_URL?.trim() ||
     DEFAULT_BACKEND_URL
   );
+}
+
+async function getAuthContext(request: Request) {
+  const authorization = request.headers.get("authorization")?.trim();
+
+  if (authorization) {
+    return getSupabaseAuthContext(request);
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  return { supabase, user };
 }
 
 function normalizeSignalTone(
@@ -90,13 +107,10 @@ function normalizeSignalTone(
   return "Neutral";
 }
 
-async function getAuthorizedPortfolio(portfolioNameInput?: string | null) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+async function getAuthorizedPortfolio(request: Request, portfolioNameInput?: string | null) {
+  const { supabase, user } = await getAuthContext(request);
+  const portfolioName = portfolioNameInput?.trim() || DEFAULT_PORTFOLIO_NAME;
 
-  const portfolioName = portfolioNameInput?.trim() || "Main Portfolio";
   if (!user?.id) {
     return { supabase, user, portfolio: null, portfolioName };
   }
@@ -107,7 +121,7 @@ async function getAuthorizedPortfolio(portfolioNameInput?: string | null) {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const context = await getAuthorizedPortfolio(searchParams.get("portfolioName"));
+  const context = await getAuthorizedPortfolio(request, searchParams.get("portfolioName"));
 
   if (!context.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -120,7 +134,7 @@ export async function GET(request: Request) {
   const recommendation = await getLatestPortfolioAIRecommendation(
     context.supabase,
     context.user.id,
-    context.portfolio.id,
+    context.portfolio.id
   );
 
   return NextResponse.json({ recommendation });
@@ -128,7 +142,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as AnalyzeRequestBody;
-  const context = await getAuthorizedPortfolio(body.portfolioName);
+  const context = await getAuthorizedPortfolio(request, body.portfolioName);
 
   if (!context.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -140,6 +154,7 @@ export async function POST(request: Request) {
 
   const { supabase, user, portfolio, portfolioName } = context;
   const positions = await getUserPortfolioPositions(supabase, user.id, portfolioName);
+
   if (positions === null) {
     return NextResponse.json({ error: "Unable to resolve portfolio positions." }, { status: 500 });
   }
@@ -215,10 +230,9 @@ export async function POST(request: Request) {
         {
           label: "TA",
           tone: normalizeSignalTone("TA", payload.data.components?.ta_result?.portfolio_trend),
-          summary:
-            payload.data.components?.ta_result
-              ? `${payload.data.components.ta_result.portfolio_trend} trend with signal strength ${payload.data.components.ta_result.signal_strength}/10.`
-              : "Technical analysis output is unavailable for this run.",
+          summary: payload.data.components?.ta_result
+            ? `${payload.data.components.ta_result.portfolio_trend} trend with signal strength ${payload.data.components.ta_result.signal_strength}/10.`
+            : "Technical analysis output is unavailable for this run.",
         },
         {
           label: "News / Market",
@@ -230,10 +244,9 @@ export async function POST(request: Request) {
         {
           label: "Risk",
           tone: normalizeSignalTone("Risk", payload.data.components?.risk_result?.risk_level),
-          summary:
-            payload.data.components?.risk_result
-              ? `${payload.data.components.risk_result.risk_level} risk with ${payload.data.components.risk_result.capital_preservation_bias.toLowerCase()} preservation bias.`
-              : "Risk output is unavailable for this run.",
+          summary: payload.data.components?.risk_result
+            ? `${payload.data.components.risk_result.risk_level} risk with ${payload.data.components.risk_result.capital_preservation_bias.toLowerCase()} preservation bias.`
+            : "Risk output is unavailable for this run.",
         },
       ],
     };

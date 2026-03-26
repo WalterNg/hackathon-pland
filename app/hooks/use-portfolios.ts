@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 const MAIN_PORTFOLIO_NAME = "Main Portfolio";
 
@@ -44,7 +45,7 @@ export function usePortfolios(): UsePortfoliosResult {
     setError(null);
 
     try {
-      const response = await fetch("/api/portfolios", { cache: "no-store" });
+      const response = await fetchWithSupabaseAuth("/api/portfolios", { cache: "no-store" });
       if (!response.ok) {
         throw new Error(`Failed to load portfolios (${response.status})`);
       }
@@ -80,7 +81,7 @@ export function usePortfolios(): UsePortfoliosResult {
     mode: "manual" | "binance_connected",
     options?: { idempotencyKey?: string }
   ) => {
-    const response = await fetch("/api/portfolios", {
+    const response = await fetchWithSupabaseAuth("/api/portfolios", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, mode, idempotencyKey: options?.idempotencyKey })
@@ -98,7 +99,7 @@ export function usePortfolios(): UsePortfoliosResult {
   }, [loadPortfolios]);
 
   const removePortfolio = useCallback(async (name: string) => {
-    const response = await fetch("/api/portfolios", {
+    const response = await fetchWithSupabaseAuth("/api/portfolios", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name })

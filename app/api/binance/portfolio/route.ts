@@ -2,10 +2,15 @@ import { NextResponse } from "next/server";
 
 import { buildBinancePortfolioSnapshot } from "@/app/lib/binance-portfolio";
 import type { PortfolioPosition, PortfolioRiskViolation } from "@/app/lib/portfolio-types";
+import { getUserPortfolioPositions } from "@/app/lib/repositories/portfolio-repo";
 import {
   getLatestPortfolioSnapshotCache,
-  savePortfolioSnapshotCache
+  savePortfolioSnapshotCache,
 } from "@/app/lib/repositories/portfolio-snapshots-repo";
+import {
+  resolveUserPortfolioByName,
+  updatePortfolioConnectionSyncState,
+} from "@/app/lib/repositories/portfolios-repo";
 import {
   applyRiskLimitOverrides,
   evaluateRiskViolations,
@@ -14,109 +19,56 @@ import {
   logRiskViolations,
 } from "@/app/lib/repositories/risk-repo";
 import { hasSupabaseEnv } from "@/app/lib/supabase/env";
+import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
 import { createSupabaseServerClient } from "@/app/lib/supabase/server";
-import { getUserPortfolioPositions } from "@/app/lib/repositories/portfolio-repo";
-import {
-  getBinanceConnectedSeedPositions,
-  resolveUserPortfolioByName,
-  updatePortfolioConnectionSyncState
-} from "@/app/lib/repositories/portfolios-repo";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
-const DEFAULT_BACKEND_URL = "http://127.0.0.1:8000";
+
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
 const CONNECTED_PORTFOLIO_SYNC_INTERVAL_MS = 30_000;
 
-function backendBaseUrl(): string {
-  return process.env.AI_BACKEND_URL?.trim() || process.env.BACKEND_API_URL?.trim() || DEFAULT_BACKEND_URL;
-}
+type AuthContext = {
+  supabase: SupabaseClient;
+  user: User | null;
+};
 
 function isSnapshotFresh(snapshot: { summary: { timestamp: string } } | null, maxAgeMs: number): boolean {
   if (!snapshot) {
     return false;
   }
 
-  const timestampMs = new Date(snapshot.summary.timestamp).getTime();
-  if (!Number.isFinite(timestampMs)) {
+  const snapshotTime = new Date(snapshot.summary.timestamp).getTime();
+  if (Number.isNaN(snapshotTime)) {
     return false;
   }
 
-  return Date.now() - timestampMs < maxAgeMs;
+  return Date.now() - snapshotTime <= maxAgeMs;
 }
 
-async function fetchConnectedPortfolioPositions(mode: "demo" | "testnet" = "demo"): Promise<PortfolioPosition[] | null> {
-  try {
-    const response = await fetch(`${backendBaseUrl()}/api/binance/connection/positions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      cache: "no-store",
-      body: JSON.stringify({
-        mode,
-        include_zero_balances: false,
-        recv_window_ms: 5000
-      })
-    });
+async function getAuthContext(request: Request): Promise<AuthContext> {
+  const authorization = request.headers.get("authorization")?.trim();
 
-    if (!response.ok) {
-      return null;
-    }
-
-    const payload = (await response.json().catch(() => null)) as
-      | {
-          data?: Array<{
-            symbol?: string;
-            quantity?: number;
-            avg_buy_price_usd?: number;
-          }>;
-        }
-      | null;
-
-    const items = payload?.data ?? [];
-    if (!Array.isArray(items) || items.length === 0) {
-      return [];
-    }
-
-    const positions: PortfolioPosition[] = [];
-    for (const item of items) {
-      const symbol = `${item.symbol ?? ""}`.trim().toUpperCase();
-      const quantity = Number(item.quantity ?? 0);
-      const priceUsd = Number(item.avg_buy_price_usd ?? 0);
-
-      if (!symbol || !Number.isFinite(quantity) || quantity <= 0) {
-        continue;
-      }
-
-      positions.push({
-        symbol,
-        quantity,
-        avgBuyPriceUsd: Number.isFinite(priceUsd) && priceUsd > 0 ? priceUsd : 1
-      });
-    }
-
-    return positions;
-  } catch {
-    return null;
+  if (authorization) {
+    return getSupabaseAuthContext(request);
   }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  return { supabase, user };
 }
 
 async function buildAndCachePortfolioSnapshot(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  supabase: SupabaseClient,
   userId: string,
-  portfolio: NonNullable<Awaited<ReturnType<typeof resolveUserPortfolioByName>>>,
+  portfolio: { id: string; mode: "manual" | "binance_connected" },
   portfolioName: string,
-  positionsOverride: PortfolioPosition[] | null
+  positionsOverride: PortfolioPosition[]
 ) {
-  const liveConnectedPositions = portfolio.mode === "binance_connected"
-    ? await fetchConnectedPortfolioPositions("demo")
-    : null;
-
-  const positions = portfolio.mode === "binance_connected"
-    ? (liveConnectedPositions ?? getBinanceConnectedSeedPositions())
-    : (positionsOverride && positionsOverride.length > 0 ? positionsOverride : positionsOverride ?? undefined);
-
-  const snapshot = await buildBinancePortfolioSnapshot(portfolioName, positions ?? undefined);
+  const snapshot = await buildBinancePortfolioSnapshot(portfolioName, positionsOverride);
   const nowIso = new Date().toISOString();
   const riskProfile = await getActiveRiskProfileByPortfolio(supabase, userId, portfolio.id);
   let riskViolations: PortfolioRiskViolation[] = [];
@@ -161,15 +113,11 @@ async function buildAndCachePortfolioSnapshot(
   return snapshotWithRisk;
 }
 
-function snapshotHeaders(
-  portfolioMode: "manual" | "binance_connected",
-  source: string,
-  isStale = false
-) {
+function snapshotHeaders(portfolioMode: "manual" | "binance_connected", source: string, isStale = false) {
   return {
     "x-portfolio-mode": portfolioMode,
     "x-snapshot-source": source,
-    "x-snapshot-stale": String(isStale)
+    "x-snapshot-stale": String(isStale),
   };
 }
 
@@ -178,11 +126,7 @@ async function getRequestContext(request: Request) {
     return { error: NextResponse.json({ error: "Supabase environment is required." }, { status: 500 }) };
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
+  const { supabase, user } = await getAuthContext(request);
   if (!user?.id) {
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
@@ -205,7 +149,7 @@ async function getRequestContext(request: Request) {
     userId: user.id,
     name,
     portfolio,
-    positionsOverride
+    positionsOverride,
   };
 }
 
@@ -220,7 +164,7 @@ export async function GET(request: Request) {
     const isFresh = isSnapshotFresh(cached, CONNECTED_PORTFOLIO_SYNC_INTERVAL_MS);
     return NextResponse.json(cached, {
       status: 200,
-      headers: snapshotHeaders(context.portfolio.mode, "cache", !isFresh)
+      headers: snapshotHeaders(context.portfolio.mode, "cache", !isFresh),
     });
   }
 
@@ -235,13 +179,13 @@ export async function GET(request: Request) {
 
     return NextResponse.json(snapshotWithRisk, {
       status: 200,
-      headers: snapshotHeaders(context.portfolio.mode, "live")
+      headers: snapshotHeaders(context.portfolio.mode, "live"),
     });
   } catch {
     if (cached) {
       return NextResponse.json(cached, {
         status: 200,
-        headers: snapshotHeaders(context.portfolio.mode, "cache-fallback")
+        headers: snapshotHeaders(context.portfolio.mode, "cache-fallback"),
       });
     }
 
@@ -256,15 +200,13 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as { name?: string } | null;
   const name = body?.name?.trim() || DEFAULT_PORTFOLIO_NAME;
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const authContext = await getAuthContext(request);
 
-  if (!user?.id) {
+  if (!authContext.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { supabase, user } = authContext;
   const portfolio = await resolveUserPortfolioByName(supabase, user.id, name);
   if (!portfolio?.id) {
     return NextResponse.json({ error: "Portfolio not found." }, { status: 404 });
@@ -286,14 +228,14 @@ export async function POST(request: Request) {
 
     return NextResponse.json(snapshotWithRisk, {
       status: 200,
-      headers: snapshotHeaders(portfolio.mode, "live")
+      headers: snapshotHeaders(portfolio.mode, "live"),
     });
   } catch {
     const cached = await getLatestPortfolioSnapshotCache(supabase, user.id, portfolio.id);
     if (cached) {
       return NextResponse.json(cached, {
         status: 200,
-        headers: snapshotHeaders(portfolio.mode, "cache-fallback")
+        headers: snapshotHeaders(portfolio.mode, "cache-fallback"),
       });
     }
 

@@ -15,6 +15,7 @@ import { RiskMonitorPanel } from "../components/portfolio/risk-monitor-panel";
 import { PortfolioSummary } from "../components/portfolio/portfolio-summary";
 import { SelectCoinModal } from "../components/portfolio/select-coin-modal";
 import { Sidebar } from "../components/ui/sidebar";
+import { AuthGuard } from "../components/auth/auth-guard";
 import { usePortfolioAIAnalysis } from "../hooks/use-portfolio-ai-analysis";
 import { usePortfolios } from "../hooks/use-portfolios";
 import { useRiskEvents } from "../hooks/use-risk-events";
@@ -295,7 +296,9 @@ export default function PortfolioPage() {
         </>
       }
     >
-      <PortfolioContent />
+      <AuthGuard>
+        <PortfolioContent />
+      </AuthGuard>
     </Suspense>
   );
 }
