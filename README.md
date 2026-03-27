@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>PLAND</h1>
+  <img src="public/logo-new.png" alt="PLAND logo" width="120" />
   <p><strong>AI-Powered Crypto Portfolio Intelligence Platform</strong></p>
   <p>Track portfolios, monitor risk, sync Binance data, and generate multi-agent AI recommendations with Next.js, Supabase, FastAPI, and LangGraph.</p>
 
