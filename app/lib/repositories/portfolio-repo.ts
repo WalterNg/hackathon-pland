@@ -113,3 +113,33 @@ export async function getUserPortfolioPositions(
 
   return positions;
 }
+
+export async function upsertPortfolioAssetPriceCache(
+  supabase: SupabaseClient,
+  userId: string,
+  portfolioId: string,
+  assets: Array<{ symbol: string; quantity: number; avgBuyPriceUsd: number; priceUsd: number }>
+): Promise<void> {
+  if (assets.length === 0) {
+    return;
+  }
+
+  const timestamp = new Date().toISOString();
+  const rows = assets
+    .filter((asset) => asset.quantity > 0)
+    .map((asset) => ({
+      user_id: userId,
+      portfolio_id: portfolioId,
+      symbol: asset.symbol,
+      quantity: asset.quantity,
+      avg_buy_price_usd: asset.avgBuyPriceUsd,
+      last_price_usd: asset.priceUsd,
+      last_synced_at: timestamp
+    }));
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  await supabase.from("portfolio_assets").upsert(rows, { onConflict: "portfolio_id,symbol" });
+}

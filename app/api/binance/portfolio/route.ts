@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 
 import { buildBinancePortfolioSnapshot } from "@/app/lib/binance-portfolio";
 import type { PortfolioPosition, PortfolioRiskViolation } from "@/app/lib/portfolio-types";
-import { getUserPortfolioPositions } from "@/app/lib/repositories/portfolio-repo";
+import {
+  getUserPortfolioPositions,
+  upsertPortfolioAssetPriceCache,
+} from "@/app/lib/repositories/portfolio-repo";
 import {
   getLatestPortfolioSnapshotCache,
   savePortfolioSnapshotCache,
@@ -18,10 +21,12 @@ import {
   listRiskLimitsByProfile,
   logRiskViolations,
 } from "@/app/lib/repositories/risk-repo";
-import { hasSupabaseEnv } from "@/app/lib/supabase/env";
+import { hasSupabaseEnv, hasSupabaseServiceEnv } from "@/app/lib/supabase/env";
 import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
+import { createSupabaseServiceClient } from "@/app/lib/supabase/service";
 import { createSupabaseServerClient } from "@/app/lib/supabase/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { refreshMarketPricesFromSnapshot } from "@/app/lib/repositories/market-data-repo";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +110,38 @@ async function buildAndCachePortfolioSnapshot(
   };
 
   await savePortfolioSnapshotCache(supabase, userId, portfolio.id, snapshotWithRisk);
+  await upsertPortfolioAssetPriceCache(
+    supabase,
+    userId,
+    portfolio.id,
+    snapshot.assets.map((asset) => ({
+      symbol: asset.symbol,
+      quantity: asset.quantity,
+      avgBuyPriceUsd: asset.avgBuyPriceUsd,
+      priceUsd: asset.priceUsd
+    }))
+  );
+
+  if (hasSupabaseServiceEnv()) {
+    const marketSupabase = createSupabaseServiceClient();
+    const marketPrices = snapshot.assets
+      .filter((asset) => Number.isFinite(asset.priceUsd) && asset.priceUsd > 0)
+      .map((asset) => ({
+        symbol: asset.symbol,
+        priceUsd: asset.priceUsd,
+        source: "portfolio_snapshot"
+      }));
+
+    if (snapshot.summary.btcPriceUsd && snapshot.summary.btcPriceUsd > 0) {
+      marketPrices.push({
+        symbol: "BTCUSDT",
+        priceUsd: snapshot.summary.btcPriceUsd,
+        source: "portfolio_snapshot"
+      });
+    }
+
+    await refreshMarketPricesFromSnapshot(marketSupabase, marketPrices);
+  }
 
   if (portfolio.mode === "binance_connected") {
     await updatePortfolioConnectionSyncState(supabase, userId, portfolio.id, "active", nowIso);

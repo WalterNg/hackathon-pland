@@ -14,12 +14,19 @@ type UseBinanceSymbolsResult = {
   error: string | null;
 };
 
-export function useBinanceSymbols(query: string): UseBinanceSymbolsResult {
+export function useBinanceSymbols(query: string, enabled = true): UseBinanceSymbolsResult {
   const [symbols, setSymbols] = useState<BinanceSymbolItem[]>([]);
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!enabled) {
+      setSymbols([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     let isDisposed = false;
     const controller = new AbortController();
 
@@ -59,7 +66,7 @@ export function useBinanceSymbols(query: string): UseBinanceSymbolsResult {
       isDisposed = true;
       controller.abort();
     };
-  }, [query]);
+  }, [enabled, query]);
 
   return { symbols, isLoading, error };
 }

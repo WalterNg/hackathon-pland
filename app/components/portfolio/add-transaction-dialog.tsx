@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MaterialIcon } from "../dashboard/material-icon";
 import { type TransactionAction, type TransferDirection, useAddTransaction } from "@/app/hooks/use-add-transaction";
+import { useBinancePrice } from "@/app/hooks/use-binance-price";
 
 type SelectedCoin = {
   symbol: string;
@@ -15,6 +16,7 @@ type AddTransactionDialogProps = {
   onClose: () => void;
   portfolioName: string;
   coin: SelectedCoin | null;
+  portfolioAssets: Array<{ symbol: string; priceUsd: number }>;
   onChangeCoin: () => void;
   onCreated: () => void;
 };
@@ -35,36 +37,65 @@ function symbolDisplay(symbol: string, quoteAsset: string) {
   return symbol.endsWith(quoteAsset) ? symbol.slice(0, symbol.length - quoteAsset.length) : symbol;
 }
 
+function formatPriceInputValue(value: number) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "";
+  }
+
+  return value.toFixed(8).replace(/\.?0+$/, "");
+}
+
 export function AddTransactionDialog({
   open,
   onClose,
   portfolioName,
   coin,
+  portfolioAssets,
   onChangeCoin,
   onCreated
 }: AddTransactionDialogProps) {
   const [action, setAction] = useState<TransactionAction>("buy");
   const [transferDirection, setTransferDirection] = useState<TransferDirection>("in");
   const [quantity, setQuantity] = useState("0");
-  const [priceUsd, setPriceUsd] = useState("0");
+  const [priceUsd, setPriceUsd] = useState("");
   const [feeUsd, setFeeUsd] = useState("0");
   const [note, setNote] = useState("");
   const [dateTime, setDateTime] = useState(nowLocalDateTimeValue());
+  const priceTouchedRef = useRef(false);
+  const selectedAssetPrice = portfolioAssets.find((asset) => asset.symbol === coin?.symbol)?.priceUsd ?? null;
   const { isSubmitting, error, submitTransaction } = useAddTransaction();
+  const { priceUsd: livePriceUsd, isLoading: isLivePriceLoading, error: livePriceError, source: livePriceSource } = useBinancePrice(
+    coin?.symbol ?? "",
+    open && !!coin && action !== "transfer",
+    selectedAssetPrice
+  );
 
   useEffect(() => {
     if (!open || !coin) {
       return;
     }
 
+    priceTouchedRef.current = false;
     setAction("buy");
     setTransferDirection("in");
     setQuantity("0");
-    setPriceUsd("0");
+    setPriceUsd(formatPriceInputValue(selectedAssetPrice ?? 0));
     setFeeUsd("0");
     setNote("");
     setDateTime(nowLocalDateTimeValue());
   }, [open, coin?.symbol]);
+
+  useEffect(() => {
+    if (!open || !coin || action === "transfer" || priceTouchedRef.current) {
+      return;
+    }
+
+    if (!livePriceUsd) {
+      return;
+    }
+
+    setPriceUsd(formatPriceInputValue(livePriceUsd));
+  }, [action, coin?.symbol, livePriceUsd, open]);
 
   const quantityNumber = Number(quantity) || 0;
   const priceNumber = Number(priceUsd) || 0;
@@ -188,8 +219,12 @@ export function AddTransactionDialog({
                 min="0"
                 step="any"
                 value={priceUsd}
-                onChange={(event) => setPriceUsd(event.target.value)}
+                onChange={(event) => {
+                  priceTouchedRef.current = true;
+                  setPriceUsd(event.target.value);
+                }}
                 className="field-input"
+                placeholder={isLivePriceLoading ? "Loading live price..." : "Auto-filled with current price"}
               />
             </div>
           ) : (

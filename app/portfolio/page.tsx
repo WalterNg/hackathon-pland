@@ -256,6 +256,10 @@ function PortfolioContent() {
         onClose={() => setAddDialogOpen(false)}
         portfolioName={portfolioName}
         coin={selectedCoin}
+        portfolioAssets={snapshot?.assets.map((asset) => ({
+          symbol: asset.symbol,
+          priceUsd: asset.priceUsd
+        })) ?? []}
         onChangeCoin={() => {
           setAddDialogOpen(false);
           setSelectCoinOpen(true);
@@ -302,4 +306,3 @@ export default function PortfolioPage() {
     </Suspense>
   );
 }
-
