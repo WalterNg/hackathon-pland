@@ -6,7 +6,7 @@ import { MaterialIcon } from "../components/dashboard/material-icon";
 import { RiskAlertCenterDialog } from "../components/portfolio/risk-alert-center-dialog";
 import { AppTopNavigation } from "../components/ui/app-top-navigation";
 import { AddTransactionDialog } from "../components/portfolio/add-transaction-dialog";
-import { AIRecommendationCard } from "../components/portfolio/ai-recommendation-card";
+import { AIPortfolioRecommendationDashboard } from "../components/portfolio/ai-portfolio-recommendation-dashboard";
 import { CreatePortfolioDialog } from "../components/portfolio/create-portfolio-dialog";
 import { PortfolioAssetsTable } from "../components/portfolio/portfolio-assets-table";
 import { PortfolioCharts } from "@/app/components/portfolio/portfolio-charts";
@@ -18,14 +18,28 @@ import { PortfolioSummary } from "../components/portfolio/portfolio-summary";
 import { SelectCoinModal } from "../components/portfolio/select-coin-modal";
 import { Sidebar } from "../components/ui/sidebar";
 import { useRiskAlerts } from "../hooks/use-risk-alerts";
+import { AuthGuard } from "../components/auth/auth-guard";
 import { usePortfolioAIAnalysis } from "../hooks/use-portfolio-ai-analysis";
 import { usePortfolios } from "../hooks/use-portfolios";
 import { useRiskEvents } from "../hooks/use-risk-events";
 import { useRiskRules } from "../hooks/use-risk-rules";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
+import type { PortfolioMode } from "@/app/lib/portfolio-types";
 import type { RiskAlertStatus, RiskRulesFormValues } from "@/app/lib/risk-types";
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
+
+function formatSyncTimestamp(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return "just now";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
 
 function PortfolioContent() {
   const pathname = usePathname();
@@ -33,24 +47,6 @@ function PortfolioContent() {
   const searchParams = useSearchParams();
   const portfolioName = searchParams.get("name")?.trim() || DEFAULT_PORTFOLIO_NAME;
   const shouldOpenCreatePortfolio = searchParams.get("createPortfolio") === "1";
-  const { snapshot, isLoading, error, reload } = usePortfolioSnapshot(portfolioName);
-  const {
-    profile: riskProfile,
-    events: riskEvents,
-    alerts: riskAlerts,
-    isLoading: isRiskLoading,
-    error: riskError,
-    reload: reloadRisk,
-  } = useRiskEvents(portfolioName);
-  const {
-    profile: editableRiskProfile,
-    source: riskRuleSource,
-    isLoading: isRiskRulesLoading,
-    isSaving: isRiskRulesSaving,
-    error: riskRulesError,
-    save: saveRiskRules,
-    reload: reloadRiskRules,
-  } = useRiskRules(portfolioName);
   const { createPortfolio, removePortfolio, portfolios } = usePortfolios();
   const [isSelectCoinOpen, setSelectCoinOpen] = useState(false);
   const [isAddDialogOpen, setAddDialogOpen] = useState(false);
@@ -61,7 +57,32 @@ function PortfolioContent() {
   const [isRemovingPortfolio, setRemovingPortfolio] = useState(false);
   const [showCharts, setShowCharts] = useState(true);
   const [selectedCoin, setSelectedCoin] = useState<{ symbol: string; baseAsset: string; quoteAsset: string } | null>(null);
-  const { recommendation, isAnalyzing, activeStepId, error: aiError, analyze, steps } = usePortfolioAIAnalysis();
+  const { recommendation, isAnalyzing, activeStepId, error: aiError, analyze, steps } = usePortfolioAIAnalysis(portfolioName);
+
+  const isMainPortfolio = useMemo(() => portfolioName === DEFAULT_PORTFOLIO_NAME, [portfolioName]);
+  const currentPortfolio = useMemo(
+    () => portfolios.find((portfolio) => portfolio.name === portfolioName) ?? null,
+    [portfolios, portfolioName]
+  );
+  const portfolioId = currentPortfolio?.id ?? null;
+  const { snapshot, isLoading, error, reload } = usePortfolioSnapshot(portfolioId, portfolioName);
+  const {
+    profile: riskProfile,
+    events: riskEvents,
+    alerts: riskAlerts,
+    isLoading: isRiskLoading,
+    error: riskError,
+    reload: reloadRisk,
+  } = useRiskEvents(portfolioId, portfolioName);
+  const {
+    profile: editableRiskProfile,
+    source: riskRuleSource,
+    isLoading: isRiskRulesLoading,
+    isSaving: isRiskRulesSaving,
+    error: riskRulesError,
+    save: saveRiskRules,
+    reload: reloadRiskRules,
+  } = useRiskRules(portfolioName);
   const {
     alerts: alertCenterAlerts,
     isLoading: isAlertCenterLoading,
@@ -71,9 +92,14 @@ function PortfolioContent() {
     acknowledge,
     resolve,
   } = useRiskAlerts(portfolioName, alertStatus, 15_000, isAlertCenterOpen);
-
-  const isMainPortfolio = useMemo(() => portfolioName === DEFAULT_PORTFOLIO_NAME, [portfolioName]);
-  const primaryActionLabel = isMainPortfolio ? "Create portfolio" : "Add transaction";
+  const isConnectedPortfolio = currentPortfolio?.mode === "binance_connected";
+  const primaryActionLabel = isMainPortfolio ? "Create portfolio" : isConnectedPortfolio ? "Read-only" : "Add transaction";
+  const connectedStatusDescription =
+    isConnectedPortfolio && snapshot?.summary.timestamp
+      ? `This portfolio syncs automatically from Binance and manual edits are disabled. Last synced at ${formatSyncTimestamp(snapshot.summary.timestamp)}.`
+      : isConnectedPortfolio
+        ? "This portfolio syncs automatically from Binance and manual edits are disabled."
+        : undefined;
   const defaultPortfolioName = useMemo(() => `Portfolio ${portfolios.length + 1}`, [portfolios.length]);
 
   useEffect(() => {
@@ -95,8 +121,8 @@ function PortfolioContent() {
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
   };
 
-  const handleCreatePortfolio = async (name: string) => {
-    const result = await createPortfolio(name);
+  const handleCreatePortfolio = async (name: string, mode: PortfolioMode, idempotencyKey?: string) => {
+    const result = await createPortfolio(name, mode, { idempotencyKey });
     if (!result.ok) {
       throw new Error(result.message ?? "Unable to create portfolio.");
     }
@@ -109,6 +135,11 @@ function PortfolioContent() {
   const openTransactionFlow = () => {
     if (isMainPortfolio) {
       setCreatePortfolioOpen(true);
+      return;
+    }
+
+    if (isConnectedPortfolio) {
+      window.alert("Connected portfolios are read-only. Manual transactions are disabled.");
       return;
     }
 
@@ -208,8 +239,11 @@ function PortfolioContent() {
           <div className="content-shell pb-6">
             <PortfolioHeader
               portfolioName={portfolioName}
+              statusLabel={isConnectedPortfolio ? "Connected to Binance" : undefined}
+              statusDescription={connectedStatusDescription}
               primaryActionLabel={primaryActionLabel}
               onPrimaryAction={openTransactionFlow}
+              isPrimaryActionDisabled={isConnectedPortfolio}
               onRemovePortfolio={handleRemovePortfolio}
               showRemovePortfolio={!isMainPortfolio}
               isRemovingPortfolio={isRemovingPortfolio}
@@ -230,9 +264,9 @@ function PortfolioContent() {
             {snapshot && (
               <>
                 <PortfolioSummary summary={snapshot.summary} metrics={snapshot.metrics} />
-                <AIRecommendationCard
+                <AIPortfolioRecommendationDashboard
+                  key={portfolioName}
                   recommendation={recommendation}
-                  snapshot={snapshot}
                   isAnalyzing={isAnalyzing}
                   activeStepId={activeStepId}
                   steps={steps}
@@ -268,7 +302,8 @@ function PortfolioContent() {
       <button
         type="button"
         onClick={openTransactionFlow}
-        className="ui-button-primary fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full p-0 md:hidden"
+        disabled={isConnectedPortfolio}
+        className="ui-button-primary fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full p-0 md:hidden disabled:cursor-not-allowed disabled:opacity-60"
       >
         <MaterialIcon name="add" outlined={false} />
       </button>
@@ -349,7 +384,10 @@ export default function PortfolioPage() {
         </>
       }
     >
-      <PortfolioContent />
+      <AuthGuard>
+        <PortfolioContent />
+      </AuthGuard>
     </Suspense>
   );
 }
+

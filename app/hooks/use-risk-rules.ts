@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { RiskProfile, RiskRulesFormValues, RiskRuleSource } from "@/app/lib/risk-types";
+import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 type RiskRulesResponse = {
   profile: RiskProfile | null;
@@ -35,7 +36,7 @@ export function useRiskRules(portfolioName: string): UseRiskRulesResult {
       setError(null);
 
       try {
-        const response = await fetch(`/api/risk/rules?portfolioName=${encodeURIComponent(portfolioName)}`, {
+        const response = await fetchWithSupabaseAuth(`/api/risk/rules?portfolioName=${encodeURIComponent(portfolioName)}`, {
           cache: "no-store",
           signal: abortController.signal,
         });
@@ -79,7 +80,7 @@ export function useRiskRules(portfolioName: string): UseRiskRulesResult {
     setError(null);
 
     try {
-      const response = await fetch(`/api/risk/rules?portfolioName=${encodeURIComponent(portfolioName)}`, {
+      const response = await fetchWithSupabaseAuth(`/api/risk/rules?portfolioName=${encodeURIComponent(portfolioName)}`, {
         method: "PUT",
         headers: {
           "content-type": "application/json",

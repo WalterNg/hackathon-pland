@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { RiskAlertRecord, RiskAlertStatus } from "@/app/lib/risk-types";
+import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 type RiskAlertsResponse = {
   alerts: RiskAlertRecord[];
@@ -48,7 +49,7 @@ export function useRiskAlerts(
       setError(null);
 
       try {
-        const response = await fetch(
+        const response = await fetchWithSupabaseAuth(
           `/api/risk/alerts?portfolioName=${encodeURIComponent(portfolioName)}&status=${encodeURIComponent(status)}&limit=40`,
           {
             cache: "no-store",
@@ -96,7 +97,7 @@ export function useRiskAlerts(
     setError(null);
 
     try {
-      const response = await fetch(`/api/risk/alerts/${encodeURIComponent(alertId)}`, {
+      const response = await fetchWithSupabaseAuth(`/api/risk/alerts/${encodeURIComponent(alertId)}`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",

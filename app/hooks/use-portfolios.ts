@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 const MAIN_PORTFOLIO_NAME = "Main Portfolio";
 
@@ -8,6 +9,7 @@ type PortfolioResponseRow = {
   id: string;
   name: string;
   isDefault: boolean;
+  mode: "manual" | "binance_connected";
   createdAt: string;
   totalValueBtc: number | null;
 };
@@ -16,6 +18,7 @@ export type PortfolioItem = {
   id: string;
   name: string;
   isDefault: boolean;
+  mode: "manual" | "binance_connected";
   totalValueBtc: number | null;
 };
 
@@ -23,7 +26,11 @@ type UsePortfoliosResult = {
   portfolios: PortfolioItem[];
   isLoading: boolean;
   error: string | null;
-  createPortfolio: (name: string) => Promise<{ ok: boolean; message?: string; portfolioName?: string }>;
+  createPortfolio: (
+    name: string,
+    mode: "manual" | "binance_connected",
+    options?: { idempotencyKey?: string }
+  ) => Promise<{ ok: boolean; message?: string; portfolioName?: string }>;
   removePortfolio: (name: string) => Promise<{ ok: boolean; message?: string }>;
   reload: () => Promise<void>;
 };
@@ -38,7 +45,7 @@ export function usePortfolios(): UsePortfoliosResult {
     setError(null);
 
     try {
-      const response = await fetch("/api/portfolios", { cache: "no-store" });
+      const response = await fetchWithSupabaseAuth("/api/portfolios", { cache: "no-store" });
       if (!response.ok) {
         throw new Error(`Failed to load portfolios (${response.status})`);
       }
@@ -48,17 +55,18 @@ export function usePortfolios(): UsePortfoliosResult {
         id: item.id,
         name: item.name,
         isDefault: item.isDefault,
+        mode: item.mode,
         totalValueBtc: item.totalValueBtc
       }));
 
       if (nextPortfolios.length === 0) {
-        setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true, totalValueBtc: null }]);
+        setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true, mode: "manual", totalValueBtc: null }]);
       } else {
         setPortfolios(nextPortfolios);
       }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load portfolios");
-      setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true, totalValueBtc: null }]);
+      setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true, mode: "manual", totalValueBtc: null }]);
     } finally {
       setLoading(false);
     }
@@ -68,11 +76,15 @@ export function usePortfolios(): UsePortfoliosResult {
     loadPortfolios();
   }, [loadPortfolios]);
 
-  const createPortfolio = useCallback(async (name: string) => {
-    const response = await fetch("/api/portfolios", {
+  const createPortfolio = useCallback(async (
+    name: string,
+    mode: "manual" | "binance_connected",
+    options?: { idempotencyKey?: string }
+  ) => {
+    const response = await fetchWithSupabaseAuth("/api/portfolios", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name })
+      body: JSON.stringify({ name, mode, idempotencyKey: options?.idempotencyKey })
     });
 
     if (!response.ok) {
@@ -87,7 +99,7 @@ export function usePortfolios(): UsePortfoliosResult {
   }, [loadPortfolios]);
 
   const removePortfolio = useCallback(async (name: string) => {
-    const response = await fetch("/api/portfolios", {
+    const response = await fetchWithSupabaseAuth("/api/portfolios", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name })

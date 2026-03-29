@@ -1,7 +1,6 @@
 "use client";
 
-import { createBrowserClient } from "@supabase/ssr";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const missingEnvMessage =
   "Supabase environment variables are missing. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.";
@@ -68,7 +67,14 @@ export async function createSupabaseBrowserClient() {
 
   browserClientPromise = (async () => {
     const { url, anonKey } = await resolvePublicEnv();
-    browserClient = createBrowserClient(url, anonKey);
+    browserClient = createClient(url, anonKey, {
+      auth: {
+        flowType: "pkce",
+        detectSessionInUrl: true,
+        persistSession: true,
+        autoRefreshToken: true,
+      }
+    });
     return browserClient;
   })();
 

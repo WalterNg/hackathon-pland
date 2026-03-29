@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "@/app/lib/supabase/client";
 
 const DEFAULT_NEXT_PATH = "/";
@@ -9,8 +9,30 @@ const DEFAULT_NEXT_PATH = "/";
 function LoginContent() {
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next")?.trim() || DEFAULT_NEXT_PATH;
+  const initialError = searchParams.get("error")?.trim() || null;
   const [loadingGoogle, setLoadingGoogle] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(initialError);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const redirectIfAuthenticated = async () => {
+      const supabase = await createSupabaseBrowserClient();
+      const {
+        data: { session }
+      } = await supabase.auth.getSession();
+
+      if (!isCancelled && session?.access_token) {
+        window.location.replace(nextPath);
+      }
+    };
+
+    void redirectIfAuthenticated();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [nextPath]);
 
   const signInWithGoogle = async () => {
     setLoadingGoogle(true);

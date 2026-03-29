@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { JournalSummaryPayload } from "@/app/lib/journal-types";
+import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 type UseJournalSummaryResult = {
   summary: JournalSummaryPayload | null;
@@ -23,7 +24,7 @@ export function useJournalSummary(days = 30): UseJournalSummaryResult {
       setError(null);
 
       try {
-        const response = await fetch(`/api/journal/summary?days=${days}`, {
+        const response = await fetchWithSupabaseAuth(`/api/journal/summary?days=${days}`, {
           cache: "no-store",
           signal: controller.signal
         });

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { RiskAlertRecord, RiskEventRecord, RiskProfile } from "@/app/lib/risk-types";
+import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 type RiskEventsResponse = {
   profile: RiskProfile | null;
@@ -21,6 +22,7 @@ type UseRiskEventsResult = {
 const DEFAULT_REFRESH_INTERVAL_MS = 10_000;
 
 export function useRiskEvents(
+  portfolioId: string | null,
   portfolioName: string,
   refreshIntervalMs = DEFAULT_REFRESH_INTERVAL_MS
 ): UseRiskEventsResult {
@@ -35,6 +37,11 @@ export function useRiskEvents(
     let isDisposed = false;
     const abortController = new AbortController();
 
+    setProfile(null);
+    setEvents([]);
+    setLoading(true);
+    setError(null);
+
     const load = async (isBackgroundRefresh = false) => {
       if (!isBackgroundRefresh) {
         setLoading(true);
@@ -43,7 +50,7 @@ export function useRiskEvents(
       setError(null);
 
       try {
-        const response = await fetch(
+        const response = await fetchWithSupabaseAuth(
           `/api/risk/events?portfolioName=${encodeURIComponent(portfolioName)}&limit=6`,
           {
             cache: "no-store",
@@ -95,7 +102,7 @@ export function useRiskEvents(
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [portfolioName, refreshIntervalMs, refreshNonce]);
+  }, [portfolioId, portfolioName, refreshIntervalMs, refreshNonce]);
 
   const reload = useCallback(async () => {
     setRefreshNonce((value) => value + 1);

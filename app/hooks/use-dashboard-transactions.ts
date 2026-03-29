@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { DashboardRecentTransaction } from "@/app/lib/portfolio-types";
+import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 type UseDashboardTransactionsResult = {
   transactions: DashboardRecentTransaction[];
@@ -26,7 +27,7 @@ export function useDashboardTransactions(
       setError(null);
 
       try {
-        const response = await fetch(
+        const response = await fetchWithSupabaseAuth(
           `/api/portfolio/transactions?portfolioName=${encodeURIComponent(portfolioName)}&limit=${limit}`,
           {
             cache: "no-store",

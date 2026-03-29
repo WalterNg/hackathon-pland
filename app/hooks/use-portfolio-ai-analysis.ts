@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { PortfolioSnapshot, PortfolioAIRecommendation } from "@/app/lib/portfolio-types";
 import type { RiskEventRecord, RiskProfile } from "@/app/lib/risk-types";
+import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 export type AIAnalysisStepId =
   | "snapshot"
@@ -66,7 +67,7 @@ const STEPS: AIAnalysisStep[] = [
   },
 ];
 
-export function usePortfolioAIAnalysis(): UsePortfolioAIAnalysisResult {
+export function usePortfolioAIAnalysis(scopeKey?: string | null): UsePortfolioAIAnalysisResult {
   const [recommendation, setRecommendation] = useState<PortfolioAIRecommendation | null>(null);
   const [isAnalyzing, setAnalyzing] = useState(false);
   const [activeStepId, setActiveStepId] = useState<AIAnalysisStepId | null>(null);
@@ -79,6 +80,48 @@ export function usePortfolioAIAnalysis(): UsePortfolioAIAnalysisResult {
       timeoutIdsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
     };
   }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    runIdRef.current += 1;
+    timeoutIdsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    timeoutIdsRef.current = [];
+    setRecommendation(null);
+    setAnalyzing(false);
+    setActiveStepId(null);
+    setError(null);
+
+    const loadLatestRecommendation = async () => {
+      if (!scopeKey?.trim()) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/ai/analyze?portfolioName=${encodeURIComponent(scopeKey)}`, {
+          cache: "no-store",
+        });
+
+        const payload = (await response.json().catch(() => null)) as
+          | { recommendation?: PortfolioAIRecommendation | null; error?: string }
+          | null;
+
+        if (isCancelled || !response.ok) {
+          return;
+        }
+
+        setRecommendation(payload?.recommendation ?? null);
+      } catch {
+        return;
+      }
+    };
+
+    void loadLatestRecommendation();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [scopeKey]);
 
   const analyze = async (input: AnalyzeInput) => {
     if (!input.snapshot || isAnalyzing) {
@@ -114,7 +157,7 @@ export function usePortfolioAIAnalysis(): UsePortfolioAIAnalysisResult {
     timeoutIdsRef.current.push(firstTimeoutId);
 
     try {
-      const response = await fetch("/api/ai/analyze", {
+      const response = await fetchWithSupabaseAuth("/api/ai/analyze", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

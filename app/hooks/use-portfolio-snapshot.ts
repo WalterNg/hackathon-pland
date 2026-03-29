@@ -8,6 +8,7 @@ import {
   calculateMaxDrawdownFromSeries,
   calculateVolatilityFromSeries,
 } from "@/app/lib/risk-calculator";
+import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 type UsePortfolioSnapshotResult = {
   snapshot: PortfolioSnapshot | null;
@@ -17,8 +18,10 @@ type UsePortfolioSnapshotResult = {
 };
 
 const DEFAULT_REFRESH_INTERVAL_MS = 10_000;
+const BACKGROUND_SYNC_COOLDOWN_MS = 30_000;
 const REALTIME_RECONNECT_DELAY_MS = 2_000;
 const BTC_USDT_SYMBOL = "BTCUSDT";
+const PORTFOLIO_CACHE_PREFIX = "portfolio";
 
 type BinanceTickerStreamMessage = {
   data?: {
@@ -152,6 +155,7 @@ function applyRealtimeTicker(
 }
 
 export function usePortfolioSnapshot(
+  portfolioId: string | null,
   portfolioName: string,
   refreshIntervalMs = DEFAULT_REFRESH_INTERVAL_MS
 ): UsePortfolioSnapshotResult {
@@ -160,6 +164,44 @@ export function usePortfolioSnapshot(
   const [error, setError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const isFetchingRef = useRef(false);
+  const isBackgroundSyncingRef = useRef(false);
+  const lastBackgroundSyncAtRef = useRef(0);
+  const snapshotCacheRef = useRef<Record<string, PortfolioSnapshot>>({});
+
+  const cacheKeys = useMemo(() => {
+    const keys = [
+      `${PORTFOLIO_CACHE_PREFIX}:name:${portfolioName}`,
+    ];
+
+    if (portfolioId?.trim()) {
+      keys.unshift(`${PORTFOLIO_CACHE_PREFIX}:id:${portfolioId.trim()}`);
+    }
+
+    return keys;
+  }, [portfolioId, portfolioName]);
+
+  const readCachedSnapshot = () => {
+    for (const key of cacheKeys) {
+      const cached = snapshotCacheRef.current[key];
+      if (cached) {
+        return cached;
+      }
+    }
+
+    return null;
+  };
+
+  const writeCachedSnapshot = (data: PortfolioSnapshot) => {
+    for (const key of cacheKeys) {
+      snapshotCacheRef.current[key] = data;
+    }
+  };
+
+  const clearCachedSnapshot = () => {
+    for (const key of cacheKeys) {
+      delete snapshotCacheRef.current[key];
+    }
+  };
 
   const streamSymbols = useMemo(() => {
     const symbolSet = new Set((snapshot?.assets ?? []).map((asset) => asset.symbol.toUpperCase()));
@@ -171,6 +213,54 @@ export function usePortfolioSnapshot(
     let isCancelled = false;
     const abortController = new AbortController();
 
+    const cachedSnapshot = readCachedSnapshot();
+    setSnapshot(cachedSnapshot);
+    setLoading(!cachedSnapshot);
+    setError(null);
+
+    const syncLiveSnapshot = async () => {
+      if (isBackgroundSyncingRef.current) {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastBackgroundSyncAtRef.current < BACKGROUND_SYNC_COOLDOWN_MS) {
+        return;
+      }
+
+      isBackgroundSyncingRef.current = true;
+      lastBackgroundSyncAtRef.current = now;
+
+      try {
+        const response = await fetch("/api/binance/portfolio", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          cache: "no-store",
+          signal: abortController.signal,
+          body: JSON.stringify({ name: portfolioName })
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data = (await response.json()) as PortfolioSnapshot;
+        if (isCancelled) {
+          return;
+        }
+
+        writeCachedSnapshot(data);
+        setSnapshot(data);
+        setError(null);
+      } catch {
+        return;
+      } finally {
+        isBackgroundSyncingRef.current = false;
+      }
+    };
+
     const loadSnapshot = async (isBackgroundRefresh = false) => {
       if (isFetchingRef.current) {
         return;
@@ -178,7 +268,7 @@ export function usePortfolioSnapshot(
 
       isFetchingRef.current = true;
 
-      if (!isBackgroundRefresh) {
+      if (!isBackgroundRefresh && !cachedSnapshot) {
         setLoading(true);
       }
 
@@ -192,7 +282,7 @@ export function usePortfolioSnapshot(
         if (isCancelled) break;
 
         try {
-          const response = await fetch(`/api/binance/portfolio?name=${encodeURIComponent(portfolioName)}`, {
+          const response = await fetchWithSupabaseAuth(`/api/binance/portfolio?name=${encodeURIComponent(portfolioName)}`, {
             cache: "no-store",
             signal: abortController.signal
           });
@@ -208,9 +298,17 @@ export function usePortfolioSnapshot(
           }
 
           const data = (await response.json()) as PortfolioSnapshot;
+          const snapshotStale = response.headers.get("x-snapshot-stale") === "true";
+          const portfolioMode = response.headers.get("x-portfolio-mode");
           if (!isCancelled) {
+            writeCachedSnapshot(data);
             setSnapshot(data);
           }
+
+          if (portfolioMode === "binance_connected" && snapshotStale) {
+            void syncLiveSnapshot();
+          }
+
           lastError = null;
           break;
         } catch (fetchError) {
@@ -223,7 +321,7 @@ export function usePortfolioSnapshot(
 
       if (lastError && !isCancelled) {
         setError(lastError.message);
-        setSnapshot(null);
+        setSnapshot(readCachedSnapshot());
       }
 
       if (!isCancelled) {
@@ -253,6 +351,7 @@ export function usePortfolioSnapshot(
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       isFetchingRef.current = false;
+      isBackgroundSyncingRef.current = false;
     };
   }, [portfolioName, refreshIntervalMs, refreshNonce]);
 
@@ -331,8 +430,9 @@ export function usePortfolioSnapshot(
   }, [streamSymbols]);
 
   const reload = useCallback(async () => {
+    clearCachedSnapshot();
     setRefreshNonce((value) => value + 1);
-  }, []);
+  }, [cacheKeys]);
 
   return { snapshot, isLoading, error, reload };
 }
