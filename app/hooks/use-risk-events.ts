@@ -1,16 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { RiskEventRecord, RiskProfile } from "@/app/lib/risk-types";
+import type { RiskAlertRecord, RiskEventRecord, RiskProfile } from "@/app/lib/risk-types";
 
 type RiskEventsResponse = {
   profile: RiskProfile | null;
   events: RiskEventRecord[];
+  alerts: RiskAlertRecord[];
 };
 
 type UseRiskEventsResult = {
   profile: RiskProfile | null;
   events: RiskEventRecord[];
+  alerts: RiskAlertRecord[];
   isLoading: boolean;
   error: string | null;
   reload: () => Promise<void>;
@@ -24,6 +26,7 @@ export function useRiskEvents(
 ): UseRiskEventsResult {
   const [profile, setProfile] = useState<RiskProfile | null>(null);
   const [events, setEvents] = useState<RiskEventRecord[]>([]);
+  const [alerts, setAlerts] = useState<RiskAlertRecord[]>([]);
   const [isLoading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -59,6 +62,7 @@ export function useRiskEvents(
 
         setProfile(payload.profile ?? null);
         setEvents(payload.events ?? []);
+        setAlerts(payload.alerts ?? []);
       } catch (loadError) {
         if (isDisposed) {
           return;
@@ -100,6 +104,7 @@ export function useRiskEvents(
   return {
     profile,
     events,
+    alerts,
     isLoading,
     error,
     reload,

@@ -56,10 +56,7 @@ export async function GET(request: Request) {
       const limits = await listRiskLimitsByProfile(supabase, user.id, riskProfile.id);
       const effectiveProfile = applyRiskLimitOverrides(riskProfile, limits);
       const violations = evaluateRiskViolations(snapshot, effectiveProfile);
-
-      if (violations.length > 0) {
-        await logRiskViolations(supabase, user.id, portfolio.id, effectiveProfile.id, violations);
-      }
+      await logRiskViolations(supabase, user.id, portfolio.id, effectiveProfile.id, violations);
 
       riskViolations = violations.map((violation) => ({
         eventType: violation.eventType,

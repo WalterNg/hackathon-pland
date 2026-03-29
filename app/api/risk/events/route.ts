@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   applyRiskLimitOverrides,
   getActiveRiskProfileByPortfolio,
+  listRiskAlerts,
   listRecentRiskEvents,
   listRiskLimitsByProfile,
 } from "@/app/lib/repositories/risk-repo";
@@ -39,5 +40,6 @@ export async function GET(request: Request) {
   }
 
   const events = await listRecentRiskEvents(supabase, user.id, portfolio.id, limit);
-  return NextResponse.json({ profile: effectiveProfile, events });
+  const alerts = await listRiskAlerts(supabase, user.id, portfolio.id, "active", limit);
+  return NextResponse.json({ profile: effectiveProfile, events, alerts });
 }

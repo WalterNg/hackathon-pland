@@ -1,12 +1,15 @@
 import type { PortfolioMetrics } from "@/app/lib/portfolio-types";
-import type { RiskEventRecord, RiskProfile } from "@/app/lib/risk-types";
+import type { RiskAlertRecord, RiskEventRecord, RiskProfile } from "@/app/lib/risk-types";
 
 type RiskMonitorPanelProps = {
   metrics: PortfolioMetrics;
   profile: RiskProfile | null;
   events: RiskEventRecord[];
+  alerts: RiskAlertRecord[];
   isLoading: boolean;
   error: string | null;
+  onManageRules: () => void;
+  onViewAlerts: () => void;
 };
 
 function metricValue(value: number | null | undefined, suffix = "%"): string {
@@ -62,7 +65,20 @@ function eventMessage(event: RiskEventRecord): string {
   return event.eventType.replaceAll("_", " ");
 }
 
-export function RiskMonitorPanel({ metrics, profile, events, isLoading, error }: RiskMonitorPanelProps) {
+function alertMessage(alert: RiskAlertRecord): string {
+  return alert.message.trim() || alert.title;
+}
+
+export function RiskMonitorPanel({
+  metrics,
+  profile,
+  events,
+  alerts,
+  isLoading,
+  error,
+  onManageRules,
+  onViewAlerts,
+}: RiskMonitorPanelProps) {
   const score = metrics.riskScore ?? null;
   const scoreBand = riskBand(score);
 
@@ -102,7 +118,12 @@ export function RiskMonitorPanel({ metrics, profile, events, isLoading, error }:
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <article className="rounded-2xl border border-white/6 bg-(--surface-container-low) px-4 py-4">
-          <p className="typo-body mb-3 font-semibold text-strong">Active limits</p>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="typo-body font-semibold text-strong">Effective rules</p>
+            <button type="button" onClick={onManageRules} className="text-sm font-semibold text-primary transition-colors hover:text-strong">
+              Manage rules
+            </button>
+          </div>
 
           {!profile && <p className="typo-body-xs text-muted">No active risk profile for this portfolio.</p>}
 
@@ -117,30 +138,41 @@ export function RiskMonitorPanel({ metrics, profile, events, isLoading, error }:
 
         <article className="rounded-2xl border border-white/6 bg-(--surface-container-low) px-4 py-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="typo-body font-semibold text-strong">Recent alerts</p>
+            <p className="typo-body font-semibold text-strong">Active alerts</p>
             <span className="status-pill status-pill-neutral">
-              {metrics.violatedRulesCount ?? events.length} active
+              {alerts.length} open
             </span>
           </div>
+
+          <button type="button" onClick={onViewAlerts} className="mb-3 text-sm font-semibold text-primary transition-colors hover:text-strong">
+            View all alerts
+          </button>
 
           {isLoading && <p className="typo-body-xs text-muted">Loading risk alerts...</p>}
           {!isLoading && error && <p className="typo-body-xs text-danger">{error}</p>}
 
-          {!isLoading && !error && events.length === 0 && (
-            <p className="typo-body-xs text-muted">No recent risk events.</p>
+          {!isLoading && !error && alerts.length === 0 && (
+            <p className="typo-body-xs text-muted">No active alerts. Monitoring remains live in the background.</p>
           )}
 
-          {!isLoading && !error && events.length > 0 && (
+          {!isLoading && !error && alerts.length > 0 && (
             <div className="space-y-2">
-              {events.slice(0, 4).map((event) => (
-                <div key={event.id} className="flex items-start gap-2 rounded-xl border border-white/6 bg-(--surface-container) p-3">
-                  <span className={`status-pill ${eventSeverityClass(event.severity)}`}>
-                    {event.severity}
+              {alerts.slice(0, 4).map((alert) => (
+                <div key={alert.id} className="flex items-start gap-2 rounded-xl border border-white/6 bg-(--surface-container) p-3">
+                  <span className={`status-pill ${eventSeverityClass(alert.severity)}`}>
+                    {alert.severity}
                   </span>
-                  <p className="typo-body-xs min-w-0 flex-1 text-body">{eventMessage(event)}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="typo-body-xs font-semibold text-strong">{alert.title}</p>
+                    <p className="typo-body-xs mt-1 text-body">{alertMessage(alert)}</p>
+                  </div>
                 </div>
               ))}
             </div>
+          )}
+
+          {!isLoading && !error && alerts.length === 0 && events.length > 0 && (
+            <p className="mt-3 text-xs text-muted">Latest audit: {eventMessage(events[0])}</p>
           )}
         </article>
       </div>

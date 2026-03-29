@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MaterialIcon } from "../components/dashboard/material-icon";
+import { RiskAlertCenterDialog } from "../components/portfolio/risk-alert-center-dialog";
 import { AppTopNavigation } from "../components/ui/app-top-navigation";
 import { AddTransactionDialog } from "../components/portfolio/add-transaction-dialog";
 import { AIRecommendationCard } from "../components/portfolio/ai-recommendation-card";
@@ -11,14 +12,18 @@ import { PortfolioAssetsTable } from "../components/portfolio/portfolio-assets-t
 import { PortfolioCharts } from "@/app/components/portfolio/portfolio-charts";
 import { PortfolioHeader } from "../components/portfolio/portfolio-header";
 import { PortfolioMetrics } from "../components/portfolio/portfolio-metrics";
+import { RiskRulesDialog } from "../components/portfolio/risk-rules-dialog";
 import { RiskMonitorPanel } from "../components/portfolio/risk-monitor-panel";
 import { PortfolioSummary } from "../components/portfolio/portfolio-summary";
 import { SelectCoinModal } from "../components/portfolio/select-coin-modal";
 import { Sidebar } from "../components/ui/sidebar";
+import { useRiskAlerts } from "../hooks/use-risk-alerts";
 import { usePortfolioAIAnalysis } from "../hooks/use-portfolio-ai-analysis";
 import { usePortfolios } from "../hooks/use-portfolios";
 import { useRiskEvents } from "../hooks/use-risk-events";
+import { useRiskRules } from "../hooks/use-risk-rules";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
+import type { RiskAlertStatus, RiskRulesFormValues } from "@/app/lib/risk-types";
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
 
@@ -32,18 +37,40 @@ function PortfolioContent() {
   const {
     profile: riskProfile,
     events: riskEvents,
+    alerts: riskAlerts,
     isLoading: isRiskLoading,
     error: riskError,
     reload: reloadRisk,
   } = useRiskEvents(portfolioName);
+  const {
+    profile: editableRiskProfile,
+    source: riskRuleSource,
+    isLoading: isRiskRulesLoading,
+    isSaving: isRiskRulesSaving,
+    error: riskRulesError,
+    save: saveRiskRules,
+    reload: reloadRiskRules,
+  } = useRiskRules(portfolioName);
   const { createPortfolio, removePortfolio, portfolios } = usePortfolios();
   const [isSelectCoinOpen, setSelectCoinOpen] = useState(false);
   const [isAddDialogOpen, setAddDialogOpen] = useState(false);
   const [isCreatePortfolioOpen, setCreatePortfolioOpen] = useState(false);
+  const [isRiskRulesOpen, setRiskRulesOpen] = useState(false);
+  const [isAlertCenterOpen, setAlertCenterOpen] = useState(false);
+  const [alertStatus, setAlertStatus] = useState<RiskAlertStatus | "all">("all");
   const [isRemovingPortfolio, setRemovingPortfolio] = useState(false);
   const [showCharts, setShowCharts] = useState(true);
   const [selectedCoin, setSelectedCoin] = useState<{ symbol: string; baseAsset: string; quoteAsset: string } | null>(null);
   const { recommendation, isAnalyzing, activeStepId, error: aiError, analyze, steps } = usePortfolioAIAnalysis();
+  const {
+    alerts: alertCenterAlerts,
+    isLoading: isAlertCenterLoading,
+    isUpdatingId: updatingAlertId,
+    error: alertCenterError,
+    reload: reloadAlertCenter,
+    acknowledge,
+    resolve,
+  } = useRiskAlerts(portfolioName, alertStatus, 15_000, isAlertCenterOpen);
 
   const isMainPortfolio = useMemo(() => portfolioName === DEFAULT_PORTFOLIO_NAME, [portfolioName]);
   const primaryActionLabel = isMainPortfolio ? "Create portfolio" : "Add transaction";
@@ -97,6 +124,39 @@ function PortfolioContent() {
   const handleTransactionCreated = async () => {
     await reload();
     await reloadRisk();
+    await reloadAlertCenter();
+  };
+
+  const handleSaveRiskRules = async (values: RiskRulesFormValues) => {
+    const saved = await saveRiskRules(values);
+    if (!saved) {
+      return;
+    }
+
+    await reloadRiskRules();
+    await reload();
+    await reloadRisk();
+    setRiskRulesOpen(false);
+  };
+
+  const handleAcknowledgeAlert = async (alertId: string) => {
+    const ok = await acknowledge(alertId);
+    if (!ok) {
+      return;
+    }
+
+    await reloadRisk();
+    await reloadAlertCenter();
+  };
+
+  const handleResolveAlert = async (alertId: string) => {
+    const ok = await resolve(alertId);
+    if (!ok) {
+      return;
+    }
+
+    await reloadRisk();
+    await reloadAlertCenter();
   };
 
   const handleRemovePortfolio = async () => {
@@ -184,8 +244,11 @@ function PortfolioContent() {
                   metrics={snapshot.metrics}
                   profile={riskProfile}
                   events={riskEvents}
+                  alerts={riskAlerts}
                   isLoading={isRiskLoading}
                   error={riskError}
+                  onManageRules={() => setRiskRulesOpen(true)}
+                  onViewAlerts={() => setAlertCenterOpen(true)}
                 />
                 <PortfolioMetrics metrics={snapshot.metrics} btcPriceUsd={snapshot.summary.btcPriceUsd} />
                 {showCharts && (
@@ -233,6 +296,31 @@ function PortfolioContent() {
         defaultName={defaultPortfolioName}
         onClose={closeCreatePortfolioDialog}
         onSubmit={handleCreatePortfolio}
+      />
+
+      <RiskRulesDialog
+        open={isRiskRulesOpen}
+        portfolioName={portfolioName}
+        profile={editableRiskProfile}
+        source={riskRuleSource}
+        isLoading={isRiskRulesLoading}
+        isSaving={isRiskRulesSaving}
+        error={riskRulesError}
+        onClose={() => setRiskRulesOpen(false)}
+        onSave={handleSaveRiskRules}
+      />
+
+      <RiskAlertCenterDialog
+        open={isAlertCenterOpen}
+        alerts={alertCenterAlerts}
+        status={alertStatus}
+        isLoading={isAlertCenterLoading}
+        isUpdatingId={updatingAlertId}
+        error={alertCenterError}
+        onClose={() => setAlertCenterOpen(false)}
+        onStatusChange={setAlertStatus}
+        onAcknowledge={handleAcknowledgeAlert}
+        onResolve={handleResolveAlert}
       />
     </>
   );
