@@ -355,10 +355,10 @@ export function AIPortfolioRecommendationDashboard({
     { id: "btc_live_price", text: "BTC live price near $70,301" },
   ];
 
-  const handleAction = async (card: AIRecommendationActionCard) => {
-    setPendingActionId(card.id);
+  const handleAction = async (cardId: string, payload: AIRecommendationActionPayload) => {
+    setPendingActionId(cardId);
     try {
-      await onAction(card.payload);
+      await onAction(payload);
     } finally {
       setPendingActionId(null);
     }
@@ -710,7 +710,12 @@ export function AIPortfolioRecommendationDashboard({
 
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                   {actionCards.map((card) => (
-                    <ActionCard key={card.id} card={card} onAction={handleAction} isPending={pendingActionId === card.id} />
+                    <ActionCard
+                      key={card.id}
+                      card={card}
+                      onAction={(payload) => handleAction(card.id, payload)}
+                      isPending={pendingActionId === card.id}
+                    />
                   ))}
                 </div>
               </section>
