@@ -8,16 +8,18 @@ import {
 } from "@/app/lib/repositories/risk-repo";
 import { resolveUserPortfolioByName } from "@/app/lib/repositories/portfolios-repo";
 import type { RiskRuleSource } from "@/app/lib/risk-types";
-import { createSupabaseServerClient } from "@/app/lib/supabase/server";
+import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
 
 export const dynamic = "force-dynamic";
 
 async function resolveRequestContext(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const authorization = request.headers.get("authorization")?.trim();
 
+  if (!authorization) {
+    return { supabase: null, user: null, portfolio: null };
+  }
+
+  const { supabase, user } = await getSupabaseAuthContext(request);
   if (!user?.id) {
     return { supabase, user: null, portfolio: null };
   }
@@ -31,7 +33,7 @@ async function resolveRequestContext(request: Request) {
 
 export async function GET(request: Request) {
   const { supabase, user, portfolio } = await resolveRequestContext(request);
-  if (!user?.id) {
+  if (!supabase || !user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -51,7 +53,7 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   const { supabase, user, portfolio } = await resolveRequestContext(request);
-  if (!user?.id) {
+  if (!supabase || !user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

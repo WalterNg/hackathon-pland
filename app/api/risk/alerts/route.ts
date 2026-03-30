@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
 import { listRiskAlerts, parseRiskAlertStatus } from "@/app/lib/repositories/risk-repo";
 import { resolveUserPortfolioByName } from "@/app/lib/repositories/portfolios-repo";
-import { createSupabaseServerClient } from "@/app/lib/supabase/server";
+import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const authorization = request.headers.get("authorization")?.trim();
+  if (!authorization) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
+  const { supabase, user } = await getSupabaseAuthContext(request);
   if (!user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

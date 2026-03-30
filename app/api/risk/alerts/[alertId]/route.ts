@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { updateRiskAlertStatus } from "@/app/lib/repositories/risk-repo";
 import type { RiskAlertStatus } from "@/app/lib/risk-types";
-import { createSupabaseServerClient } from "@/app/lib/supabase/server";
+import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
 
 type RouteContext = {
   params: Promise<{
@@ -16,11 +16,12 @@ function isAlertStatus(value: unknown): value is RiskAlertStatus {
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const authorization = request.headers.get("authorization")?.trim();
+  if (!authorization) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
+  const { supabase, user } = await getSupabaseAuthContext(request);
   if (!user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
