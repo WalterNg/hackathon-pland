@@ -14,6 +14,7 @@ type RiskAlertCenterDialogProps = {
   onStatusChange: (status: RiskAlertStatus | "all") => void;
   onAcknowledge: (alertId: string) => Promise<void>;
   onResolve: (alertId: string) => Promise<void>;
+  onReviewRules: () => void;
 };
 
 const filters: Array<{ value: RiskAlertStatus | "all"; label: string }> = [
@@ -71,6 +72,18 @@ function formatThreshold(alert: RiskAlertRecord): string {
   return `${alert.thresholdValue.toFixed(2)}%`;
 }
 
+function urgencyCopy(alert: RiskAlertRecord): string {
+  if (alert.triggerCount >= 3) {
+    return `This breach has repeated ${alert.triggerCount} times and should be treated as urgent until the position or rules are adjusted.`;
+  }
+
+  if (alert.severity === "critical") {
+    return "Critical threshold exceeded. Review immediately and decide whether to reduce exposure or tighten protection.";
+  }
+
+  return "Review the breach context, then acknowledge it or tighten the related rules if the threshold is no longer acceptable.";
+}
+
 export function RiskAlertCenterDialog({
   open,
   alerts,
@@ -82,10 +95,13 @@ export function RiskAlertCenterDialog({
   onStatusChange,
   onAcknowledge,
   onResolve,
+  onReviewRules,
 }: RiskAlertCenterDialogProps) {
   if (!open) {
     return null;
   }
+
+  const criticalActiveAlerts = alerts.filter((alert) => alert.status === "active" && alert.severity === "critical");
 
   return (
     <div className="modal-backdrop z-95">
@@ -118,6 +134,29 @@ export function RiskAlertCenterDialog({
           ))}
         </div>
 
+        {criticalActiveAlerts.length > 0 ? (
+          <div className="mb-5 rounded-2xl border border-rose-500/22 bg-[linear-gradient(90deg,rgba(127,29,29,0.22),rgba(62,9,18,0.12),rgba(16,19,26,0.96))] px-4 py-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-rose-300/85">
+                  <span className="inline-flex h-2.5 w-2.5 rounded-full bg-rose-300 animate-pulse" />
+                  Critical attention required
+                </div>
+                <p className="mt-2 text-base font-semibold text-white">
+                  {criticalActiveAlerts.length} critical alert{criticalActiveAlerts.length > 1 ? "s are" : " is"} still active.
+                </p>
+                <p className="mt-1 text-sm text-rose-50/80">
+                  Review the active breaches, then tighten rules or reduce exposure before they repeat.
+                </p>
+              </div>
+
+              <button type="button" onClick={onReviewRules} className="ui-button-primary">
+                Review rules
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {isLoading && <div className="panel-low p-4 text-sm text-muted">Loading alerts...</div>}
         {!isLoading && error && <div className="panel-low p-4 text-sm text-danger">{error}</div>}
 
@@ -128,7 +167,14 @@ export function RiskAlertCenterDialog({
         {!isLoading && !error && alerts.length > 0 && (
           <div className="max-h-[65vh] space-y-3 overflow-y-auto pr-1">
             {alerts.map((alert) => (
-              <article key={alert.id} className="rounded-2xl bg-(--surface-container-low) p-4">
+              <article
+                key={alert.id}
+                className={`rounded-2xl p-4 ${
+                  alert.severity === "critical" && alert.status === "active"
+                    ? "border border-rose-500/20 bg-[linear-gradient(180deg,rgba(62,9,18,0.3),rgba(25,12,18,0.92))]"
+                    : "bg-(--surface-container-low)"
+                }`}
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -138,9 +184,20 @@ export function RiskAlertCenterDialog({
                     </div>
                     <h3 className="mt-3 text-base font-semibold text-strong">{alert.title}</h3>
                     <p className="mt-1 text-sm text-body">{alert.message}</p>
+                    {alert.severity === "critical" && alert.status === "active" ? (
+                      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-rose-200/90">
+                        Requires explicit review before normal trading continues.
+                      </p>
+                    ) : null}
+                    <p className="mt-2 text-xs text-muted">{urgencyCopy(alert)}</p>
                   </div>
 
                   <div className="flex flex-wrap items-center justify-end gap-2">
+                    {alert.severity === "critical" && alert.status === "active" ? (
+                      <button type="button" onClick={onReviewRules} className="ui-button-secondary">
+                        Review rules
+                      </button>
+                    ) : null}
                     {alert.status === "active" && (
                       <button
                         type="button"

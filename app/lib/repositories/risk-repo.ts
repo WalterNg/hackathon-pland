@@ -179,6 +179,28 @@ function limitNumber(value: number | null): number | null {
   return value === null || !Number.isFinite(value) ? null : value;
 }
 
+function escalatedSeverity(
+  violation: RiskViolation,
+  nextTriggerCount: number
+): RiskSeverity {
+  if (violation.severity === "critical") {
+    return "critical";
+  }
+
+  return nextTriggerCount >= 3 ? "critical" : violation.severity;
+}
+
+function escalatedMessage(
+  violation: RiskViolation,
+  nextTriggerCount: number
+): string {
+  if (nextTriggerCount < 3) {
+    return violation.message;
+  }
+
+  return `${violation.message} This breach has repeated ${nextTriggerCount} times while still active.`;
+}
+
 export async function getActiveRiskProfileByPortfolio(
   supabase: SupabaseClient,
   userId: string,
@@ -541,12 +563,19 @@ export async function logRiskViolations(
 
   for (const violation of violations) {
     const existingAlert = activeAlertsBySignature.get(violation.signature);
+    const nextTriggerCount = existingAlert ? Math.max(1, existingAlert.triggerCount) + 1 : 1;
+    const severity = escalatedSeverity(violation, nextTriggerCount);
+    const message = escalatedMessage(violation, nextTriggerCount);
     const logged = await logRiskEventIfChanged(supabase, userId, {
       portfolioId,
       riskProfileId,
       eventType: violation.eventType,
-      severity: violation.severity,
-      details: toRiskEventDetails(violation),
+      severity,
+      details: {
+        ...toRiskEventDetails(violation),
+        message,
+        triggerCount: nextTriggerCount,
+      },
     });
 
     if (logged) {
@@ -559,15 +588,15 @@ export async function logRiskViolations(
         portfolio_id: portfolioId,
         risk_profile_id: riskProfileId,
         event_type: violation.eventType,
-        severity: violation.severity,
+        severity,
         status: "active",
         title: violation.title,
-        message: violation.message,
+        message,
         observed_value: limitNumber(violation.observedValue),
         threshold_value: limitNumber(violation.thresholdValue),
         symbol: violation.symbol ?? null,
         signature: violation.signature,
-        trigger_count: 1,
+        trigger_count: nextTriggerCount,
         first_triggered_at: nowIso,
         last_triggered_at: nowIso,
         acknowledged_at: null,
@@ -581,14 +610,14 @@ export async function logRiskViolations(
         .from("risk_alerts")
         .update({
           risk_profile_id: riskProfileId,
-          severity: violation.severity,
+          severity,
           title: violation.title,
-          message: violation.message,
+          message,
           observed_value: limitNumber(violation.observedValue),
           threshold_value: limitNumber(violation.thresholdValue),
           symbol: violation.symbol ?? null,
           last_triggered_at: nowIso,
-          trigger_count: Math.max(1, existingAlert.triggerCount) + 1,
+          trigger_count: nextTriggerCount,
         })
         .eq("id", existingAlert.id)
         .eq("user_id", userId);

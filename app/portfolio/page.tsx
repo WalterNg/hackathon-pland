@@ -24,8 +24,10 @@ import { usePortfolios } from "../hooks/use-portfolios";
 import { useRiskEvents } from "../hooks/use-risk-events";
 import { useRiskRules } from "../hooks/use-risk-rules";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
+import { buildRecommendationActionCards, toSelectedCoin, type AIRecommendationActionPayload } from "@/app/lib/portfolio-ai-actions";
 import type { PortfolioMode } from "@/app/lib/portfolio-types";
 import type { RiskAlertStatus, RiskRulesFormValues } from "@/app/lib/risk-types";
+import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
 
@@ -57,6 +59,14 @@ function PortfolioContent() {
   const [isRemovingPortfolio, setRemovingPortfolio] = useState(false);
   const [showCharts, setShowCharts] = useState(true);
   const [selectedCoin, setSelectedCoin] = useState<{ symbol: string; baseAsset: string; quoteAsset: string } | null>(null);
+  const [transactionIntent, setTransactionIntent] = useState<{ action: "buy" | "sell" | "transfer"; note: string }>({
+    action: "buy",
+    note: "",
+  });
+  const [aiActionFeedback, setAIActionFeedback] = useState<{
+    tone: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
   const { recommendation, isAnalyzing, activeStepId, error: aiError, analyze, steps } = usePortfolioAIAnalysis(portfolioName);
 
   const isMainPortfolio = useMemo(() => portfolioName === DEFAULT_PORTFOLIO_NAME, [portfolioName]);
@@ -101,12 +111,38 @@ function PortfolioContent() {
         ? "This portfolio syncs automatically from Binance and manual edits are disabled."
         : undefined;
   const defaultPortfolioName = useMemo(() => `Portfolio ${portfolios.length + 1}`, [portfolios.length]);
+  const recommendationActionCards = useMemo(
+    () => (recommendation ? buildRecommendationActionCards(recommendation, riskAlerts, editableRiskProfile) : []),
+    [editableRiskProfile, recommendation, riskAlerts]
+  );
+  const criticalActiveAlerts = useMemo(
+    () => riskAlerts.filter((alert) => alert.status === "active" && alert.severity === "critical"),
+    [riskAlerts]
+  );
+  const warningActiveAlerts = useMemo(
+    () => riskAlerts.filter((alert) => alert.status === "active" && alert.severity !== "critical"),
+    [riskAlerts]
+  );
+  const pinnedCriticalAlert = useMemo(
+    () => criticalActiveAlerts.find((alert) => alert.triggerCount >= 3) ?? criticalActiveAlerts[0] ?? null,
+    [criticalActiveAlerts]
+  );
 
   useEffect(() => {
     if (shouldOpenCreatePortfolio) {
       setCreatePortfolioOpen(true);
     }
   }, [shouldOpenCreatePortfolio]);
+
+  const openAlertCenterForActiveAlerts = () => {
+    setAlertStatus("active");
+    setAlertCenterOpen(true);
+  };
+
+  const closeAddDialog = () => {
+    setAddDialogOpen(false);
+    setTransactionIntent({ action: "buy", note: "" });
+  };
 
   const closeCreatePortfolioDialog = () => {
     setCreatePortfolioOpen(false);
@@ -133,6 +169,8 @@ function PortfolioContent() {
   };
 
   const openTransactionFlow = () => {
+    setTransactionIntent({ action: "buy", note: "" });
+
     if (isMainPortfolio) {
       setCreatePortfolioOpen(true);
       return;
@@ -152,10 +190,40 @@ function PortfolioContent() {
     setAddDialogOpen(true);
   };
 
+  const logAIActionEvent = async (
+    payload: {
+      actionType: "sell_intent_opened" | "protective_rules_applied" | "alert_center_opened";
+      severity: "info" | "warning" | "critical";
+      title: string;
+      message: string;
+      symbol?: string;
+      details?: Record<string, unknown>;
+    }
+  ) => {
+    try {
+      await fetchWithSupabaseAuth("/api/ai/actions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          portfolioName,
+          ...payload,
+        }),
+      });
+    } catch {
+      return;
+    }
+  };
+
   const handleTransactionCreated = async () => {
     await reload();
     await reloadRisk();
     await reloadAlertCenter();
+    setAIActionFeedback({
+      tone: "success",
+      message: "Portfolio activity recorded. Risk monitor and alerts have been refreshed.",
+    });
   };
 
   const handleSaveRiskRules = async (values: RiskRulesFormValues) => {
@@ -224,6 +292,110 @@ function PortfolioContent() {
     });
   };
 
+  const handleOpenSellIntent = async (symbol: string, note: string) => {
+    if (isMainPortfolio) {
+      setAIActionFeedback({
+        tone: "info",
+        message: "Create a child portfolio first before applying AI trade intents.",
+      });
+      setCreatePortfolioOpen(true);
+      return;
+    }
+
+    if (isConnectedPortfolio) {
+      setAIActionFeedback({
+        tone: "info",
+        message: "Connected portfolios are read-only. Review the recommendation, then manage execution on Binance directly.",
+      });
+      return;
+    }
+
+    const nextCoin = toSelectedCoin(symbol);
+    setTransactionIntent({ action: "sell", note });
+    setSelectedCoin(nextCoin);
+    setAddDialogOpen(true);
+    setAIActionFeedback({
+      tone: "info",
+      message: `Sell flow opened for ${nextCoin.baseAsset}. Review quantity and price before confirming.`,
+    });
+
+    await logAIActionEvent({
+      actionType: "sell_intent_opened",
+      severity: riskAlerts.some((alert) => alert.severity === "critical") ? "critical" : "warning",
+      title: "AI sell flow opened",
+      message: note,
+      symbol,
+      details: {
+        source: "ai_recommendation_dashboard",
+      },
+    });
+  };
+
+  const handleApplyProtectiveRules = async (values: RiskRulesFormValues, note: string) => {
+    const saved = await saveRiskRules(values);
+    if (!saved) {
+      setAIActionFeedback({
+        tone: "error",
+        message: "Unable to apply the defensive rule set. Review the rule form and try again.",
+      });
+      return;
+    }
+
+    await reloadRiskRules();
+    await reload();
+    await reloadRisk();
+    await reloadAlertCenter();
+    setRiskRulesOpen(true);
+    setAIActionFeedback({
+      tone: "success",
+      message: "Defensive rules have been applied. Review the updated guardrails and active alerts.",
+    });
+
+    await logAIActionEvent({
+      actionType: "protective_rules_applied",
+      severity: riskAlerts.some((alert) => alert.severity === "critical") ? "critical" : "warning",
+      title: "AI defensive rules applied",
+      message: note,
+      details: {
+        values,
+        source: "ai_recommendation_dashboard",
+      },
+    });
+  };
+
+  const handleOpenAlertCenterFromAI = async (note: string) => {
+    setAlertStatus("active");
+    setAlertCenterOpen(true);
+    setAIActionFeedback({
+      tone: "info",
+      message: "Alert Center opened so you can review the active breaches behind this recommendation.",
+    });
+
+    await logAIActionEvent({
+      actionType: "alert_center_opened",
+      severity: riskAlerts.some((alert) => alert.severity === "critical") ? "critical" : "info",
+      title: "AI-linked alert review opened",
+      message: note,
+      details: {
+        source: "ai_recommendation_dashboard",
+      },
+    });
+  };
+
+  const handleRecommendationAction = async (payload: AIRecommendationActionPayload) => {
+    if (payload.type === "sell-intent") {
+      await handleOpenSellIntent(payload.symbol, payload.note);
+      return;
+    }
+
+    if (payload.type === "apply-protective-rules") {
+      await handleApplyProtectiveRules(payload.values, payload.note);
+      return;
+    }
+
+    await handleOpenAlertCenterFromAI(payload.note);
+  };
+
   return (
     <>
       <header className="page-header shrink-0 px-4 sm:px-6 lg:px-8">
@@ -236,11 +408,14 @@ function PortfolioContent() {
         <Sidebar />
 
         <main className="app-main overflow-y-auto px-4 pb-6 pt-5 sm:px-6 sm:pb-8 lg:px-8">
-          <div className="content-shell pb-6">
+          <div className="content-shell max-w-7xl pb-6">
             <PortfolioHeader
               portfolioName={portfolioName}
               statusLabel={isConnectedPortfolio ? "Connected to Binance" : undefined}
               statusDescription={connectedStatusDescription}
+              criticalAlertCount={criticalActiveAlerts.length}
+              warningAlertCount={warningActiveAlerts.length}
+              onOpenAlertCenter={openAlertCenterForActiveAlerts}
               primaryActionLabel={primaryActionLabel}
               onPrimaryAction={openTransactionFlow}
               isPrimaryActionDisabled={isConnectedPortfolio}
@@ -250,6 +425,35 @@ function PortfolioContent() {
               showCharts={showCharts}
               onToggleShowCharts={() => setShowCharts((prev) => !prev)}
             />
+
+            {pinnedCriticalAlert ? (
+              <section className="mb-6 overflow-hidden rounded-3xl border border-rose-500/20 bg-[linear-gradient(90deg,rgba(127,29,29,0.18),rgba(58,12,25,0.1),rgba(8,13,22,0.96))] px-4 py-4 shadow-[0_20px_60px_rgba(0,0,0,0.24)] sm:px-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-rose-200/88">
+                      <span className="inline-flex h-2.5 w-2.5 rounded-full bg-rose-300 animate-pulse" />
+                      Critical alert requires action
+                      {pinnedCriticalAlert.triggerCount >= 3 ? (
+                        <span className="rounded-full border border-rose-300/20 bg-rose-500/12 px-2 py-0.5 text-[0.64rem] text-rose-100/90">
+                          Repeated {pinnedCriticalAlert.triggerCount} times
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-2 text-base font-semibold text-white sm:text-lg">{pinnedCriticalAlert.title}</p>
+                    <p className="mt-1 max-w-3xl text-sm text-rose-50/78">{pinnedCriticalAlert.message}</p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={openAlertCenterForActiveAlerts} className="ui-button-secondary">
+                      Review alerts
+                    </button>
+                    <button type="button" onClick={() => setRiskRulesOpen(true)} className="ui-button-primary">
+                      Tighten rules
+                    </button>
+                  </div>
+                </div>
+              </section>
+            ) : null}
 
             {isLoading && (
               <div className="panel-low mb-6 p-5 text-sm text-muted">Loading portfolio snapshot…</div>
@@ -267,10 +471,16 @@ function PortfolioContent() {
                 <AIPortfolioRecommendationDashboard
                   key={portfolioName}
                   recommendation={recommendation}
+                  actionCards={recommendationActionCards}
+                  alerts={riskAlerts}
                   isAnalyzing={isAnalyzing}
                   activeStepId={activeStepId}
                   steps={steps}
                   error={aiError}
+                  actionFeedback={aiActionFeedback}
+                  onClearActionFeedback={() => setAIActionFeedback(null)}
+                  onAction={handleRecommendationAction}
+                  onOpenAlertCenter={openAlertCenterForActiveAlerts}
                   onAnalyze={handleAnalyzeWithAI}
                   isDisabled={!snapshot || isLoading}
                 />
@@ -282,7 +492,7 @@ function PortfolioContent() {
                   isLoading={isRiskLoading}
                   error={riskError}
                   onManageRules={() => setRiskRulesOpen(true)}
-                  onViewAlerts={() => setAlertCenterOpen(true)}
+                  onViewAlerts={openAlertCenterForActiveAlerts}
                 />
                 <PortfolioMetrics metrics={snapshot.metrics} btcPriceUsd={snapshot.summary.btcPriceUsd} />
                 {showCharts && (
@@ -316,11 +526,14 @@ function PortfolioContent() {
 
       <AddTransactionDialog
         open={isAddDialogOpen}
-        onClose={() => setAddDialogOpen(false)}
+        onClose={closeAddDialog}
         portfolioName={portfolioName}
         coin={selectedCoin}
+        initialAction={transactionIntent.action}
+        initialNote={transactionIntent.note}
         onChangeCoin={() => {
           setAddDialogOpen(false);
+          setTransactionIntent({ action: "buy", note: "" });
           setSelectCoinOpen(true);
         }}
         onCreated={handleTransactionCreated}
@@ -356,6 +569,10 @@ function PortfolioContent() {
         onStatusChange={setAlertStatus}
         onAcknowledge={handleAcknowledgeAlert}
         onResolve={handleResolveAlert}
+        onReviewRules={() => {
+          setAlertCenterOpen(false);
+          setRiskRulesOpen(true);
+        }}
       />
     </>
   );
@@ -374,7 +591,7 @@ export default function PortfolioPage() {
           <div className="app-shell flex overflow-hidden">
             <Sidebar />
             <main className="app-main overflow-hidden p-4 pt-7 sm:p-6 lg:p-8">
-              <div className="content-shell">
+              <div className="content-shell max-w-7xl">
                 <div className="panel-low p-5 text-sm text-muted">
                   Loading portfolio...
                 </div>

@@ -1,17 +1,26 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import type { AIRecommendationActionCard, AIRecommendationActionPayload } from "@/app/lib/portfolio-ai-actions";
 import type { PortfolioAIRecommendation } from "@/app/lib/portfolio-types";
 import type { AIAnalysisStep, AIAnalysisStepId } from "@/app/hooks/use-portfolio-ai-analysis";
+import type { RiskAlertRecord } from "@/app/lib/risk-types";
 import { MaterialIcon } from "../dashboard/material-icon";
 
 type AIPortfolioRecommendationDashboardProps = {
   recommendation: PortfolioAIRecommendation | null;
+  actionCards: AIRecommendationActionCard[];
+  alerts: RiskAlertRecord[];
   isAnalyzing: boolean;
   activeStepId: AIAnalysisStepId | null;
   steps: AIAnalysisStep[];
   error: string | null;
+  actionFeedback: { tone: "success" | "error" | "info"; message: string } | null;
+  onClearActionFeedback: () => void;
+  onAction: (payload: AIRecommendationActionPayload) => Promise<void> | void;
+  onOpenAlertCenter: () => void;
   onAnalyze: () => void;
   isDisabled?: boolean;
 };
@@ -176,30 +185,20 @@ function ConfidenceGauge({ value }: { value: number }) {
 }
 
 function ActionCard({
-  title,
-  primary,
-  secondary,
-  buttonLabel,
-  icon,
+  card,
+  onAction,
+  isPending,
 }: {
-  title: string;
-  primary: string;
-  secondary?: string;
-  buttonLabel: string;
-  icon: string;
+  card: AIRecommendationActionCard;
+  onAction: (payload: AIRecommendationActionPayload) => Promise<void> | void;
+  isPending: boolean;
 }) {
-  const handleAction = () => {
-    window.alert("Feature Coming Soon: This is a decision-support tool. Manual execution is required.");
-  };
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText([primary, secondary].filter(Boolean).join(" | "));
-      window.alert("Setup copied to clipboard.");
-    } catch {
-      window.alert("Unable to copy setup values.");
-    }
-  };
+  const severityClass =
+    card.severity === "critical"
+      ? "bg-rose-500/14 text-rose-200"
+      : card.severity === "warning"
+        ? "bg-amber-400/14 text-amber-200"
+        : "bg-sky-400/14 text-sky-100";
 
   return (
     <article className="relative overflow-hidden rounded-[1.5rem] border border-white/8 bg-[#0d131d] p-5 shadow-[0_20px_45px_rgba(0,0,0,0.28)]">
@@ -207,38 +206,104 @@ function ActionCard({
       <div className="relative">
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
-            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-slate-500">{title}</p>
-            <p className="mt-3 text-xl font-semibold leading-snug text-white">{primary}</p>
-            {secondary ? <p className="mt-2 text-sm text-slate-400">{secondary}</p> : null}
+            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-slate-500">{card.title}</p>
+            <p className="mt-3 text-xl font-semibold leading-snug text-white">{card.primary}</p>
+            {card.secondary ? <p className="mt-2 text-sm text-slate-400">{card.secondary}</p> : null}
           </div>
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-200 transition hover:border-sky-400/40 hover:text-white"
-            aria-label="Copy setup values"
-          >
-            <MaterialIcon name={icon} outlined={false} className="text-lg" />
-          </button>
+          <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.16em] ${severityClass}`}>
+            <MaterialIcon name={card.icon} outlined={false} className="text-sm" />
+            {card.severity}
+          </span>
+        </div>
+
+        <div className="mb-5 rounded-2xl border border-white/6 bg-white/[0.04] px-3 py-3">
+          <p className="text-sm text-slate-300">{card.rationale}</p>
+          {card.linkedAlertLabel ? <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Linked: {card.linkedAlertLabel}</p> : null}
         </div>
 
         <button
           type="button"
-          onClick={handleAction}
-          className="inline-flex w-full items-center justify-center rounded-xl bg-[linear-gradient(135deg,rgba(244,63,94,0.92),rgba(225,29,72,0.88))] px-4 py-3 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(244,63,94,0.22)] transition hover:brightness-110"
+          onClick={() => void onAction(card.payload)}
+          disabled={isPending}
+          className="inline-flex w-full items-center justify-center rounded-xl bg-[linear-gradient(135deg,rgba(244,63,94,0.92),rgba(225,29,72,0.88))] px-4 py-3 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(244,63,94,0.22)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {buttonLabel}
+          {isPending ? "Applying..." : card.buttonLabel}
         </button>
       </div>
     </article>
   );
 }
 
+function EmptyRecommendationHero({ onAnalyze, isDisabled }: { onAnalyze: () => void; isDisabled: boolean }) {
+  return (
+    <div className="relative overflow-hidden rounded-[2rem] border border-white/14 bg-[linear-gradient(180deg,#6A38E7_0%,#AE4EF9_100%)] px-5 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.24),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.12),transparent_30%)]" />
+
+      <div className="relative flex flex-col gap-8 lg:min-h-[19rem] lg:justify-center lg:pr-[18rem] xl:pr-[22rem]">
+        <div className="max-w-3xl">
+          <div className="inline-flex items-center gap-3">
+            <Image
+              src="/AI.png"
+              alt="AI"
+              width={36}
+              height={36}
+              priority={false}
+              className="h-8 w-8 object-contain sm:h-9 sm:w-9"
+            />
+            <span
+              className="text-[1.75rem] font-extrabold tracking-[0.12em] text-white sm:text-[2.2rem]"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              AI recommendation
+            </span>
+          </div>
+
+          <p className="mt-6 max-w-2xl text-lg font-semibold tracking-[0.12em] text-white sm:text-xl lg:text-[1.7rem]">
+            Trade with discipline, act with conviction
+          </p>
+
+          <button
+            type="button"
+            onClick={onAnalyze}
+            disabled={isDisabled}
+            className="group relative mt-8 inline-flex min-h-14 items-center gap-3 overflow-hidden rounded-full border border-white/32 bg-[linear-gradient(180deg,rgba(255,255,255,0.28),rgba(255,255,255,0.12))] px-7 text-base font-semibold text-white backdrop-blur-[22px] transition hover:-translate-y-0.5 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.34),rgba(255,255,255,0.14))] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span className="pointer-events-none absolute inset-0 rounded-full bg-[linear-gradient(135deg,rgba(255,255,255,0.22),rgba(255,255,255,0.06)_42%,rgba(255,255,255,0.14)_78%,rgba(255,255,255,0.1))]" />
+            <span className="pointer-events-none absolute inset-x-4 top-1 h-1/2 rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.46),rgba(255,255,255,0.08))] opacity-90 blur-md" />
+            <span className="pointer-events-none absolute inset-[1px] rounded-full border border-white/18" />
+            <span className="relative">Analyze with AI</span>
+            <MaterialIcon name="arrow_forward" outlined={false} className="relative text-lg transition group-hover:translate-x-0.5" />
+          </button>
+        </div>
+
+        <div className="relative mx-auto flex w-full max-w-[20rem] justify-center lg:absolute lg:-right-4 lg:top-[51%] lg:w-auto lg:max-w-none lg:-translate-y-1/2 lg:justify-end xl:-right-8 xl:top-[53%]">
+          <div className="pointer-events-none absolute inset-x-[12%] bottom-2 h-8 rounded-full bg-[radial-gradient(circle,rgba(61,18,136,0.38),transparent_70%)] blur-xl" />
+          <Image
+            src="/coin.svg"
+            alt="Bitcoin and Ethereum coin illustration"
+            width={380}
+            height={280}
+            priority={false}
+            className="relative h-auto w-full max-w-[18rem] drop-shadow-[0_18px_40px_rgba(67,23,156,0.24)] sm:max-w-[20rem] lg:max-w-[28rem] xl:max-w-[31rem]"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AIPortfolioRecommendationDashboard({
   recommendation,
+  actionCards,
+  alerts,
   isAnalyzing,
   activeStepId,
   steps,
   error,
+  actionFeedback,
+  onClearActionFeedback,
+  onAction,
+  onOpenAlertCenter,
   onAnalyze,
   isDisabled = false,
 }: AIPortfolioRecommendationDashboardProps) {
@@ -246,6 +311,7 @@ export function AIPortfolioRecommendationDashboard({
   const [isCouncilProcessing, setCouncilProcessing] = useState(isAnalyzing);
   const [highlightedFactId, setHighlightedFactId] = useState<MarketFactId | null>(null);
   const [openAccordionId, setOpenAccordionId] = useState<AgentAccordion["id"] | null>("technical");
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isAnalyzing) {
@@ -270,6 +336,9 @@ export function AIPortfolioRecommendationDashboard({
   const analyzedTime = formatTimestamp(recommendation?.analyzedAt);
   const snapshotTime = formatTimestamp(recommendation?.snapshotTimestamp);
   const showDecisionSections = Boolean(recommendation);
+  const showEmptyHero = !recommendation && !isCouncilProcessing;
+  const criticalAlertCount = alerts.filter((alert) => alert.status === "active" && alert.severity === "critical").length;
+  const topCriticalAlert = alerts.find((alert) => alert.status === "active" && alert.severity === "critical") ?? null;
 
   const marketFacts = useMemo(() => MOCK_FACTS, []);
 
@@ -286,6 +355,29 @@ export function AIPortfolioRecommendationDashboard({
     { id: "btc_live_price", text: "BTC live price near $70,301" },
   ];
 
+  const handleAction = async (card: AIRecommendationActionCard) => {
+    setPendingActionId(card.id);
+    try {
+      await onAction(card.payload);
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
+  if (showEmptyHero) {
+    return (
+      <section className="mb-6 lg:mb-8">
+        <EmptyRecommendationHero onAnalyze={onAnalyze} isDisabled={isDisabled || isAnalyzing} />
+
+        {error ? (
+          <div className="mt-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+            {error}
+          </div>
+        ) : null}
+      </section>
+    );
+  }
+
   return (
     <section className="relative mb-6 overflow-hidden rounded-[2rem] border border-white/8 bg-[#080d16] text-white shadow-[0_30px_90px_rgba(0,0,0,0.42)] lg:mb-8">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_25%),radial-gradient(circle_at_top_right,rgba(244,63,94,0.13),transparent_28%),linear-gradient(180deg,rgba(10,15,24,0.98),rgba(7,11,18,0.98))]" />
@@ -294,45 +386,49 @@ export function AIPortfolioRecommendationDashboard({
       <div className="relative px-5 py-5 sm:px-6 sm:py-6 lg:px-8">
         <div className="flex flex-col gap-5">
           <header className="rounded-[1.6rem] border border-white/8 bg-[linear-gradient(180deg,rgba(14,20,31,0.96),rgba(9,14,22,0.98))] p-5 sm:p-6">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div className="max-w-3xl">
-                <div className="flex items-center gap-3">
-                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-sky-400/25 bg-sky-400/10 text-sky-200 shadow-[0_0_24px_rgba(56,189,248,0.18)]">
-                    <MaterialIcon name="psychology" outlined={false} className="text-xl" />
-                  </span>
-                  <div>
-                    <h3 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">AI Portfolio Recommendation</h3>
-                    <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-                      Portfolio-level recommendation built from parallel TA, market context, and risk agents.
-                    </p>
+            {showEmptyHero ? (
+              <EmptyRecommendationHero onAnalyze={onAnalyze} isDisabled={isDisabled || isAnalyzing} />
+            ) : (
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div className="max-w-3xl">
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-sky-400/25 bg-sky-400/10 text-sky-200 shadow-[0_0_24px_rgba(56,189,248,0.18)]">
+                      <MaterialIcon name="psychology" outlined={false} className="text-xl" />
+                    </span>
+                    <div>
+                      <h3 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">AI Portfolio Recommendation</h3>
+                      <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
+                        Portfolio-level recommendation built from parallel TA, market context, and risk agents.
+                      </p>
+                    </div>
                   </div>
+
+                  {recommendation ? (
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300">
+                        Confidence {displayConfidence}/10
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300">
+                        Analyzed {analyzedTime}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300">
+                        Snapshot {snapshotTime}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
 
-                {recommendation ? (
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300">
-                      Confidence {displayConfidence}/10
-                    </span>
-                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300">
-                      Analyzed {analyzedTime}
-                    </span>
-                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300">
-                      Snapshot {snapshotTime}
-                    </span>
-                  </div>
-                ) : null}
+                <button
+                  type="button"
+                  onClick={onAnalyze}
+                  disabled={isDisabled || isAnalyzing}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-sky-400/20 bg-[linear-gradient(135deg,rgba(59,130,246,0.22),rgba(37,99,235,0.08))] px-5 py-3 text-sm font-semibold text-sky-100 shadow-[0_14px_36px_rgba(37,99,235,0.18)] transition hover:border-sky-300/35 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <MaterialIcon name={isAnalyzing ? "hourglass_top" : "flash_on"} outlined={false} className="text-lg" />
+                  Analyze with AI
+                </button>
               </div>
-
-              <button
-                type="button"
-                onClick={onAnalyze}
-                disabled={isDisabled || isAnalyzing}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-sky-400/20 bg-[linear-gradient(135deg,rgba(59,130,246,0.22),rgba(37,99,235,0.08))] px-5 py-3 text-sm font-semibold text-sky-100 shadow-[0_14px_36px_rgba(37,99,235,0.18)] transition hover:border-sky-300/35 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <MaterialIcon name={isAnalyzing ? "hourglass_top" : "flash_on"} outlined={false} className="text-lg" />
-                Analyze with AI
-              </button>
-            </div>
+            )}
 
             {isCouncilProcessing ? (
               <div className="mt-5 rounded-[1.5rem] border border-white/8 bg-[#0a0f18] px-4 py-5 sm:px-5">
@@ -413,6 +509,16 @@ export function AIPortfolioRecommendationDashboard({
                       <p className="mt-1 text-lg font-semibold text-rose-100 sm:text-xl">
                         SIGNAL: {recommendation.action.toUpperCase()}
                       </p>
+                      {criticalAlertCount > 0 ? (
+                        <button
+                          type="button"
+                          onClick={onOpenAlertCenter}
+                          className="mt-2 inline-flex items-center gap-2 rounded-full border border-rose-400/30 bg-rose-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-rose-100 transition hover:bg-rose-500/16"
+                        >
+                          <span className="h-2 w-2 rounded-full bg-rose-300 animate-pulse" />
+                          {criticalAlertCount} critical alert{criticalAlertCount > 1 ? "s" : ""}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
 
@@ -428,29 +534,53 @@ export function AIPortfolioRecommendationDashboard({
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="mt-5 rounded-[1.45rem] border border-dashed border-white/10 bg-[#0a0f18] px-5 py-6">
-                <div className="mx-auto flex max-w-xl flex-col items-center text-center">
-                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-sky-200">
-                    <MaterialIcon name="auto_awesome" outlined={false} className="text-xl" />
-                  </span>
-                  <p className="mt-3 text-lg font-semibold text-white">No AI recommendation yet</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">
-                    Run an analysis to generate a portfolio-level verdict, smart actions, and explainable evidence.
-                  </p>
-                </div>
-              </div>
-            )}
+            ) : null}
 
             {error ? (
               <div className="mt-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
                 {error}
               </div>
             ) : null}
+
+            {actionFeedback ? (
+              <div
+                className={`mt-4 flex items-start justify-between gap-3 rounded-2xl px-4 py-3 text-sm ${
+                  actionFeedback.tone === "success"
+                    ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
+                    : actionFeedback.tone === "error"
+                      ? "border border-rose-500/20 bg-rose-500/10 text-rose-100"
+                      : "border border-sky-400/20 bg-sky-500/10 text-sky-100"
+                }`}
+              >
+                <p>{actionFeedback.message}</p>
+                <button type="button" onClick={onClearActionFeedback} className="text-current/80 transition hover:text-current">
+                  <MaterialIcon name="close" outlined={false} className="text-lg" />
+                </button>
+              </div>
+            ) : null}
           </header>
 
           {showDecisionSections ? (
             <>
+              {topCriticalAlert ? (
+                <section className="rounded-[1.6rem] border border-rose-500/24 bg-[linear-gradient(90deg,rgba(127,29,29,0.28),rgba(29,10,18,0.4),rgba(10,15,24,0.96))] px-5 py-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <p className="text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-rose-300/80">Critical risk pressure</p>
+                      <p className="mt-2 text-lg font-semibold text-white">{topCriticalAlert.title}</p>
+                      <p className="mt-1 text-sm text-rose-100/80">{topCriticalAlert.message}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onOpenAlertCenter}
+                      className="inline-flex items-center justify-center rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-50 transition hover:bg-rose-500/16"
+                    >
+                      Review critical alerts
+                    </button>
+                  </div>
+                </section>
+              ) : null}
+
               <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {marketFacts.map((fact) => {
                   const highlighted = highlightedFactId === fact.id;
@@ -579,19 +709,9 @@ export function AIPortfolioRecommendationDashboard({
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                  <ActionCard
-                    title="Immediate Action"
-                    primary="Target: Sell 25% of BNBUSDT"
-                    secondary="Ref Price: ~$600.00"
-                    buttonLabel="Place Sell Order"
-                    icon="content_copy"
-                  />
-                  <ActionCard
-                    title="Defensive Setup"
-                    primary="Hard Stop-Loss at $580.00"
-                    buttonLabel="Configure Stop-Loss"
-                    icon="content_copy"
-                  />
+                  {actionCards.map((card) => (
+                    <ActionCard key={card.id} card={card} onAction={handleAction} isPending={pendingActionId === card.id} />
+                  ))}
                 </div>
               </section>
             </>

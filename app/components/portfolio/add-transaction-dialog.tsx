@@ -15,6 +15,8 @@ type AddTransactionDialogProps = {
   onClose: () => void;
   portfolioName: string;
   coin: SelectedCoin | null;
+  initialAction?: TransactionAction;
+  initialNote?: string;
   onChangeCoin: () => void;
   onCreated: () => void;
 };
@@ -40,6 +42,8 @@ export function AddTransactionDialog({
   onClose,
   portfolioName,
   coin,
+  initialAction = "buy",
+  initialNote = "",
   onChangeCoin,
   onCreated
 }: AddTransactionDialogProps) {
@@ -57,14 +61,14 @@ export function AddTransactionDialog({
       return;
     }
 
-    setAction("buy");
+    setAction(initialAction);
     setTransferDirection("in");
     setQuantity("0");
     setPriceUsd("0");
     setFeeUsd("0");
-    setNote("");
+    setNote(initialNote);
     setDateTime(nowLocalDateTimeValue());
-  }, [open, coin?.symbol]);
+  }, [open, coin?.symbol, initialAction, initialNote]);
 
   const quantityNumber = Number(quantity) || 0;
   const priceNumber = Number(priceUsd) || 0;
@@ -107,7 +111,7 @@ export function AddTransactionDialog({
   };
 
   return (
-    <div className="modal-backdrop z-[90]">
+    <div className="modal-backdrop z-90">
       <div className="modal-shell max-w-lg p-5 sm:p-6">
         <div className="mb-5 flex items-start justify-between gap-4">
           <h2 className="text-xl font-bold text-strong">Add Transaction</h2>

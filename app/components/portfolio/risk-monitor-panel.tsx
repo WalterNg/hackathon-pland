@@ -69,6 +69,18 @@ function alertMessage(alert: RiskAlertRecord): string {
   return alert.message.trim() || alert.title;
 }
 
+function alertUrgencyLabel(alert: RiskAlertRecord): string | null {
+  if (alert.triggerCount >= 3) {
+    return `Repeated ${alert.triggerCount} times`;
+  }
+
+  if (alert.severity === "critical") {
+    return "Immediate review";
+  }
+
+  return null;
+}
+
 export function RiskMonitorPanel({
   metrics,
   profile,
@@ -81,6 +93,8 @@ export function RiskMonitorPanel({
 }: RiskMonitorPanelProps) {
   const score = metrics.riskScore ?? null;
   const scoreBand = riskBand(score);
+  const criticalAlerts = alerts.filter((alert) => alert.status === "active" && alert.severity === "critical");
+  const topCriticalAlert = criticalAlerts[0] ?? null;
 
   return (
     <section className="panel-base mb-6 overflow-hidden p-5 sm:p-6 lg:mb-8" aria-live="polite">
@@ -93,6 +107,35 @@ export function RiskMonitorPanel({
           {scoreBand.label} Risk {score !== null ? `(${score.toFixed(1)})` : ""}
         </span>
       </div>
+
+      {topCriticalAlert ? (
+        <div className="mb-4 rounded-2xl border border-rose-500/22 bg-[linear-gradient(90deg,rgba(127,29,29,0.22),rgba(62,9,18,0.12),rgba(16,19,26,0.96))] px-4 py-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-rose-300/85">
+                <span className="inline-flex h-2.5 w-2.5 rounded-full bg-rose-300 animate-pulse" />
+                Critical risk alert
+              </div>
+              <p className="mt-2 text-base font-semibold text-white">{topCriticalAlert.title}</p>
+              <p className="mt-1 text-sm text-rose-50/80">{topCriticalAlert.message}</p>
+              {alertUrgencyLabel(topCriticalAlert) ? (
+                <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-rose-200/90">
+                  {alertUrgencyLabel(topCriticalAlert)}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={onViewAlerts} className="ui-button-secondary">
+                Review alerts
+              </button>
+              <button type="button" onClick={onManageRules} className="ui-button-primary">
+                Tighten rules
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <article className="rounded-2xl border border-white/6 bg-(--surface-container-low) px-4 py-4">
@@ -140,7 +183,7 @@ export function RiskMonitorPanel({
           <div className="mb-3 flex items-center justify-between gap-3">
             <p className="typo-body font-semibold text-strong">Active alerts</p>
             <span className="status-pill status-pill-neutral">
-              {alerts.length} open
+              {criticalAlerts.length > 0 ? `${criticalAlerts.length} critical` : `${alerts.length} open`}
             </span>
           </div>
 
@@ -165,6 +208,7 @@ export function RiskMonitorPanel({
                   <div className="min-w-0 flex-1">
                     <p className="typo-body-xs font-semibold text-strong">{alert.title}</p>
                     <p className="typo-body-xs mt-1 text-body">{alertMessage(alert)}</p>
+                    {alertUrgencyLabel(alert) ? <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-subtle">{alertUrgencyLabel(alert)}</p> : null}
                   </div>
                 </div>
               ))}

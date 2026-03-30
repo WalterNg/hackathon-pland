@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { buildBinancePortfolioSnapshot } from "@/app/lib/binance-portfolio";
+import { deriveRecommendationMetadata } from "@/app/lib/portfolio-ai-actions";
 import { buildPortfolioAIEvidence } from "@/app/lib/portfolio-ai-evidence";
 import type { PortfolioAIRecommendation } from "@/app/lib/portfolio-types";
+import { getActiveRiskProfileByPortfolio, listRiskAlerts } from "@/app/lib/repositories/risk-repo";
 import {
   getLatestPortfolioAIRecommendation,
   savePortfolioAIRecommendation,
@@ -119,7 +121,9 @@ function buildBackendFallbackWarning(detail: string): string {
 
 function buildFallbackRecommendation(
   portfolioName: string,
-  snapshot: Awaited<ReturnType<typeof buildBinancePortfolioSnapshot>>
+  snapshot: Awaited<ReturnType<typeof buildBinancePortfolioSnapshot>>,
+  alerts: Awaited<ReturnType<typeof listRiskAlerts>>,
+  profile: Awaited<ReturnType<typeof getActiveRiskProfileByPortfolio>>,
 ): PortfolioAIRecommendation {
   const sortedAssets = [...snapshot.assets].sort((left, right) => right.allocationPercent - left.allocationPercent);
   const topAsset = sortedAssets[0] ?? null;
@@ -208,7 +212,7 @@ function buildFallbackRecommendation(
     ],
   };
 
-  return {
+  const recommendation: PortfolioAIRecommendation = {
     action,
     confidence,
     summary: summaryByAction[action],
@@ -240,6 +244,11 @@ function buildFallbackRecommendation(
     analyzedAt: new Date().toISOString(),
     snapshotTimestamp: snapshot.summary.timestamp,
     evidence: buildPortfolioAIEvidence(snapshot),
+  };
+
+  return {
+    ...recommendation,
+    metadata: deriveRecommendationMetadata(recommendation, alerts, profile),
   };
 }
 
@@ -300,6 +309,10 @@ export async function POST(request: Request) {
   }
 
   const snapshot = await buildBinancePortfolioSnapshot(portfolioName, positions);
+  const [activeRiskProfile, activeAlerts] = await Promise.all([
+    getActiveRiskProfileByPortfolio(supabase, user.id, portfolio.id),
+    listRiskAlerts(supabase, user.id, portfolio.id, "active", 20),
+  ]);
   const portfolioItems = positions
     .map((position) => {
       const assetRow = snapshot.assets.find((asset) => asset.symbol === position.symbol);
@@ -345,7 +358,7 @@ export async function POST(request: Request) {
 
       if (response.status >= 500) {
         return NextResponse.json({
-          recommendation: buildFallbackRecommendation(portfolioName, snapshot),
+          recommendation: buildFallbackRecommendation(portfolioName, snapshot, activeAlerts, activeRiskProfile),
           warning: buildBackendFallbackWarning(detail),
         });
       }
@@ -355,14 +368,14 @@ export async function POST(request: Request) {
 
     if (payload?.status !== "success" || !payload.data?.final_decision) {
       return NextResponse.json({
-        recommendation: buildFallbackRecommendation(portfolioName, snapshot),
+        recommendation: buildFallbackRecommendation(portfolioName, snapshot, activeAlerts, activeRiskProfile),
         warning: buildBackendFallbackWarning(
           payload?.data?.message || "AI analysis did not return a final recommendation."
         ),
       });
     }
 
-    const recommendation: PortfolioAIRecommendation = {
+    const recommendationBase: PortfolioAIRecommendation = {
       action: payload.data.final_decision.action,
       confidence: payload.data.final_decision.confidence,
       summary: payload.data.final_decision.summary,
@@ -396,13 +409,18 @@ export async function POST(request: Request) {
       ],
     };
 
+    const recommendation: PortfolioAIRecommendation = {
+      ...recommendationBase,
+      metadata: deriveRecommendationMetadata(recommendationBase, activeAlerts, activeRiskProfile),
+    };
+
     await savePortfolioAIRecommendation(supabase, user.id, portfolio.id, recommendation);
 
     return NextResponse.json({ recommendation });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to reach AI backend.";
     return NextResponse.json({
-      recommendation: buildFallbackRecommendation(portfolioName, snapshot),
+      recommendation: buildFallbackRecommendation(portfolioName, snapshot, activeAlerts, activeRiskProfile),
       warning: buildBackendFallbackWarning(message),
     });
   }
