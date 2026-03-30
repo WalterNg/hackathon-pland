@@ -232,7 +232,7 @@ export function usePortfolioSnapshot(
       lastBackgroundSyncAtRef.current = now;
 
       try {
-        const response = await fetch("/api/binance/portfolio", {
+        const response = await fetchWithSupabaseAuth("/api/binance/portfolio", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
