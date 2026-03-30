@@ -1,12 +1,15 @@
 import type { PortfolioMetrics } from "@/app/lib/portfolio-types";
-import type { RiskEventRecord, RiskProfile } from "@/app/lib/risk-types";
+import type { RiskAlertRecord, RiskEventRecord, RiskProfile } from "@/app/lib/risk-types";
 
 type RiskMonitorPanelProps = {
   metrics: PortfolioMetrics;
   profile: RiskProfile | null;
   events: RiskEventRecord[];
+  alerts: RiskAlertRecord[];
   isLoading: boolean;
   error: string | null;
+  onManageRules: () => void;
+  onViewAlerts: () => void;
 };
 
 function metricValue(value: number | null | undefined, suffix = "%"): string {
@@ -62,9 +65,36 @@ function eventMessage(event: RiskEventRecord): string {
   return event.eventType.replaceAll("_", " ");
 }
 
-export function RiskMonitorPanel({ metrics, profile, events, isLoading, error }: RiskMonitorPanelProps) {
+function alertMessage(alert: RiskAlertRecord): string {
+  return alert.message.trim() || alert.title;
+}
+
+function alertUrgencyLabel(alert: RiskAlertRecord): string | null {
+  if (alert.triggerCount >= 3) {
+    return `Repeated ${alert.triggerCount} times`;
+  }
+
+  if (alert.severity === "critical") {
+    return "Immediate review";
+  }
+
+  return null;
+}
+
+export function RiskMonitorPanel({
+  metrics,
+  profile,
+  events,
+  alerts,
+  isLoading,
+  error,
+  onManageRules,
+  onViewAlerts,
+}: RiskMonitorPanelProps) {
   const score = metrics.riskScore ?? null;
   const scoreBand = riskBand(score);
+  const criticalAlerts = alerts.filter((alert) => alert.status === "active" && alert.severity === "critical");
+  const topCriticalAlert = criticalAlerts[0] ?? null;
 
   return (
     <section className="panel-base mb-6 overflow-hidden p-5 sm:p-6 lg:mb-8" aria-live="polite">
@@ -77,6 +107,35 @@ export function RiskMonitorPanel({ metrics, profile, events, isLoading, error }:
           {scoreBand.label} Risk {score !== null ? `(${score.toFixed(1)})` : ""}
         </span>
       </div>
+
+      {topCriticalAlert ? (
+        <div className="mb-4 rounded-2xl border border-rose-500/22 bg-[linear-gradient(90deg,rgba(127,29,29,0.22),rgba(62,9,18,0.12),rgba(16,19,26,0.96))] px-4 py-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-rose-300/85">
+                <span className="inline-flex h-2.5 w-2.5 rounded-full bg-rose-300 animate-pulse" />
+                Critical risk alert
+              </div>
+              <p className="mt-2 text-base font-semibold text-white">{topCriticalAlert.title}</p>
+              <p className="mt-1 text-sm text-rose-50/80">{topCriticalAlert.message}</p>
+              {alertUrgencyLabel(topCriticalAlert) ? (
+                <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-rose-200/90">
+                  {alertUrgencyLabel(topCriticalAlert)}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={onViewAlerts} className="ui-button-secondary">
+                Review alerts
+              </button>
+              <button type="button" onClick={onManageRules} className="ui-button-primary">
+                Tighten rules
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <article className="rounded-2xl border border-white/6 bg-(--surface-container-low) px-4 py-4">
@@ -102,7 +161,12 @@ export function RiskMonitorPanel({ metrics, profile, events, isLoading, error }:
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <article className="rounded-2xl border border-white/6 bg-(--surface-container-low) px-4 py-4">
-          <p className="typo-body mb-3 font-semibold text-strong">Active limits</p>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="typo-body font-semibold text-strong">Effective rules</p>
+            <button type="button" onClick={onManageRules} className="text-sm font-semibold text-primary transition-colors hover:text-strong">
+              Manage rules
+            </button>
+          </div>
 
           {!profile && <p className="typo-body-xs text-muted">No active risk profile for this portfolio.</p>}
 
@@ -117,30 +181,42 @@ export function RiskMonitorPanel({ metrics, profile, events, isLoading, error }:
 
         <article className="rounded-2xl border border-white/6 bg-(--surface-container-low) px-4 py-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="typo-body font-semibold text-strong">Recent alerts</p>
+            <p className="typo-body font-semibold text-strong">Active alerts</p>
             <span className="status-pill status-pill-neutral">
-              {metrics.violatedRulesCount ?? events.length} active
+              {criticalAlerts.length > 0 ? `${criticalAlerts.length} critical` : `${alerts.length} open`}
             </span>
           </div>
+
+          <button type="button" onClick={onViewAlerts} className="mb-3 text-sm font-semibold text-primary transition-colors hover:text-strong">
+            View all alerts
+          </button>
 
           {isLoading && <p className="typo-body-xs text-muted">Loading risk alerts...</p>}
           {!isLoading && error && <p className="typo-body-xs text-danger">{error}</p>}
 
-          {!isLoading && !error && events.length === 0 && (
-            <p className="typo-body-xs text-muted">No recent risk events.</p>
+          {!isLoading && !error && alerts.length === 0 && (
+            <p className="typo-body-xs text-muted">No active alerts. Monitoring remains live in the background.</p>
           )}
 
-          {!isLoading && !error && events.length > 0 && (
+          {!isLoading && !error && alerts.length > 0 && (
             <div className="space-y-2">
-              {events.slice(0, 4).map((event) => (
-                <div key={event.id} className="flex items-start gap-2 rounded-xl border border-white/6 bg-(--surface-container) p-3">
-                  <span className={`status-pill ${eventSeverityClass(event.severity)}`}>
-                    {event.severity}
+              {alerts.slice(0, 4).map((alert) => (
+                <div key={alert.id} className="flex items-start gap-2 rounded-xl border border-white/6 bg-(--surface-container) p-3">
+                  <span className={`status-pill ${eventSeverityClass(alert.severity)}`}>
+                    {alert.severity}
                   </span>
-                  <p className="typo-body-xs min-w-0 flex-1 text-body">{eventMessage(event)}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="typo-body-xs font-semibold text-strong">{alert.title}</p>
+                    <p className="typo-body-xs mt-1 text-body">{alertMessage(alert)}</p>
+                    {alertUrgencyLabel(alert) ? <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-subtle">{alertUrgencyLabel(alert)}</p> : null}
+                  </div>
                 </div>
               ))}
             </div>
+          )}
+
+          {!isLoading && !error && alerts.length === 0 && events.length > 0 && (
+            <p className="mt-3 text-xs text-muted">Latest audit: {eventMessage(events[0])}</p>
           )}
         </article>
       </div>

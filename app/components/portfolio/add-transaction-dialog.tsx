@@ -17,6 +17,8 @@ type AddTransactionDialogProps = {
   portfolioName: string;
   coin: SelectedCoin | null;
   portfolioAssets: Array<{ symbol: string; priceUsd: number }>;
+  initialAction?: TransactionAction;
+  initialNote?: string;
   onChangeCoin: () => void;
   onCreated: () => void;
 };
@@ -51,6 +53,8 @@ export function AddTransactionDialog({
   portfolioName,
   coin,
   portfolioAssets,
+  initialAction = "buy",
+  initialNote = "",
   onChangeCoin,
   onCreated
 }: AddTransactionDialogProps) {
@@ -76,14 +80,14 @@ export function AddTransactionDialog({
     }
 
     priceTouchedRef.current = false;
-    setAction("buy");
+    setAction(initialAction);
     setTransferDirection("in");
     setQuantity("0");
     setPriceUsd(formatPriceInputValue(selectedAssetPrice ?? 0));
     setFeeUsd("0");
-    setNote("");
+    setNote(initialNote);
     setDateTime(nowLocalDateTimeValue());
-  }, [open, coin?.symbol]);
+  }, [open, coin?.symbol, initialAction, initialNote]);
 
   useEffect(() => {
     if (!open || !coin || action === "transfer" || priceTouchedRef.current) {
@@ -138,7 +142,7 @@ export function AddTransactionDialog({
   };
 
   return (
-    <div className="modal-backdrop z-[90]">
+    <div className="modal-backdrop z-90">
       <div className="modal-shell max-w-lg p-5 sm:p-6">
         <div className="mb-5 flex items-start justify-between gap-4">
           <h2 className="text-xl font-bold text-strong">Add Transaction</h2>

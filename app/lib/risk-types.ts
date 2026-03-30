@@ -1,5 +1,9 @@
 export type RiskSeverity = "info" | "warning" | "critical";
 
+export type RiskAlertStatus = "active" | "acknowledged" | "resolved";
+
+export type RiskRuleSource = "none" | "global" | "portfolio";
+
 export type RiskProfile = {
   id: string;
   userId: string;
@@ -39,6 +43,7 @@ export type RiskViolation = {
   thresholdValue: number | null;
   symbol?: string;
   signature: string;
+  dedupKey: string;
 };
 
 export type RiskEventRecord = {
@@ -47,4 +52,30 @@ export type RiskEventRecord = {
   severity: RiskSeverity;
   details: Record<string, unknown>;
   occurredAt: string;
+};
+
+export type RiskAlertRecord = {
+  id: string;
+  portfolioId: string | null;
+  riskProfileId: string | null;
+  eventType: string;
+  severity: RiskSeverity;
+  status: RiskAlertStatus;
+  title: string;
+  message: string;
+  observedValue: number | null;
+  thresholdValue: number | null;
+  symbol?: string;
+  signature: string;
+  triggerCount: number;
+  firstTriggeredAt: string;
+  lastTriggeredAt: string;
+  acknowledgedAt: string | null;
+  resolvedAt: string | null;
+};
+
+export type RiskRulesFormValues = {
+  maxDrawdownPct: number | null;
+  maxPositionSizePct: number | null;
+  maxDailyLossUsd: number | null;
 };

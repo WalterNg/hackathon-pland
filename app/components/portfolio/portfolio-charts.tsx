@@ -251,7 +251,7 @@ export function PortfolioCharts({ chart, assets, allTimeProfitPercent }: Portfol
       <article className="panel-base p-5 sm:p-6">
         <div className="mb-6 flex items-center justify-between">
           <h3 className="section-title">History</h3>
-          <div className="panel-high flex rounded-xl p-1">
+          <div className="flex rounded-xl bg-(--surface-container-highest) p-1">
             {timeframes.map((option) => (
               <button
                 key={option}
