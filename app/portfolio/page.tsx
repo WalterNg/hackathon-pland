@@ -529,6 +529,10 @@ function PortfolioContent() {
         onClose={closeAddDialog}
         portfolioName={portfolioName}
         coin={selectedCoin}
+        portfolioAssets={snapshot?.assets.map((asset) => ({
+          symbol: asset.symbol,
+          priceUsd: asset.priceUsd
+        })) ?? []}
         initialAction={transactionIntent.action}
         initialNote={transactionIntent.note}
         onChangeCoin={() => {
@@ -607,4 +611,3 @@ export default function PortfolioPage() {
     </Suspense>
   );
 }
-

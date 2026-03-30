@@ -16,7 +16,7 @@ function symbolDisplay(symbol: string, quoteAsset: string) {
 
 export function SelectCoinModal({ open, onClose, onSelect }: SelectCoinModalProps) {
   const [search, setSearch] = useState("");
-  const { symbols, isLoading } = useBinanceSymbols(search);
+  const { symbols, isLoading } = useBinanceSymbols(search, open);
 
   const visibleItems = useMemo(() => symbols.slice(0, 40), [symbols]);
 
