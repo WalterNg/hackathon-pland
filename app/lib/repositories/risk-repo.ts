@@ -1,9 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PortfolioSnapshot } from "../portfolio-types";
 import type {
+  RiskAlertRecord,
+  RiskAlertStatus,
   RiskEventRecord,
   RiskLimit,
   RiskProfile,
+  RiskRulesFormValues,
   RiskSeverity,
   RiskViolation,
 } from "../risk-types";
@@ -45,6 +48,26 @@ type RiskEventRow = {
   severity: RiskSeverity;
   details: unknown;
   occurred_at: string;
+};
+
+type RiskAlertRow = {
+  id: string;
+  portfolio_id: string | null;
+  risk_profile_id: string | null;
+  event_type: string;
+  severity: RiskSeverity;
+  status: RiskAlertStatus;
+  title: string;
+  message: string;
+  observed_value: number | null;
+  threshold_value: number | null;
+  symbol: string | null;
+  signature: string;
+  trigger_count: number;
+  first_triggered_at: string;
+  last_triggered_at: string;
+  acknowledged_at: string | null;
+  resolved_at: string | null;
 };
 
 const EVENT_DEDUP_COOLDOWN_MINUTES = 15;
@@ -100,6 +123,84 @@ function selectSeverity(observed: number, threshold: number): RiskSeverity {
   return "warning";
 }
 
+function toRiskAlert(row: RiskAlertRow): RiskAlertRecord {
+  return {
+    id: row.id,
+    portfolioId: row.portfolio_id,
+    riskProfileId: row.risk_profile_id,
+    eventType: row.event_type,
+    severity: row.severity,
+    status: row.status,
+    title: row.title,
+    message: row.message,
+    observedValue: toFiniteNumberOrNull(row.observed_value),
+    thresholdValue: toFiniteNumberOrNull(row.threshold_value),
+    symbol: row.symbol ?? undefined,
+    signature: row.signature,
+    triggerCount: Math.max(1, Number(row.trigger_count ?? 1)),
+    firstTriggeredAt: row.first_triggered_at,
+    lastTriggeredAt: row.last_triggered_at,
+    acknowledgedAt: row.acknowledged_at,
+    resolvedAt: row.resolved_at,
+  };
+}
+
+function toRiskEventDetails(violation: RiskViolation): Record<string, unknown> {
+  return {
+    title: violation.title,
+    message: violation.message,
+    observedValue: violation.observedValue,
+    thresholdValue: violation.thresholdValue,
+    symbol: violation.symbol,
+    signature: violation.dedupKey,
+    alertSignature: violation.signature,
+  };
+}
+
+function toProfileInsert(input: RiskRulesFormValues, name: string, userId: string, portfolioId: string) {
+  return {
+    user_id: userId,
+    portfolio_id: portfolioId,
+    name,
+    max_daily_loss_usd: input.maxDailyLossUsd,
+    max_position_size_pct: input.maxPositionSizePct,
+    max_leverage: null,
+    max_drawdown_pct: input.maxDrawdownPct,
+    risk_per_trade_pct: null,
+    is_active: true,
+  };
+}
+
+function isAlertStatus(value: string | null): value is RiskAlertStatus {
+  return value === "active" || value === "acknowledged" || value === "resolved";
+}
+
+function limitNumber(value: number | null): number | null {
+  return value === null || !Number.isFinite(value) ? null : value;
+}
+
+function escalatedSeverity(
+  violation: RiskViolation,
+  nextTriggerCount: number
+): RiskSeverity {
+  if (violation.severity === "critical") {
+    return "critical";
+  }
+
+  return nextTriggerCount >= 3 ? "critical" : violation.severity;
+}
+
+function escalatedMessage(
+  violation: RiskViolation,
+  nextTriggerCount: number
+): string {
+  if (nextTriggerCount < 3) {
+    return violation.message;
+  }
+
+  return `${violation.message} This breach has repeated ${nextTriggerCount} times while still active.`;
+}
+
 export async function getActiveRiskProfileByPortfolio(
   supabase: SupabaseClient,
   userId: string,
@@ -136,6 +237,77 @@ export async function getActiveRiskProfileByPortfolio(
   }
 
   return toRiskProfile(globalProfileResponse.data[0] as RiskProfileRow);
+}
+
+export async function getExactRiskProfileByPortfolio(
+  supabase: SupabaseClient,
+  userId: string,
+  portfolioId: string
+): Promise<RiskProfile | null> {
+  const { data, error } = await supabase
+    .from("risk_profiles")
+    .select(
+      "id, user_id, portfolio_id, name, max_daily_loss_usd, max_position_size_pct, max_leverage, max_drawdown_pct, risk_per_trade_pct, is_active, updated_at"
+    )
+    .eq("user_id", userId)
+    .eq("portfolio_id", portfolioId)
+    .eq("is_active", true)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+
+  if (error || !data || data.length === 0) {
+    return null;
+  }
+
+  return toRiskProfile(data[0] as RiskProfileRow);
+}
+
+export async function upsertPortfolioRiskProfile(
+  supabase: SupabaseClient,
+  userId: string,
+  portfolioId: string,
+  input: RiskRulesFormValues,
+  name = "Spot Risk Rules"
+): Promise<RiskProfile | null> {
+  const existing = await getExactRiskProfileByPortfolio(supabase, userId, portfolioId);
+
+  if (existing?.id) {
+    const { data, error } = await supabase
+      .from("risk_profiles")
+      .update({
+        name,
+        max_daily_loss_usd: input.maxDailyLossUsd,
+        max_position_size_pct: input.maxPositionSizePct,
+        max_drawdown_pct: input.maxDrawdownPct,
+        is_active: true,
+      })
+      .eq("id", existing.id)
+      .eq("user_id", userId)
+      .select(
+        "id, user_id, portfolio_id, name, max_daily_loss_usd, max_position_size_pct, max_leverage, max_drawdown_pct, risk_per_trade_pct, is_active, updated_at"
+      )
+      .limit(1);
+
+    if (error || !data || data.length === 0) {
+      return null;
+    }
+
+    return toRiskProfile(data[0] as RiskProfileRow);
+  }
+
+  const { data, error } = await supabase
+    .from("risk_profiles")
+    .insert(toProfileInsert(input, name, userId, portfolioId))
+    .select(
+      "id, user_id, portfolio_id, name, max_daily_loss_usd, max_position_size_pct, max_leverage, max_drawdown_pct, risk_per_trade_pct, is_active, updated_at"
+    )
+    .limit(1);
+
+  if (error || !data || data.length === 0) {
+    return null;
+  }
+
+  return toRiskProfile(data[0] as RiskProfileRow);
 }
 
 export async function listRiskLimitsByProfile(
@@ -203,6 +375,7 @@ export function evaluateRiskViolations(
   const maxDrawdownPct = profile.maxDrawdownPct;
   const observedDrawdown = snapshot.metrics.maxDrawdownPercent ?? 0;
   if (maxDrawdownPct !== null && observedDrawdown > maxDrawdownPct) {
+    const signature = `drawdown:${maxDrawdownPct.toFixed(2)}`;
     violations.push({
       eventType: "drawdown_limit_breached",
       severity: selectSeverity(observedDrawdown, maxDrawdownPct),
@@ -210,7 +383,8 @@ export function evaluateRiskViolations(
       message: `Drawdown reached ${observedDrawdown.toFixed(2)}% (limit ${maxDrawdownPct.toFixed(2)}%).`,
       observedValue: observedDrawdown,
       thresholdValue: maxDrawdownPct,
-      signature: `drawdown:${maxDrawdownPct.toFixed(2)}:${observedDrawdown.toFixed(2)}:${nowIso.slice(0, 13)}`,
+      signature,
+      dedupKey: `${signature}:${nowIso.slice(0, 13)}`,
     });
   }
 
@@ -222,6 +396,7 @@ export function evaluateRiskViolations(
       .slice(0, 3);
 
     for (const asset of oversizedPositions) {
+      const signature = `position:${asset.symbol}:${maxPositionSizePct.toFixed(2)}`;
       violations.push({
         eventType: "position_size_limit_breached",
         severity: selectSeverity(asset.allocationPercent, maxPositionSizePct),
@@ -230,7 +405,8 @@ export function evaluateRiskViolations(
         observedValue: asset.allocationPercent,
         thresholdValue: maxPositionSizePct,
         symbol: asset.symbol,
-        signature: `position:${asset.symbol}:${maxPositionSizePct.toFixed(2)}:${asset.allocationPercent.toFixed(2)}:${nowIso.slice(0, 13)}`,
+        signature,
+        dedupKey: `${signature}:${nowIso.slice(0, 13)}`,
       });
     }
   }
@@ -242,6 +418,7 @@ export function evaluateRiskViolations(
     const dailyLossUsd = Math.max(0, previous - current);
 
     if (dailyLossUsd > maxDailyLossUsd) {
+      const signature = `daily-loss:${maxDailyLossUsd.toFixed(2)}`;
       violations.push({
         eventType: "daily_loss_limit_breached",
         severity: selectSeverity(dailyLossUsd, maxDailyLossUsd),
@@ -249,7 +426,8 @@ export function evaluateRiskViolations(
         message: `Daily loss is ${dailyLossUsd.toFixed(2)} USD (limit ${maxDailyLossUsd.toFixed(2)} USD).`,
         observedValue: dailyLossUsd,
         thresholdValue: maxDailyLossUsd,
-        signature: `daily-loss:${maxDailyLossUsd.toFixed(2)}:${dailyLossUsd.toFixed(2)}:${nowIso.slice(0, 13)}`,
+        signature,
+        dedupKey: `${signature}:${nowIso.slice(0, 13)}`,
       });
     }
   }
@@ -310,6 +488,66 @@ export async function logRiskEventIfChanged(
   return !insertResult.error;
 }
 
+export async function listRiskAlerts(
+  supabase: SupabaseClient,
+  userId: string,
+  portfolioId: string,
+  status: RiskAlertStatus | "all" = "active",
+  limit = 20
+): Promise<RiskAlertRecord[]> {
+  const boundedLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 100) : 20;
+  let query = supabase
+    .from("risk_alerts")
+    .select(
+      "id, portfolio_id, risk_profile_id, event_type, severity, status, title, message, observed_value, threshold_value, symbol, signature, trigger_count, first_triggered_at, last_triggered_at, acknowledged_at, resolved_at"
+    )
+    .eq("user_id", userId)
+    .eq("portfolio_id", portfolioId)
+    .order("last_triggered_at", { ascending: false })
+    .limit(boundedLimit);
+
+  if (status !== "all") {
+    query = query.eq("status", status);
+  }
+
+  const { data, error } = await query;
+  if (error || !data) {
+    return [];
+  }
+
+  return (data as RiskAlertRow[]).map(toRiskAlert);
+}
+
+export async function updateRiskAlertStatus(
+  supabase: SupabaseClient,
+  userId: string,
+  alertId: string,
+  status: RiskAlertStatus
+): Promise<RiskAlertRecord | null> {
+  const nowIso = new Date().toISOString();
+  const patch = {
+    status,
+    acknowledged_at: status === "acknowledged" ? nowIso : null,
+    resolved_at: status === "resolved" ? nowIso : null,
+  };
+
+  const { data, error } = await supabase
+    .from("risk_alerts")
+    .update(patch)
+    .eq("id", alertId)
+    .eq("user_id", userId)
+    .select(
+      "id, portfolio_id, risk_profile_id, event_type, severity, status, title, message, observed_value, threshold_value, symbol, signature, trigger_count, first_triggered_at, last_triggered_at, acknowledged_at, resolved_at"
+    )
+    .limit(1);
+
+  if (error || !data || data.length === 0) {
+    return null;
+  }
+
+  return toRiskAlert(data[0] as RiskAlertRow);
+}
+
 export async function logRiskViolations(
   supabase: SupabaseClient,
   userId: string,
@@ -317,31 +555,85 @@ export async function logRiskViolations(
   riskProfileId: string,
   violations: RiskViolation[]
 ): Promise<number> {
-  if (violations.length === 0) {
-    return 0;
-  }
-
   let inserted = 0;
+  const nowIso = new Date().toISOString();
+  const activeAlerts = await listRiskAlerts(supabase, userId, portfolioId, "active", 100);
+  const activeAlertsBySignature = new Map(activeAlerts.map((alert) => [alert.signature, alert]));
+  const nextSignatures = new Set(violations.map((violation) => violation.signature));
 
   for (const violation of violations) {
+    const existingAlert = activeAlertsBySignature.get(violation.signature);
+    const nextTriggerCount = existingAlert ? Math.max(1, existingAlert.triggerCount) + 1 : 1;
+    const severity = escalatedSeverity(violation, nextTriggerCount);
+    const message = escalatedMessage(violation, nextTriggerCount);
     const logged = await logRiskEventIfChanged(supabase, userId, {
       portfolioId,
       riskProfileId,
       eventType: violation.eventType,
-      severity: violation.severity,
+      severity,
       details: {
-        title: violation.title,
-        message: violation.message,
-        observedValue: violation.observedValue,
-        thresholdValue: violation.thresholdValue,
-        symbol: violation.symbol,
-        signature: violation.signature,
+        ...toRiskEventDetails(violation),
+        message,
+        triggerCount: nextTriggerCount,
       },
     });
 
     if (logged) {
       inserted += 1;
     }
+
+    if (!existingAlert) {
+      await supabase.from("risk_alerts").insert({
+        user_id: userId,
+        portfolio_id: portfolioId,
+        risk_profile_id: riskProfileId,
+        event_type: violation.eventType,
+        severity,
+        status: "active",
+        title: violation.title,
+        message,
+        observed_value: limitNumber(violation.observedValue),
+        threshold_value: limitNumber(violation.thresholdValue),
+        symbol: violation.symbol ?? null,
+        signature: violation.signature,
+        trigger_count: nextTriggerCount,
+        first_triggered_at: nowIso,
+        last_triggered_at: nowIso,
+        acknowledged_at: null,
+        resolved_at: null,
+      });
+      continue;
+    }
+
+    if (logged) {
+      await supabase
+        .from("risk_alerts")
+        .update({
+          risk_profile_id: riskProfileId,
+          severity,
+          title: violation.title,
+          message,
+          observed_value: limitNumber(violation.observedValue),
+          threshold_value: limitNumber(violation.thresholdValue),
+          symbol: violation.symbol ?? null,
+          last_triggered_at: nowIso,
+          trigger_count: nextTriggerCount,
+        })
+        .eq("id", existingAlert.id)
+        .eq("user_id", userId);
+    }
+  }
+
+  const staleAlerts = activeAlerts.filter((alert) => !nextSignatures.has(alert.signature));
+  for (const alert of staleAlerts) {
+    await supabase
+      .from("risk_alerts")
+      .update({
+        status: "resolved",
+        resolved_at: nowIso,
+      })
+      .eq("id", alert.id)
+      .eq("user_id", userId);
   }
 
   return inserted;
@@ -373,4 +665,30 @@ export async function listRecentRiskEvents(
     details: parseEventDetails(row.details),
     occurredAt: row.occurred_at,
   }));
+}
+
+export function parseRiskRulesInput(payload: Record<string, unknown>): RiskRulesFormValues {
+  const drawdown = toFiniteNumberOrNull(payload.maxDrawdownPct);
+  const positionSize = toFiniteNumberOrNull(payload.maxPositionSizePct);
+  const dailyLoss = toFiniteNumberOrNull(payload.maxDailyLossUsd);
+
+  return {
+    maxDrawdownPct: drawdown,
+    maxPositionSizePct: positionSize,
+    maxDailyLossUsd: dailyLoss,
+  };
+}
+
+export function isValidRiskRulesInput(input: RiskRulesFormValues): boolean {
+  const values = [input.maxDrawdownPct, input.maxPositionSizePct, input.maxDailyLossUsd];
+
+  return values.every((value) => value === null || (Number.isFinite(value) && value >= 0));
+}
+
+export function parseRiskAlertStatus(value: string | null): RiskAlertStatus | "all" {
+  if (value === "all") {
+    return "all";
+  }
+
+  return isAlertStatus(value) ? value : "active";
 }

@@ -100,6 +100,11 @@ export type AIAnalysisAction =
 
 export type AIAnalysisSignalTone = "Bullish" | "Neutral" | "Bearish" | "Cautious" | "Defensive";
 
+export type AIRecommendationActionKind =
+  | "sell-intent"
+  | "apply-protective-rules"
+  | "open-alert-center";
+
 export type AIAnalysisComponentSignal = {
   label: string;
   tone: AIAnalysisSignalTone;
@@ -119,6 +124,43 @@ export type PortfolioAIAnalysisEvidence = {
   maxDrawdownPercent: number | null;
 };
 
+export type PortfolioAIRecommendationLinkedAlert = {
+  id: string;
+  eventType: string;
+  severity: import("@/app/lib/risk-types").RiskSeverity;
+  status: import("@/app/lib/risk-types").RiskAlertStatus;
+  title: string;
+  message: string;
+  symbol?: string;
+  triggerCount: number;
+};
+
+export type PortfolioAIRecommendedAction = {
+  type: AIRecommendationActionKind;
+  title: string;
+  note: string;
+  severity: import("@/app/lib/risk-types").RiskSeverity;
+  symbol?: string;
+  trimPercent?: number;
+  values?: import("@/app/lib/risk-types").RiskRulesFormValues;
+};
+
+export type PortfolioAIRecommendationMetadata = {
+  urgency: import("@/app/lib/risk-types").RiskSeverity;
+  primarySymbol: string | null;
+  linkedAlerts: PortfolioAIRecommendationLinkedAlert[];
+  recommendedActions: PortfolioAIRecommendedAction[];
+  suggestedRulePatch: import("@/app/lib/risk-types").RiskRulesFormValues | null;
+  suggestedTransactionIntent:
+    | {
+        action: "sell";
+        symbol: string;
+        trimPercent: number;
+        note: string;
+      }
+    | null;
+};
+
 export type PortfolioAIRecommendation = {
   action: AIAnalysisAction;
   confidence: number;
@@ -129,6 +171,7 @@ export type PortfolioAIRecommendation = {
   analyzedAt: string;
   snapshotTimestamp: string;
   evidence: PortfolioAIAnalysisEvidence;
+  metadata?: PortfolioAIRecommendationMetadata;
 };
 
 export type DashboardRecentTransaction = {

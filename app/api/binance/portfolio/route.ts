@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 import { buildBinancePortfolioSnapshot } from "@/app/lib/binance-portfolio";
 import type { PortfolioPosition, PortfolioRiskViolation } from "@/app/lib/portfolio-types";
@@ -21,7 +22,6 @@ import {
 import { hasSupabaseEnv } from "@/app/lib/supabase/env";
 import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
 import { createSupabaseServerClient } from "@/app/lib/supabase/server";
-import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 
@@ -77,10 +77,7 @@ async function buildAndCachePortfolioSnapshot(
     const limits = await listRiskLimitsByProfile(supabase, userId, riskProfile.id);
     const effectiveProfile = applyRiskLimitOverrides(riskProfile, limits);
     const violations = evaluateRiskViolations(snapshot, effectiveProfile);
-
-    if (violations.length > 0) {
-      await logRiskViolations(supabase, userId, portfolio.id, effectiveProfile.id, violations);
-    }
+    await logRiskViolations(supabase, userId, portfolio.id, effectiveProfile.id, violations);
 
     riskViolations = violations.map((violation) => ({
       eventType: violation.eventType,
