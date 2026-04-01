@@ -8,14 +8,15 @@ if str(backend_dir) not in sys.path:
     sys.path.append(str(backend_dir))
 
 from dotenv import load_dotenv
-load_dotenv(project_root / ".env.local")
 load_dotenv(project_root / ".env")
+load_dotenv(project_root / ".env.local")
 
 from core.logger import setup_logger
 
 setup_logger()
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from core.exceptions import global_exception_handler, validation_exception_handler
 from api.routes import debug_market, evaluate, ta_agent, sentiment_agent, risk_agent, binance_connection
@@ -27,6 +28,26 @@ app = FastAPI(
     title="PLAND",
     description="Multi-Agent System for evaluating crypto portfolios.",
     version="1.0.0"
+)
+
+allowed_origins = {
+    origin.strip()
+    for origin in [
+        os.getenv("NEXT_PUBLIC_APP_URL", ""),
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ]
+    if origin.strip()
+}
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=sorted(allowed_origins),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Exception handlers
