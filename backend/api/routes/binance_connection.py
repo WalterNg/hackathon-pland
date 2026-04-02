@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import APIRouter, HTTPException
 
@@ -9,6 +10,20 @@ from services.binance_connector import BinanceConnector, BinanceConnectorError
 router = APIRouter()
 logger = logging.getLogger("hackathon-pland")
 _binance_connector = BinanceConnector()
+
+
+@router.get("/binance/connection/demo-credentials")
+async def get_demo_credentials():
+    api_key = os.getenv("BINANCE_DEMO_API_KEY", "").strip() or os.getenv("BINANCE_API_KEY", "").strip()
+    api_secret = os.getenv("BINANCE_DEMO_SECRET_KEY", "").strip() or os.getenv("BINANCE_SECRET_KEY", "").strip()
+
+    if not api_key or not api_secret:
+        raise HTTPException(
+            status_code=400,
+            detail="Demo credentials are missing. Set BINANCE_DEMO_API_KEY and BINANCE_DEMO_SECRET_KEY in the server .env.",
+        )
+
+    return {"apiKey": api_key, "apiSecret": api_secret}
 
 
 @router.post("/binance/connection/preview", response_model=BinanceConnectionPreviewResponse)
