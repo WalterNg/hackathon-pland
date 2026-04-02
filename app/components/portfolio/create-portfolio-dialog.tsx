@@ -88,6 +88,8 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
     { balanceWidth: "w-24", valueWidth: "w-20" },
     { balanceWidth: "w-16", valueWidth: "w-16" }
   ];
+  const optionCardBase =
+    "group flex h-full items-center gap-3 rounded-2xl border px-4 py-4 text-left transition-all duration-200 ease-out will-change-transform hover:-translate-y-0.5 hover:shadow-[0_16px_32px_rgba(0,0,0,0.22)]";
 
   const loadDemoPreview = async (overrideApiKey?: string, overrideApiSecret?: string) => {
     const apiKeyValue = (overrideApiKey ?? apiKey).trim();
@@ -205,7 +207,12 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
           <div className="flex items-center">
             <h2 className="text-[1.65rem] font-bold leading-none tracking-tight text-strong">Create Portfolio</h2>
           </div>
-          <button type="button" onClick={onClose} className="icon-button h-10 w-10" aria-label="Close">
+          <button
+            type="button"
+            onClick={onClose}
+            className="icon-button h-10 w-10 transition-all duration-200 ease-out hover:scale-105 hover:bg-(--surface-bright)"
+            aria-label="Close"
+          >
             <MaterialIcon name="close" outlined={false} className="text-xl" />
           </button>
         </div>
@@ -230,13 +237,13 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
               <button
                 type="button"
                 onClick={() => setMode("manual")}
-                className={`flex h-full items-center gap-3 rounded-2xl border px-4 py-4 text-left transition ${
+                className={`${optionCardBase} ${
                   mode === "manual"
-                    ? "border-primary bg-(--surface-container-highest)"
-                    : "border-(--surface-outline) bg-(--surface-container-low)"
+                    ? "border-primary/70 bg-(--surface-container-highest) shadow-[0_0_0_1px_rgba(60,227,106,0.18),0_12px_28px_rgba(0,0,0,0.22)]"
+                    : "border-(--surface-outline) bg-(--surface-container-low) hover:border-primary/35 hover:bg-(--surface-bright)"
                 }`}
               >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success-soft text-success">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success-soft text-success transition-all duration-200 ease-out group-hover:scale-105 group-hover:bg-success/15">
                   <MaterialIcon name="edit" outlined={false} className="text-base" />
                 </span>
                 <span className="min-w-0">
@@ -247,13 +254,13 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
               <button
                 type="button"
                 onClick={() => setMode("binance_connected")}
-                className={`flex h-full items-center gap-3 rounded-2xl border px-4 py-4 text-left transition ${
+                className={`${optionCardBase} ${
                   mode === "binance_connected"
-                    ? "border-primary bg-(--surface-container-highest)"
-                    : "border-(--surface-outline) bg-(--surface-container-low)"
+                    ? "border-primary/70 bg-(--surface-container-highest) shadow-[0_0_0_1px_rgba(60,227,106,0.18),0_12px_28px_rgba(0,0,0,0.22)]"
+                    : "border-(--surface-outline) bg-(--surface-container-low) hover:border-primary/35 hover:bg-(--surface-bright)"
                 }`}
               >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning transition-all duration-200 ease-out group-hover:scale-105 group-hover:bg-warning/15">
                   <MaterialIcon name="link" outlined={false} className="text-base" />
                 </span>
                 <span className="min-w-0">
@@ -288,7 +295,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
                       type="button"
                       onClick={() => void loadQuickDemo()}
                       disabled={isLoadingQuickDemo}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-warning/30 bg-warning-soft px-2.5 py-1 text-[0.68rem] font-semibold text-warning transition hover:border-warning/60 hover:bg-warning/15 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-warning/30 bg-warning-soft px-2.5 py-1 text-[0.68rem] font-semibold text-warning transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-warning/60 hover:bg-warning/15 hover:shadow-[0_10px_20px_rgba(255,184,106,0.12)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none"
                     >
                       <MaterialIcon name="bolt" outlined={false} className="text-[0.85rem]" />
                       {isLoadingQuickDemo ? "Loading..." : "Quick Demo"}
@@ -346,7 +353,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
                     type="button"
                     onClick={() => void loadDemoPreview()}
                     disabled={isLoadingPreview}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 to-emerald-400/10 px-4 py-3 text-sm font-semibold tracking-wide text-emerald-300 transition hover:border-emerald-400/60 hover:from-emerald-500/25 hover:to-emerald-400/20 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 to-emerald-400/10 px-4 py-3 text-sm font-semibold tracking-wide text-emerald-300 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-emerald-400/60 hover:from-emerald-500/25 hover:to-emerald-400/20 hover:text-emerald-200 hover:shadow-[0_14px_28px_rgba(60,227,106,0.14)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
                   >
                     {isLoadingPreview ? (
                       <>
@@ -421,7 +428,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
                       {preview.assets.map((asset) => (
                         <div
                           key={asset.asset}
-                          className="grid grid-cols-[1.1fr_1fr_0.8fr] items-center gap-4 rounded-xl border border-(--surface-outline) bg-(--surface-container-highest) px-4 py-2.5"
+                          className="grid grid-cols-[1.1fr_1fr_0.8fr] items-center gap-4 rounded-xl border border-(--surface-outline) bg-(--surface-container-highest) px-4 py-2.5 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/25 hover:bg-(--surface-bright) hover:shadow-[0_10px_22px_rgba(0,0,0,0.18)]"
                         >
                           <div className="flex items-center gap-2.5">
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/8 text-[0.65rem] font-bold text-strong">
@@ -462,7 +469,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="ui-button-secondary disabled:opacity-60"
+            className="ui-button-secondary transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-(--surface-bright) hover:text-strong disabled:opacity-60 disabled:hover:translate-y-0"
           >
             Cancel
           </button>
@@ -470,7 +477,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
             type="button"
             onClick={handleSubmit}
             disabled={!canSubmit || isSubmitting}
-            className="ui-button-primary disabled:opacity-60"
+            className="ui-button-primary transition-all duration-200 ease-out hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
           >
             {isSubmitting ? "Creating..." : mode === "binance_connected" ? "Connect & create" : "Create"}
           </button>
