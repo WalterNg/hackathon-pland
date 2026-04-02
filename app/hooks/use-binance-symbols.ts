@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 export type BinanceSymbolItem = {
   symbol: string;
+  name: string | null;
   baseAsset: string;
   quoteAsset: string;
 };

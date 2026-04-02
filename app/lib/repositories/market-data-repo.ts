@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PORTFOLIO_SYMBOLS } from "../portfolio-types";
+import { getFullCoinName } from "../coin-names";
 
 const BINANCE_BASE_URL = "https://api.binance.com";
 const SYMBOL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -29,6 +30,7 @@ type TickerPriceResponse = {
 
 type MarketSymbolRow = {
   symbol: string;
+  name: string | null;
   base_asset: string;
   quote_asset: string;
   status: string;
@@ -48,6 +50,7 @@ type MarketPriceRow = {
 
 export type MarketSymbolItem = {
   symbol: string;
+  name: string | null;
   baseAsset: string;
   quoteAsset: string;
   status: string;
@@ -113,6 +116,7 @@ function symbolToBaseAsset(symbol: string) {
 function mapMarketSymbolRow(row: MarketSymbolRow): MarketSymbolItem {
   return {
     symbol: row.symbol,
+    name: row.name ?? null,
     baseAsset: row.base_asset,
     quoteAsset: row.quote_asset,
     status: row.status,
@@ -172,6 +176,7 @@ function buildPinnedSymbols(rows: MarketSymbolItem[]) {
 
     return {
       symbol,
+      name: getFullCoinName(symbolToBaseAsset(symbol)),
       baseAsset: symbolToBaseAsset(symbol),
       quoteAsset: "USDT",
       status: "TRADING",
@@ -194,6 +199,7 @@ function filterMarketSymbols(rows: MarketSymbolItem[], query: string) {
 function buildSeedSymbols(): MarketSymbolItem[] {
   return PORTFOLIO_SYMBOLS.map((symbol) => ({
     symbol,
+    name: getFullCoinName(symbolToBaseAsset(symbol)),
     baseAsset: symbolToBaseAsset(symbol),
     quoteAsset: "USDT",
     status: "TRADING",
@@ -219,6 +225,7 @@ async function fetchLiveSymbols(): Promise<MarketSymbolItem[]> {
       .filter((item) => item.quoteAsset === "USDT")
       .map((item) => ({
         symbol: item.symbol,
+        name: getFullCoinName(item.baseAsset) !== item.baseAsset ? getFullCoinName(item.baseAsset) : null,
         baseAsset: item.baseAsset,
         quoteAsset: item.quoteAsset,
         status: item.status,
@@ -274,6 +281,7 @@ export async function saveMarketSymbolsCache(
 
   const rows = symbols.map((item) => ({
     symbol: item.symbol,
+    name: item.name,
     base_asset: item.baseAsset,
     quote_asset: item.quoteAsset,
     status: item.status,
@@ -308,7 +316,7 @@ export async function saveMarketPricesCache(
 async function listCachedSymbols(supabase: SupabaseClient): Promise<MarketSymbolItem[]> {
   const { data, error } = await supabase
     .from("market_symbols")
-    .select("symbol, base_asset, quote_asset, status, is_spot_trading_allowed, source, last_synced_at, sort_rank")
+    .select("symbol, name, base_asset, quote_asset, status, is_spot_trading_allowed, source, last_synced_at, sort_rank")
     .order("sort_rank", { ascending: true })
     .order("base_asset", { ascending: true })
     .order("symbol", { ascending: true });
@@ -449,6 +457,7 @@ async function ensurePriceSymbolRow(
   const normalizedSymbol = normalizeSymbol(symbol);
   const row = {
     symbol: normalizedSymbol,
+    name: getFullCoinName(symbolToBaseAsset(normalizedSymbol)),
     base_asset: symbolToBaseAsset(normalizedSymbol),
     quote_asset: "USDT",
     status: "TRADING",
@@ -536,6 +545,7 @@ export async function refreshMarketPricesFromSnapshot(
     supabase,
     normalizedPrices.map((item) => ({
       symbol: item.symbol,
+      name: getFullCoinName(symbolToBaseAsset(item.symbol)),
       baseAsset: symbolToBaseAsset(item.symbol),
       quoteAsset: "USDT",
       status: "TRADING",
