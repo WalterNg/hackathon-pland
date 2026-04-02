@@ -1,5 +1,6 @@
 import type { PortfolioAssetRow } from "@/app/lib/portfolio-types";
 import { MaterialIcon } from "../dashboard/material-icon";
+import { getFullCoinName } from "@/app/lib/coin-names";
 
 type PortfolioAssetsTableProps = {
   assets: PortfolioAssetRow[];
@@ -14,13 +15,7 @@ const formatBtcValue = (usdValue: number, btcPriceUsd: number | null, fractionDi
   return `${(usdValue / btcPriceUsd).toFixed(fractionDigits)} BTC`;
 };
 
-const symbolNames: Record<string, string> = {
-  BTCUSDT: "Bitcoin",
-  ETHUSDT: "Ethereum",
-  BNBUSDT: "BNB",
-  SOLUSDT: "Solana",
-  DOGEUSDT: "Dogecoin"
-};
+
 
 function toDisplaySymbol(symbol: string): string {
   const normalized = symbol.trim().toUpperCase();
@@ -84,7 +79,7 @@ export function PortfolioAssetsTable({ assets, btcPriceUsd }: PortfolioAssetsTab
                         <MaterialIcon name="currency_bitcoin" outlined={false} className="text-sm" />
                       </div>
                       <div>
-                        <div className="font-bold text-strong">{symbolNames[asset.symbol] ?? displaySymbol}</div>
+                        <div className="font-bold text-strong">{getFullCoinName(displaySymbol)}</div>
                         <div className="text-xs text-muted">{displaySymbol}</div>
                       </div>
                     </div>

@@ -5,6 +5,7 @@ import type {
   PortfolioAIRecommendedAction,
 } from "@/app/lib/portfolio-types";
 import type { RiskAlertRecord, RiskProfile, RiskRulesFormValues, RiskSeverity } from "@/app/lib/risk-types";
+import { getFullCoinName } from "@/app/lib/coin-names";
 
 export type AIRecommendationActionPayload =
   | {
@@ -233,13 +234,14 @@ function resolveLinkedAlert(
   return preferredAlert(alerts);
 }
 
-export function toSelectedCoin(symbol: string): { symbol: string; baseAsset: string; quoteAsset: string } {
+export function toSelectedCoin(symbol: string): { symbol: string; name: string | null; baseAsset: string; quoteAsset: string } {
   const upper = normalizeSymbol(symbol);
   const quoteAsset = upper.endsWith("USDT") ? "USDT" : "USD";
   const baseAsset = upper.endsWith(quoteAsset) ? upper.slice(0, upper.length - quoteAsset.length) : upper;
 
   return {
     symbol: upper,
+    name: getFullCoinName(baseAsset),
     baseAsset,
     quoteAsset,
   };

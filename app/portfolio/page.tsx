@@ -58,7 +58,7 @@ function PortfolioContent() {
   const [alertStatus, setAlertStatus] = useState<RiskAlertStatus | "all">("all");
   const [isRemovingPortfolio, setRemovingPortfolio] = useState(false);
   const [showCharts, setShowCharts] = useState(true);
-  const [selectedCoin, setSelectedCoin] = useState<{ symbol: string; baseAsset: string; quoteAsset: string } | null>(null);
+  const [selectedCoin, setSelectedCoin] = useState<{ symbol: string; name: string | null; baseAsset: string; quoteAsset: string } | null>(null);
   const [transactionIntent, setTransactionIntent] = useState<{ action: "buy" | "sell" | "transfer"; note: string }>({
     action: "buy",
     note: "",
@@ -184,7 +184,7 @@ function PortfolioContent() {
     setSelectCoinOpen(true);
   };
 
-  const handleCoinSelected = (coin: { symbol: string; baseAsset: string; quoteAsset: string }) => {
+  const handleCoinSelected = (coin: { symbol: string; name: string | null; baseAsset: string; quoteAsset: string }) => {
     setSelectedCoin(coin);
     setSelectCoinOpen(false);
     setAddDialogOpen(true);

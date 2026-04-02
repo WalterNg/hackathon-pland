@@ -7,6 +7,7 @@ import { useBinancePrice } from "@/app/hooks/use-binance-price";
 
 type SelectedCoin = {
   symbol: string;
+  name: string | null;
   baseAsset: string;
   quoteAsset: string;
 };
@@ -178,8 +179,8 @@ export function AddTransactionDialog({
               {shortSymbol.slice(0, 1)}
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-lg font-semibold text-strong">{coin.baseAsset}</span>
-              <span className="text-sm font-semibold text-muted">{shortSymbol}</span>
+              <span className="text-lg font-semibold text-strong">{shortSymbol}</span>
+              <span className="text-sm font-semibold text-muted">{coin.name || coin.baseAsset}</span>
             </div>
           </div>
           <MaterialIcon name="expand_more" outlined={false} className="text-muted" />
