@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { MaterialIcon } from "../dashboard/material-icon";
 import type { PortfolioMode } from "@/app/lib/portfolio-types";
+import { formatLocaleNumber } from "@/app/lib/number-format";
 
 type CreatePortfolioDialogProps = {
   open: boolean;
@@ -383,7 +384,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
                   {preview ? (
                     <div className="text-right">
                       <p className="text-sm font-semibold text-strong">
-                        ${preview.totals.total_estimated_usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        ${formatLocaleNumber(preview.totals.total_estimated_usd, { maximumFractionDigits: 2 })}
                       </p>
                       <p className="text-[0.68rem] text-muted">{preview.totals.non_zero_asset_count} assets</p>
                     </div>
@@ -437,10 +438,10 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
                             <span className="text-sm font-semibold text-strong">{asset.asset}</span>
                           </div>
                           <p className="text-xs text-muted">
-                            {asset.quantity.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                            {formatLocaleNumber(asset.quantity, { maximumFractionDigits: 6 })}
                           </p>
                           <p className="text-right text-sm font-semibold text-strong">
-                            ${asset.estimated_usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            ${formatLocaleNumber(asset.estimated_usd, { maximumFractionDigits: 2 })}
                           </p>
                         </div>
                       ))}

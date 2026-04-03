@@ -1,7 +1,7 @@
 export const COIN_NAMES: Record<string, string> = {
   BTC: "Bitcoin",
   ETH: "Ethereum",
-  BNB: "Binance Coin",
+  BNB: "BNB",
   SOL: "Solana",
   XRP: "XRP",
   DOGE: "Dogecoin",
