@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import {
   createUserPortfolio,
   deleteUserPortfolio,
-  listUserPortfolios
+  listUserPortfolios,
+  type BinanceImportAsset
 } from "@/app/lib/repositories/portfolios-repo";
 import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
 
@@ -32,17 +33,20 @@ export async function POST(request: Request) {
     name?: string;
     mode?: "manual" | "binance_connected";
     idempotencyKey?: string;
+    assets?: BinanceImportAsset[];
   } | null;
   const nextName = payload?.name ?? "";
   const nextMode = payload?.mode === "binance_connected" ? "binance_connected" : "manual";
   const nextIdempotencyKey = payload?.idempotencyKey ?? undefined;
+  const nextAssets = Array.isArray(payload?.assets) ? (payload.assets as BinanceImportAsset[]) : undefined;
 
   const { portfolio, errorCode, isReplay } = await createUserPortfolio(
     supabase,
     user.id,
     nextName,
     nextMode,
-    nextIdempotencyKey
+    nextIdempotencyKey,
+    nextAssets
   );
 
   if (errorCode === "invalid-name") {

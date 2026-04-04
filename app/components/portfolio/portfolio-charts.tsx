@@ -99,8 +99,14 @@ function trendColorByDirection(start: number, end: number): string {
   return end >= start ? THEME_COLORS.primary : THEME_COLORS.danger;
 }
 
-function formatBtcTick(value: number): string {
-  return `${value.toFixed(4)} BTC`;
+const usdAxisFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0
+});
+
+function formatUsdTick(value: number): string {
+  return usdAxisFormatter.format(value);
 }
 
 function formatPercentTick(value: number): string {
@@ -153,19 +159,14 @@ export function PortfolioCharts({ chart, assets, allTimeProfitPercent }: Portfol
     return chart.slice(-30);
   }, [chart, timeframe]);
 
-  const btcPriceUsd = useMemo(() => {
-    const btcAsset = assets.find((asset) => asset.symbol === "BTCUSDT");
-    return btcAsset?.priceUsd ?? 0;
-  }, [assets]);
-
-  const historyValuesBtc = useMemo(
-    () => filteredChart.map((point) => (btcPriceUsd > 0 ? point.totalValueUsd / btcPriceUsd : 0)),
-    [filteredChart, btcPriceUsd]
+  const historyValuesUsd = useMemo(
+    () => filteredChart.map((point) => point.totalValueUsd),
+    [filteredChart]
   );
-  const historyRange = useMemo(() => getValueRange(historyValuesBtc), [historyValuesBtc]);
-  const historyPath = useMemo(() => chartValuesToPath(historyValuesBtc, historyRange), [historyValuesBtc, historyRange]);
+  const historyRange = useMemo(() => getValueRange(historyValuesUsd), [historyValuesUsd]);
+  const historyPath = useMemo(() => chartValuesToPath(historyValuesUsd, historyRange), [historyValuesUsd, historyRange]);
   const historyTicks = useMemo(() => createTicks(historyRange.min, historyRange.max), [historyRange]);
-  const historyColor = trendColorByDirection(historyValuesBtc[0] ?? 0, historyValuesBtc[historyValuesBtc.length - 1] ?? 0);
+  const historyColor = trendColorByDirection(historyValuesUsd[0] ?? 0, historyValuesUsd[historyValuesUsd.length - 1] ?? 0);
 
   const performance = performanceValues(filteredChart);
   const allTimeProfitDisplayPercent = useMemo(() => {
@@ -290,7 +291,7 @@ export function PortfolioCharts({ chart, assets, allTimeProfitPercent }: Portfol
           </div>
           <div className="pointer-events-none absolute inset-y-0 right-0 flex w-14 flex-col justify-between pb-6 pt-10 text-right text-[10px] text-subtle">
             {historyTicks.map((tick, index) => (
-              <span key={`history-tick-${index}`}>{formatBtcTick(tick)}</span>
+              <span key={`history-tick-${index}`}>{formatUsdTick(tick)}</span>
             ))}
           </div>
         </div>

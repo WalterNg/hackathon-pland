@@ -10,7 +10,7 @@ export const COIN_NAMES: Record<string, string> = {
   LINK: "Chainlink",
   DOT: "Polkadot",
   MATIC: "Polygon",
-  USDT: "Tether US",
+  USDT: "Tether USDt",
   USDC: "USDC",
   SHIB: "Shiba Inu",
   LTC: "Litecoin",

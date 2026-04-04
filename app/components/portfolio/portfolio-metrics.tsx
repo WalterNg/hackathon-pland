@@ -3,7 +3,6 @@ import { MaterialIcon } from "../dashboard/material-icon";
 
 type PortfolioMetricsProps = {
   metrics: PortfolioMetricsType;
-  btcPriceUsd: number | null;
 };
 
 const symbolNames: Record<string, string> = {
@@ -14,15 +13,13 @@ const symbolNames: Record<string, string> = {
   DOGEUSDT: "Dogecoin"
 };
 
-function formatBtc(usdAmount: number, btcPriceUsd: number | null): string {
-  if (!btcPriceUsd || !Number.isFinite(btcPriceUsd) || btcPriceUsd <= 0) {
-    return "N/A";
-  }
+const usdFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 2
+});
 
-  return `${(usdAmount / btcPriceUsd).toFixed(6)} BTC`;
-}
-
-export function PortfolioMetrics({ metrics, btcPriceUsd }: PortfolioMetricsProps) {
+export function PortfolioMetrics({ metrics }: PortfolioMetricsProps) {
   const best = metrics.bestPerformer24h;
   const worst = metrics.worstPerformer24h;
 
@@ -34,7 +31,7 @@ export function PortfolioMetrics({ metrics, btcPriceUsd }: PortfolioMetricsProps
         </div>
 
         <p className={`mb-1 text-2xl font-bold ${metrics.allTimeProfitUsd >= 0 ? "text-success" : "text-danger"}`}>
-          {formatBtc(metrics.allTimeProfitUsd, btcPriceUsd)}
+          {usdFormatter.format(metrics.allTimeProfitUsd)}
         </p>
 
         <div className={`status-pill ${metrics.allTimeProfitUsd >= 0 ? "status-pill-positive" : "status-pill-negative"}`}>
@@ -54,7 +51,7 @@ export function PortfolioMetrics({ metrics, btcPriceUsd }: PortfolioMetricsProps
           <h3 className="typo-body-sm font-medium text-muted">Cost Basis</h3>
         </div>
 
-        <p className="mb-1 text-2xl font-bold text-strong">{formatBtc(metrics.totalCostBasisUsd, btcPriceUsd)}</p>
+        <p className="mb-1 text-2xl font-bold text-strong">{usdFormatter.format(metrics.totalCostBasisUsd)}</p>
       </article>
 
       <article className="panel-base p-5 sm:p-6">
