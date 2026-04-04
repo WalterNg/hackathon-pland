@@ -171,6 +171,7 @@ export type PortfolioAIRecommendation = {
   analyzedAt: string;
   snapshotTimestamp: string;
   evidence: PortfolioAIAnalysisEvidence;
+  workflowVersion?: string;
   metadata?: PortfolioAIRecommendationMetadata;
 };
 
