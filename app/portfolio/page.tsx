@@ -8,6 +8,7 @@ import { AppTopNavigation } from "../components/ui/app-top-navigation";
 import { AddTransactionDialog } from "../components/portfolio/add-transaction-dialog";
 import { AIPortfolioRecommendationDashboard } from "../components/portfolio/ai-portfolio-recommendation-dashboard";
 import { CreatePortfolioDialog } from "../components/portfolio/create-portfolio-dialog";
+import { SyncBinanceDialog } from "../components/portfolio/sync-binance-dialog";
 import { PortfolioAssetsTable } from "../components/portfolio/portfolio-assets-table";
 import { PortfolioCharts } from "@/app/components/portfolio/portfolio-charts";
 import { PortfolioHeader } from "../components/portfolio/portfolio-header";
@@ -49,14 +50,16 @@ function PortfolioContent() {
   const searchParams = useSearchParams();
   const portfolioName = searchParams.get("name")?.trim() || DEFAULT_PORTFOLIO_NAME;
   const shouldOpenCreatePortfolio = searchParams.get("createPortfolio") === "1";
-  const { createPortfolio, removePortfolio, portfolios } = usePortfolios();
+  const { createPortfolio, removePortfolio, syncPortfolio, portfolios } = usePortfolios();
   const [isSelectCoinOpen, setSelectCoinOpen] = useState(false);
   const [isAddDialogOpen, setAddDialogOpen] = useState(false);
   const [isCreatePortfolioOpen, setCreatePortfolioOpen] = useState(false);
+  const [isSyncDialogOpen, setSyncDialogOpen] = useState(false);
   const [isRiskRulesOpen, setRiskRulesOpen] = useState(false);
   const [isAlertCenterOpen, setAlertCenterOpen] = useState(false);
   const [alertStatus, setAlertStatus] = useState<RiskAlertStatus | "all">("all");
   const [isRemovingPortfolio, setRemovingPortfolio] = useState(false);
+  const [isSyncingPortfolio, setSyncingPortfolio] = useState(false);
   const [showCharts, setShowCharts] = useState(true);
   const [selectedCoin, setSelectedCoin] = useState<{ symbol: string; name: string | null; baseAsset: string; quoteAsset: string } | null>(null);
   const [transactionIntent, setTransactionIntent] = useState<{ action: "buy" | "sell" | "transfer"; note: string }>({
@@ -157,8 +160,22 @@ function PortfolioContent() {
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
   };
 
-  const handleCreatePortfolio = async (name: string, mode: PortfolioMode, idempotencyKey?: string) => {
-    const result = await createPortfolio(name, mode, { idempotencyKey });
+  const handleSyncPortfolio = async (assets: Array<{ asset: string; quantity: number; price_usd: number }>) => {
+    setSyncingPortfolio(true);
+    try {
+      const result = await syncPortfolio(portfolioName, assets);
+      if (!result.ok) {
+        window.alert(result.message ?? "Unable to sync portfolio.");
+        return;
+      }
+      await reload();
+    } finally {
+      setSyncingPortfolio(false);
+    }
+  };
+
+  const handleCreatePortfolio = async (name: string, mode: PortfolioMode, idempotencyKey?: string, assets?: Array<{ asset: string; quantity: number; price_usd: number }>) => {
+    const result = await createPortfolio(name, mode, { idempotencyKey, assets });
     if (!result.ok) {
       throw new Error(result.message ?? "Unable to create portfolio.");
     }
@@ -424,6 +441,9 @@ function PortfolioContent() {
               isRemovingPortfolio={isRemovingPortfolio}
               showCharts={showCharts}
               onToggleShowCharts={() => setShowCharts((prev) => !prev)}
+              isConnectedPortfolio={isConnectedPortfolio}
+              onSync={() => setSyncDialogOpen(true)}
+              isSyncing={isSyncingPortfolio}
             />
 
             {pinnedCriticalAlert ? (
@@ -494,7 +514,7 @@ function PortfolioContent() {
                   onManageRules={() => setRiskRulesOpen(true)}
                   onViewAlerts={openAlertCenterForActiveAlerts}
                 />
-                <PortfolioMetrics metrics={snapshot.metrics} btcPriceUsd={snapshot.summary.btcPriceUsd} />
+                <PortfolioMetrics metrics={snapshot.metrics} />
                 {showCharts && (
                   <PortfolioCharts
                     chart={snapshot.chart}
@@ -502,7 +522,7 @@ function PortfolioContent() {
                     allTimeProfitPercent={snapshot.metrics.allTimeProfitPercent}
                   />
                 )}
-                <PortfolioAssetsTable assets={snapshot.assets} btcPriceUsd={snapshot.summary.btcPriceUsd} />
+                <PortfolioAssetsTable assets={snapshot.assets} />
               </>
             )}
           </div>
@@ -548,6 +568,13 @@ function PortfolioContent() {
         defaultName={defaultPortfolioName}
         onClose={closeCreatePortfolioDialog}
         onSubmit={handleCreatePortfolio}
+      />
+
+      <SyncBinanceDialog
+        open={isSyncDialogOpen}
+        portfolioName={portfolioName}
+        onClose={() => setSyncDialogOpen(false)}
+        onSync={handleSyncPortfolio}
       />
 
       <RiskRulesDialog

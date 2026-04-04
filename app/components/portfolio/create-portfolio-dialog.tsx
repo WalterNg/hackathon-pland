@@ -9,7 +9,7 @@ type CreatePortfolioDialogProps = {
   open: boolean;
   defaultName: string;
   onClose: () => void;
-  onSubmit: (name: string, mode: PortfolioMode, idempotencyKey?: string) => Promise<void>;
+  onSubmit: (name: string, mode: PortfolioMode, idempotencyKey?: string, assets?: Array<{ asset: string; quantity: number; price_usd: number }>) => Promise<void>;
 };
 
 function createIdempotencyKey(): string {
@@ -186,7 +186,10 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
     setError(null);
 
     try {
-      await onSubmit(trimmed, mode, setupIdempotencyKey);
+      const assets = mode === "binance_connected" && preview
+        ? preview.assets.map((a) => ({ asset: a.asset, quantity: a.quantity, price_usd: a.price_usd }))
+        : undefined;
+      await onSubmit(trimmed, mode, setupIdempotencyKey, assets);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to create portfolio.");
       setSetupIdempotencyKey(createIdempotencyKey());
@@ -354,7 +357,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
                     type="button"
                     onClick={() => void loadDemoPreview()}
                     disabled={isLoadingPreview}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 to-emerald-400/10 px-4 py-3 text-sm font-semibold tracking-wide text-emerald-300 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-emerald-400/60 hover:from-emerald-500/25 hover:to-emerald-400/20 hover:text-emerald-200 hover:shadow-[0_14px_28px_rgba(60,227,106,0.14)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-linear-to-r from-emerald-500/15 to-emerald-400/10 px-4 py-3 text-sm font-semibold tracking-wide text-emerald-300 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-emerald-400/60 hover:from-emerald-500/25 hover:to-emerald-400/20 hover:text-emerald-200 hover:shadow-[0_14px_28px_rgba(60,227,106,0.14)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
                   >
                     {isLoadingPreview ? (
                       <>

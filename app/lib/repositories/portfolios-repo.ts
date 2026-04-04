@@ -6,31 +6,11 @@ import type { PortfolioMode } from "../portfolio-types";
 const MAIN_PORTFOLIO_NAME = "Main Portfolio";
 const SETUP_SESSION_TTL_MINUTES = 10;
 
-const BINANCE_CONNECTED_SEED_TRANSACTIONS = [
-  {
-    symbol: "BTCUSDT",
-    quantity: 0.42,
-    priceUsd: 71000,
-  },
-  {
-    symbol: "ETHUSDT",
-    quantity: 8.15,
-    priceUsd: 2987.73006135,
-  },
-  {
-    symbol: "BNBUSDT",
-    quantity: 25,
-    priceUsd: 500,
-  }
-] as const;
-
-export function getBinanceConnectedSeedPositions(): PortfolioPosition[] {
-  return BINANCE_CONNECTED_SEED_TRANSACTIONS.map((transaction) => ({
-    symbol: transaction.symbol,
-    quantity: transaction.quantity,
-    avgBuyPriceUsd: transaction.priceUsd
-  }));
-}
+export type BinanceImportAsset = {
+  asset: string;
+  quantity: number;
+  price_usd: number;
+};
 
 export type UserPortfolio = {
   id: string;
@@ -41,6 +21,7 @@ export type UserPortfolio = {
   lastSyncedAt?: string | null;
   createdAt: string;
   totalValueBtc: number | null;
+  totalValueUsd: number;
 };
 
 type PortfolioRow = {
@@ -61,6 +42,17 @@ type PortfolioConnectionState = {
   mode: PortfolioMode;
   syncStatus: string | null;
   lastSyncedAt: string | null;
+};
+
+type PortfolioSnapshotRow = {
+  nav_usd: number | null;
+  metadata: unknown;
+};
+
+type PortfolioAssetCacheRow = {
+  portfolio_id: string;
+  quantity: number | null;
+  last_price_usd: number | null;
 };
 
 type PortfolioSetupSessionRow = {
@@ -86,7 +78,8 @@ function toUserPortfolio(row: PortfolioRow): UserPortfolio {
     isDefault: row.is_default,
     mode: "manual",
     createdAt: row.created_at,
-    totalValueBtc: null
+    totalValueBtc: null,
+    totalValueUsd: 0
   };
 }
 
@@ -252,24 +245,30 @@ async function createPortfolioConnection(
 async function seedBinanceConnectedPortfolio(
   supabase: SupabaseClient,
   userId: string,
-  portfolioId: string
+  portfolioId: string,
+  assets: BinanceImportAsset[]
 ): Promise<boolean> {
   const nowIso = new Date().toISOString();
-  const { error } = await supabase.from("portfolio_transactions").insert(
-    BINANCE_CONNECTED_SEED_TRANSACTIONS.map((transaction) => ({
+  const rows = assets
+    .filter((asset) => asset.quantity > 0)
+    .map((asset) => ({
       user_id: userId,
       portfolio_id: portfolioId,
-      symbol: transaction.symbol,
+      symbol: asset.asset.endsWith("USDT") ? asset.asset : `${asset.asset}USDT`,
       side: "deposit",
-      quantity: transaction.quantity,
-      price_usd: transaction.priceUsd,
+      quantity: asset.quantity,
+      price_usd: asset.price_usd,
       fee_usd: 0,
       source: "binance_connected",
       note: "Imported from Binance connection",
       executed_at: nowIso
-    }))
-  );
+    }));
 
+  if (rows.length === 0) {
+    return true;
+  }
+
+  const { error } = await supabase.from("portfolio_transactions").insert(rows);
   return !error;
 }
 
@@ -292,6 +291,80 @@ export async function updatePortfolioConnectionSyncState(
     .eq("portfolio_id", portfolioId);
 
   return !error;
+}
+
+export async function syncBinancePortfolio(
+  supabase: SupabaseClient,
+  userId: string,
+  portfolioId: string,
+  assets: BinanceImportAsset[]
+): Promise<{ ok: boolean; adjustmentCount: number }> {
+  // Fetch current DB positions for this portfolio
+  const { data: transactions, error: txError } = await supabase
+    .from("portfolio_transactions")
+    .select("symbol, side, quantity")
+    .eq("user_id", userId)
+    .eq("portfolio_id", portfolioId);
+
+  if (txError) {
+    return { ok: false, adjustmentCount: 0 };
+  }
+
+  type TxRow = { symbol: string; side: string; quantity: number };
+  const currentQtyBySymbol = new Map<string, number>();
+  for (const row of (transactions ?? []) as TxRow[]) {
+    const sym = row.symbol.toUpperCase();
+    const qty = Number(row.quantity) || 0;
+    const prev = currentQtyBySymbol.get(sym) ?? 0;
+    if (row.side === "buy" || row.side === "deposit" || row.side === "airdrop") {
+      currentQtyBySymbol.set(sym, prev + qty);
+    } else if (row.side === "sell" || row.side === "withdrawal") {
+      currentQtyBySymbol.set(sym, Math.max(0, prev - qty));
+    }
+  }
+
+  const nowIso = new Date().toISOString();
+  const adjustmentRows: object[] = [];
+
+  for (const asset of assets) {
+    if (asset.quantity <= 0) continue;
+    const symbol = asset.asset.endsWith("USDT") ? asset.asset : `${asset.asset}USDT`;
+    const currentQty = currentQtyBySymbol.get(symbol.toUpperCase()) ?? 0;
+    const delta = asset.quantity - currentQty;
+
+    if (Math.abs(delta) < 1e-12) continue;
+
+    adjustmentRows.push({
+      user_id: userId,
+      portfolio_id: portfolioId,
+      symbol,
+      side: delta > 0 ? "deposit" : "withdrawal",
+      quantity: Math.abs(delta),
+      price_usd: asset.price_usd,
+      fee_usd: 0,
+      source: "binance_sync",
+      note: "Binance balance adjustment (manual sync)",
+      executed_at: nowIso,
+    });
+  }
+
+  if (adjustmentRows.length > 0) {
+    const { error: insertError } = await supabase
+      .from("portfolio_transactions")
+      .insert(adjustmentRows);
+    if (insertError) {
+      return { ok: false, adjustmentCount: 0 };
+    }
+  }
+
+  // Update last_synced_at
+  await supabase
+    .from("portfolio_connections")
+    .update({ sync_status: "active", last_synced_at: nowIso })
+    .eq("user_id", userId)
+    .eq("portfolio_id", portfolioId);
+
+  return { ok: true, adjustmentCount: adjustmentRows.length };
 }
 
 export async function ensureMainPortfolio(
@@ -360,10 +433,45 @@ export async function listUserPortfolios(
   const basePortfolios = (data as PortfolioRow[]).map(toUserPortfolio);
   const portfolioIds = basePortfolios.map((portfolio) => portfolio.id);
   const modes = await fetchPortfolioModes(supabase, userId, portfolioIds);
+  const { data: rawAssetRows } = await supabase
+    .from("portfolio_assets")
+    .select("portfolio_id, quantity, last_price_usd")
+    .eq("user_id", userId)
+    .in("portfolio_id", portfolioIds);
+
+  const assetRows = (rawAssetRows ?? []) as PortfolioAssetCacheRow[];
+  const portfolioTotalsFromAssets = new Map<string, number>();
+  for (const row of assetRows) {
+    const quantity = typeof row.quantity === "number" && Number.isFinite(row.quantity) ? row.quantity : 0;
+    const lastPriceUsd = typeof row.last_price_usd === "number" && Number.isFinite(row.last_price_usd) ? row.last_price_usd : 0;
+    if (!row.portfolio_id || quantity <= 0 || lastPriceUsd < 0) {
+      continue;
+    }
+
+    const runningTotal = portfolioTotalsFromAssets.get(row.portfolio_id) ?? 0;
+    portfolioTotalsFromAssets.set(row.portfolio_id, runningTotal + quantity * lastPriceUsd);
+  }
 
   const portfoliosWithTotals = await Promise.all(
     basePortfolios.map(async (portfolio) => {
       const snapshot = await getLatestPortfolioSnapshotCache(supabase, userId, portfolio.id);
+      const { data: rawSnapshotRows } = await supabase
+        .from("portfolio_snapshots")
+        .select("nav_usd, metadata")
+        .eq("user_id", userId)
+        .eq("portfolio_id", portfolio.id)
+        .order("snapshot_at", { ascending: false })
+        .limit(1);
+      const rawSnapshot = (rawSnapshotRows?.[0] as PortfolioSnapshotRow | undefined) ?? null;
+      const metadataSummary = rawSnapshot?.metadata && typeof rawSnapshot.metadata === "object"
+        ? (rawSnapshot.metadata as { summary?: { totalValueUsd?: number } }).summary
+        : undefined;
+      const totalValueUsd =
+        (typeof rawSnapshot?.nav_usd === "number" && Number.isFinite(rawSnapshot.nav_usd))
+          ? rawSnapshot.nav_usd
+          : (typeof metadataSummary?.totalValueUsd === "number" && Number.isFinite(metadataSummary.totalValueUsd))
+            ? metadataSummary.totalValueUsd
+            : portfolioTotalsFromAssets.get(portfolio.id) ?? 0;
       const connection = modes.get(portfolio.id);
 
       return {
@@ -371,7 +479,8 @@ export async function listUserPortfolios(
         mode: connection?.mode ?? "manual",
         syncStatus: connection?.syncStatus ?? null,
         lastSyncedAt: connection?.lastSyncedAt ?? null,
-        totalValueBtc: snapshot?.summary.totalValueBtc ?? null
+        totalValueBtc: snapshot?.summary.totalValueBtc ?? null,
+        totalValueUsd
       };
     })
   );
@@ -384,7 +493,8 @@ export async function createUserPortfolio(
   userId: string,
   inputName: string,
   inputMode: PortfolioMode = "manual",
-  rawIdempotencyKey?: string
+  rawIdempotencyKey?: string,
+  binanceAssets?: BinanceImportAsset[]
 ): Promise<{
   portfolio: UserPortfolio | null;
   errorCode: "invalid-name" | "duplicate" | "unknown" | "idempotency-conflict" | "idempotency-expired" | "idempotency-in-progress" | null;
@@ -457,8 +567,9 @@ export async function createUserPortfolio(
 
   if (inputMode === "binance_connected") {
     const connectionCreated = await createPortfolioConnection(supabase, userId, data.id as string);
+    const assetsToSeed = binanceAssets ?? [];
     const seeded = connectionCreated
-      ? await seedBinanceConnectedPortfolio(supabase, userId, data.id as string)
+      ? await seedBinanceConnectedPortfolio(supabase, userId, data.id as string, assetsToSeed)
       : false;
 
     if (!connectionCreated || !seeded) {

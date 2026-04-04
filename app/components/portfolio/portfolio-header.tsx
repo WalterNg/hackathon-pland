@@ -15,6 +15,9 @@ type PortfolioHeaderProps = {
   isRemovingPortfolio?: boolean;
   showCharts: boolean;
   onToggleShowCharts: () => void;
+  isConnectedPortfolio?: boolean;
+  onSync?: () => void;
+  isSyncing?: boolean;
 };
 
 export function PortfolioHeader({
@@ -31,7 +34,10 @@ export function PortfolioHeader({
   showRemovePortfolio = false,
   isRemovingPortfolio = false,
   showCharts,
-  onToggleShowCharts
+  onToggleShowCharts,
+  isConnectedPortfolio = false,
+  onSync,
+  isSyncing = false,
 }: PortfolioHeaderProps) {
   const isReadOnlyStatus = isPrimaryActionDisabled && primaryActionLabel === "Read-only";
 
@@ -103,6 +109,19 @@ export function PortfolioHeader({
             {primaryActionLabel}
           </button>
         )}
+
+        {isConnectedPortfolio && onSync ? (
+          <button
+            type="button"
+            onClick={onSync}
+            disabled={isSyncing}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-[0.72rem] font-semibold text-primary transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/18 hover:shadow-[0_8px_20px_rgba(60,227,106,0.14)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+            aria-label="Sync with Binance"
+          >
+            <MaterialIcon name={isSyncing ? "hourglass_top" : "sync"} outlined={false} className="text-[0.9rem]" />
+            {isSyncing ? "Syncing…" : "Sync"}
+          </button>
+        ) : null}
 
         {showRemovePortfolio && onRemovePortfolio ? (
           <button

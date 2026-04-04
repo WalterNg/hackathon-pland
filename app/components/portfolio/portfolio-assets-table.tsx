@@ -4,15 +4,20 @@ import { getFullCoinName } from "@/app/lib/coin-names";
 
 type PortfolioAssetsTableProps = {
   assets: PortfolioAssetRow[];
-  btcPriceUsd: number | null;
 };
 
-const formatBtcValue = (usdValue: number, btcPriceUsd: number | null, fractionDigits = 6) => {
-  if (!Number.isFinite(usdValue) || !btcPriceUsd || !Number.isFinite(btcPriceUsd) || btcPriceUsd <= 0) {
+const usdFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 2
+});
+
+const formatUsdValue = (usdValue: number) => {
+  if (!Number.isFinite(usdValue)) {
     return "N/A";
   }
 
-  return `${(usdValue / btcPriceUsd).toFixed(fractionDigits)} BTC`;
+  return usdFormatter.format(usdValue);
 };
 
 
@@ -30,7 +35,7 @@ function toDisplaySymbol(symbol: string): string {
   return normalized;
 }
 
-export function PortfolioAssetsTable({ assets, btcPriceUsd }: PortfolioAssetsTableProps) {
+export function PortfolioAssetsTable({ assets }: PortfolioAssetsTableProps) {
   return (
     <section className="panel-base mb-6 overflow-hidden lg:mb-8">
       <div className="p-5 sm:p-6">
@@ -86,7 +91,7 @@ export function PortfolioAssetsTable({ assets, btcPriceUsd }: PortfolioAssetsTab
                   </td>
 
                   <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium text-body">
-                    {formatBtcValue(asset.priceUsd, btcPriceUsd)}
+                    {formatUsdValue(asset.priceUsd)}
                   </td>
 
                   <td className={`whitespace-nowrap px-6 py-4 text-right text-sm font-medium ${positive1h ? "text-success" : "text-danger"}`}>
@@ -111,17 +116,17 @@ export function PortfolioAssetsTable({ assets, btcPriceUsd }: PortfolioAssetsTab
                   </td>
 
                   <td className="whitespace-nowrap px-6 py-4 text-right">
-                    <div className="text-sm font-bold text-strong">{formatBtcValue(asset.valueUsd, btcPriceUsd)}</div>
+                    <div className="text-sm font-bold text-strong">{formatUsdValue(asset.valueUsd)}</div>
                     <div className="text-xs text-muted">{asset.quantity.toFixed(4)} {displaySymbol}</div>
                   </td>
 
                   <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium text-body">
-                    {formatBtcValue(asset.avgBuyPriceUsd, btcPriceUsd)}
+                    {formatUsdValue(asset.avgBuyPriceUsd)}
                   </td>
 
                   <td className="whitespace-nowrap px-6 py-4 text-right">
                     <div className={`text-sm font-bold ${positivePnl ? "text-success" : "text-danger"}`}>
-                      {formatBtcValue(asset.pnlUsd, btcPriceUsd)}
+                      {formatUsdValue(asset.pnlUsd)}
                     </div>
                     <div className={`flex items-center justify-end gap-1 text-xs ${positivePnl ? "text-success" : "text-danger"}`}>
                       <MaterialIcon

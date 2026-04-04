@@ -9,12 +9,18 @@ import { usePortfolios } from "@/app/hooks/use-portfolios";
 
 const DEFAULT_PORTFOLIOS = ["Main Portfolio"];
 
-function formatPortfolioTotal(totalValueBtc: number | null | undefined): string {
-  if (totalValueBtc === null || totalValueBtc === undefined || !Number.isFinite(totalValueBtc)) {
-    return "0 BTC";
+const usdFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 2
+});
+
+function formatPortfolioTotal(totalValueUsd: number | null | undefined): string {
+  if (totalValueUsd === null || totalValueUsd === undefined || !Number.isFinite(totalValueUsd)) {
+    return "$0.00";
   }
 
-  return `${totalValueBtc.toFixed(2)} BTC`;
+  return usdFormatter.format(totalValueUsd);
 }
 
 function normalizePath(path: string): string {
@@ -120,7 +126,7 @@ function SidebarContent() {
                     </div>
                     <div className="min-w-0">
                       <div className="typo-body truncate font-semibold text-current">{portfolioName}</div>
-                      <div className="typo-body-sm text-muted">{formatPortfolioTotal(portfolio.totalValueBtc)}</div>
+                      <div className="typo-body-sm text-muted">{formatPortfolioTotal(portfolio.totalValueUsd)}</div>
                     </div>
                   </Link>
                 );

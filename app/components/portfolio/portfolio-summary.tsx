@@ -7,9 +7,12 @@ type PortfolioSummaryProps = {
 };
 
 export function PortfolioSummary({ summary, metrics }: PortfolioSummaryProps) {
-  const btcPriceUsd = summary.btcPriceUsd;
-  const totalValueBtcLabel = summary.totalValueBtc !== null ? `${summary.totalValueBtc.toFixed(4)} BTC` : "N/A";
-  const volumeBtc = btcPriceUsd && btcPriceUsd > 0 ? metrics.totalVolume24hUsd / btcPriceUsd : null;
+  const usdFormatter = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2
+  });
+  const totalValueUsdLabel = usdFormatter.format(summary.totalValueUsd);
   const isProfitPositive = metrics.allTimeProfitPercent >= 0;
   const allTimeProfitPercentLabel = `${isProfitPositive ? "+" : ""}${metrics.allTimeProfitPercent.toFixed(2)}%`;
 
@@ -22,7 +25,7 @@ export function PortfolioSummary({ summary, metrics }: PortfolioSummaryProps) {
           <span className="eyebrow">Total Portfolio Value</span>
         </div>
         <div>
-          <h2 className="metric-display">{totalValueBtcLabel}</h2>
+          <h2 className="metric-display">{totalValueUsdLabel}</h2>
           <div className={`mt-3 flex items-center gap-2 ${isProfitPositive ? "text-primary" : "text-danger"}`}>
             <MaterialIcon
               name={isProfitPositive ? "arrow_upward" : "arrow_downward"}
@@ -38,7 +41,7 @@ export function PortfolioSummary({ summary, metrics }: PortfolioSummaryProps) {
         <div className="h-24 w-px bg-white/8" />
         <div className="text-right">
           <p className="eyebrow mb-3 text-subtle">24h Volume</p>
-          <p className="typo-display">{volumeBtc !== null ? `${volumeBtc.toFixed(6)} BTC` : "N/A"}</p>
+          <p className="typo-display">{usdFormatter.format(metrics.totalVolume24hUsd)}</p>
         </div>
       </div>
     </section>

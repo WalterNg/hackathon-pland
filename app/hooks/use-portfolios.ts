@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 const MAIN_PORTFOLIO_NAME = "Main Portfolio";
+const PORTFOLIOS_REFRESH_INTERVAL_MS = 15_000;
 
 type PortfolioResponseRow = {
   id: string;
@@ -12,6 +13,13 @@ type PortfolioResponseRow = {
   mode: "manual" | "binance_connected";
   createdAt: string;
   totalValueBtc: number | null;
+  totalValueUsd: number;
+};
+
+export type BinanceImportAsset = {
+  asset: string;
+  quantity: number;
+  price_usd: number;
 };
 
 export type PortfolioItem = {
@@ -20,6 +28,7 @@ export type PortfolioItem = {
   isDefault: boolean;
   mode: "manual" | "binance_connected";
   totalValueBtc: number | null;
+  totalValueUsd: number;
 };
 
 type UsePortfoliosResult = {
@@ -29,8 +38,12 @@ type UsePortfoliosResult = {
   createPortfolio: (
     name: string,
     mode: "manual" | "binance_connected",
-    options?: { idempotencyKey?: string }
+    options?: { idempotencyKey?: string; assets?: BinanceImportAsset[] }
   ) => Promise<{ ok: boolean; message?: string; portfolioName?: string }>;
+  syncPortfolio: (
+    name: string,
+    assets: BinanceImportAsset[]
+  ) => Promise<{ ok: boolean; message?: string; adjustmentCount?: number }>;
   removePortfolio: (name: string) => Promise<{ ok: boolean; message?: string }>;
   reload: () => Promise<void>;
 };
@@ -56,17 +69,18 @@ export function usePortfolios(): UsePortfoliosResult {
         name: item.name,
         isDefault: item.isDefault,
         mode: item.mode,
-        totalValueBtc: item.totalValueBtc
+        totalValueBtc: item.totalValueBtc,
+        totalValueUsd: item.totalValueUsd
       }));
 
       if (nextPortfolios.length === 0) {
-        setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true, mode: "manual", totalValueBtc: null }]);
+        setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true, mode: "manual", totalValueBtc: null, totalValueUsd: 0 }]);
       } else {
         setPortfolios(nextPortfolios);
       }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load portfolios");
-      setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true, mode: "manual", totalValueBtc: null }]);
+      setPortfolios([{ id: "main", name: MAIN_PORTFOLIO_NAME, isDefault: true, mode: "manual", totalValueBtc: null, totalValueUsd: 0 }]);
     } finally {
       setLoading(false);
     }
@@ -74,17 +88,34 @@ export function usePortfolios(): UsePortfoliosResult {
 
   useEffect(() => {
     loadPortfolios();
+
+    const intervalId = window.setInterval(() => {
+      void loadPortfolios();
+    }, PORTFOLIOS_REFRESH_INTERVAL_MS);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        void loadPortfolios();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [loadPortfolios]);
 
   const createPortfolio = useCallback(async (
     name: string,
     mode: "manual" | "binance_connected",
-    options?: { idempotencyKey?: string }
+    options?: { idempotencyKey?: string; assets?: BinanceImportAsset[] }
   ) => {
     const response = await fetchWithSupabaseAuth("/api/portfolios", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, mode, idempotencyKey: options?.idempotencyKey })
+      body: JSON.stringify({ name, mode, idempotencyKey: options?.idempotencyKey, assets: options?.assets })
     });
 
     if (!response.ok) {
@@ -96,6 +127,23 @@ export function usePortfolios(): UsePortfoliosResult {
 
     await loadPortfolios();
     return { ok: true, portfolioName: payload.portfolio?.name };
+  }, [loadPortfolios]);
+
+  const syncPortfolio = useCallback(async (name: string, assets: BinanceImportAsset[]) => {
+    const response = await fetchWithSupabaseAuth("/api/portfolios/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, assets })
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      return { ok: false, message: payload?.error ?? "Unable to sync portfolio." };
+    }
+
+    const payload = (await response.json()) as { adjustmentCount?: number };
+    await loadPortfolios();
+    return { ok: true, adjustmentCount: payload.adjustmentCount };
   }, [loadPortfolios]);
 
   const removePortfolio = useCallback(async (name: string) => {
@@ -119,6 +167,7 @@ export function usePortfolios(): UsePortfoliosResult {
     isLoading,
     error,
     createPortfolio,
+    syncPortfolio,
     removePortfolio,
     reload: loadPortfolios
   };
