@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { PortfolioAIRecommendation } from "@/app/lib/portfolio-types";
 import type {
+  TradingAgentPreparedContext,
   TradingAgentResult,
   TradingAgentStepEvent,
   TradingAgentStreamDoneEvent,
@@ -22,6 +23,7 @@ type AnalyzeInput = {
 type UseTradingAgentAnalysisResult = {
   recommendation: PortfolioAIRecommendation | null;
   latestResult: TradingAgentResult | null;
+  preparedContext: TradingAgentPreparedContext | null;
   trace: TradingAgentTraceEvent[];
   warnings: string[];
   isAnalyzing: boolean;
@@ -72,6 +74,7 @@ function parseSseBlock(block: string): { event: string; data: string } | null {
 export function useTradingAgentAnalysis(scopeKey?: string | null): UseTradingAgentAnalysisResult {
   const [recommendation, setRecommendation] = useState<PortfolioAIRecommendation | null>(null);
   const [latestResult, setLatestResult] = useState<TradingAgentResult | null>(null);
+  const [preparedContext, setPreparedContext] = useState<TradingAgentPreparedContext | null>(null);
   const [trace, setTrace] = useState<TradingAgentTraceEvent[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [status, setStatus] = useState<TradingAgentRunStatus>("idle");
@@ -95,6 +98,7 @@ export function useTradingAgentAnalysis(scopeKey?: string | null): UseTradingAge
     setStatus("idle");
     setError(null);
     setActiveNodes([]);
+    setPreparedContext(null);
 
     const loadLatestRecommendation = async () => {
       if (!scopeKey?.trim()) {
@@ -141,6 +145,7 @@ export function useTradingAgentAnalysis(scopeKey?: string | null): UseTradingAge
     setWarnings([]);
     setActiveNodes([]);
     setLatestResult(null);
+    setPreparedContext(null);
 
     try {
       const response = await fetchWithSupabaseAuth("/api/ai/analyze-trading-agent/stream", {
@@ -193,6 +198,9 @@ export function useTradingAgentAnalysis(scopeKey?: string | null): UseTradingAge
                 setActiveNodes(stepPayload.nodes);
                 setTrace(stepPayload.trace);
                 setWarnings(stepPayload.warnings);
+                if (stepPayload.state?.prepared_context) {
+                  setPreparedContext(stepPayload.state.prepared_context);
+                }
               }
 
               if (parsed.event === "done") {
@@ -251,6 +259,7 @@ export function useTradingAgentAnalysis(scopeKey?: string | null): UseTradingAge
   return {
     recommendation,
     latestResult,
+    preparedContext,
     trace,
     warnings,
     isAnalyzing: status === "streaming",

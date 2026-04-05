@@ -38,9 +38,14 @@ def _sentiment_label(score: float) -> str:
 
 
 async def build_trading_context(request: TradingAgentRequest) -> tuple[TradingAgentMeta, PortfolioContext, list[str]]:
+    """
+    Collects and normalizes all input data (Context) for the Multi-Agent system,
+    including market prices, news, social sentiment, and portfolio structure.
+    """
     warnings: list[str] = []
     headlines = list(request.news_headlines)
 
+    # 1. Fetch market news (RSS fallback if not provided)
     if not headlines:
         try:
             headlines = [article["title"] for article in fetch_crypto_news_from_rss(limit_per_feed=4)]
@@ -49,6 +54,7 @@ async def build_trading_context(request: TradingAgentRequest) -> tuple[TradingAg
             warnings.append("Unable to fetch RSS headlines; using neutral external-news context.")
             headlines = []
 
+    # 2. Retrieve Fear & Greed Index if sentiment score is missing 
     social_score = request.social_dominance
     if social_score == 0:
         fetched_score = await fetch_fear_greed_index()
@@ -66,19 +72,25 @@ async def build_trading_context(request: TradingAgentRequest) -> tuple[TradingAg
         social_dominance=social_score,
     )
 
+    # 3. Synchronize price and volume data from exchanges (Binance/ByBit)
     market_data_map = await fetch_market_data_map(base_payload.portfolio, _binance_service)
+    
+    # 4. Generate core inputs for specialized analyst nodes
     meta = build_graph_meta(base_payload, portfolio_id=f"{request.user_id}-trading-agent")
     ta_input = build_ta_input(base_payload, market_data_map)
     news_input = build_news_market_input(base_payload, ta_input)
     risk_input = build_risk_input(ta_input)
 
+    # 5. Create a frozen snapshot of portfolio state for historical trace
     trading_meta = TradingAgentMeta(
         user_id=meta.user_id,
         portfolio_id=meta.portfolio_id,
         as_of=meta.as_of,
         symbols=meta.symbols,
+        portfolio_snapshot=request.portfolio,
     )
 
+    # 6. Assemble the final structured PortfolioContext
     context = PortfolioContext(
         technical=TechnicalContext(
             cash_ratio=ta_input.cash_ratio,

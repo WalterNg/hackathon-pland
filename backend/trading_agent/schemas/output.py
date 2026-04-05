@@ -1,6 +1,10 @@
-from typing import List, Literal
+from typing import List, Literal, Union
 
 from pydantic import BaseModel, Field
+
+class SentimentText(BaseModel):
+    text: str
+    sentiment: Literal["Bullish", "Bearish", "Neutral"]
 
 
 class TechnicalAnalysisReport(BaseModel):
@@ -9,21 +13,21 @@ class TechnicalAnalysisReport(BaseModel):
     strongest_positions: List[str] = Field(default_factory=list)
     weakest_positions: List[str] = Field(default_factory=list)
     summary: str
-    evidence: List[str] = Field(default_factory=list)
+    evidence: List[Union[str, SentimentText]] = Field(default_factory=list)
 
 
 class NewsAnalysisReport(BaseModel):
     market_bias: Literal["Bullish", "Bearish", "Neutral"]
     confidence: int = Field(..., ge=1, le=10)
-    catalysts: List[str] = Field(default_factory=list)
-    headwinds: List[str] = Field(default_factory=list)
+    catalysts: List[Union[str, SentimentText]] = Field(default_factory=list)
+    headwinds: List[Union[str, SentimentText]] = Field(default_factory=list)
     summary: str
 
 
 class SentimentAnalysisReport(BaseModel):
     sentiment_bias: Literal["Bullish", "Bearish", "Neutral"]
     confidence: int = Field(..., ge=1, le=10)
-    drivers: List[str] = Field(default_factory=list)
+    drivers: List[Union[str, SentimentText]] = Field(default_factory=list)
     summary: str
 
 
@@ -62,7 +66,7 @@ class PortfolioManagerDecision(BaseModel):
     stance: Literal["Accumulate", "Hold", "Reduce Risk", "Rebalance"]
     confidence: int = Field(..., ge=1, le=10)
     summary: str
-    reasoning: List[str] = Field(..., min_length=2)
+    reasoning: List[Union[str, SentimentText]] = Field(..., min_length=2)
 
 
 class TraderProposal(BaseModel):
@@ -97,7 +101,7 @@ class FinalDecision(BaseModel):
     action: Literal["Accumulate", "Hold", "Reduce Risk", "Rebalance", "Stop Loss"]
     confidence: int = Field(..., ge=1, le=10)
     summary: str
-    reasoning: List[str] = Field(..., min_length=2)
+    reasoning: List[Union[str, SentimentText]] = Field(..., min_length=2)
     portfolio_actions: List[str] = Field(default_factory=list)
     decision_source: Literal["manager_consensus", "trader_proposal", "risk_judge", "guardrail_override"]
     overridden_by_guardrail: bool = False
@@ -110,7 +114,7 @@ class RiskJudgeDecision(BaseModel):
     action: Literal["Accumulate", "Hold", "Reduce Risk", "Rebalance", "Stop Loss"]
     confidence: int = Field(..., ge=1, le=10)
     summary: str
-    reasoning: List[str] = Field(..., min_length=2)
+    reasoning: List[Union[str, SentimentText]] = Field(..., min_length=2)
     portfolio_actions: List[str] = Field(default_factory=list)
 
 

@@ -22,6 +22,7 @@ class TradingAgentMeta(BaseModel):
     portfolio_id: str
     as_of: str
     symbols: List[str]
+    portfolio_snapshot: Optional[List[TradingPortfolioItem]] = None
     workflow_version: str = "trading_agent_v1"
 
 

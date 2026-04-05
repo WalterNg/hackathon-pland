@@ -66,6 +66,7 @@ function PortfolioContent() {
   const {
     recommendation: tradingAgentRecommendation,
     latestResult: tradingAgentResult,
+    preparedContext: tradingAgentPreparedContext,
     trace: tradingAgentTrace,
     warnings: tradingAgentWarnings,
     isAnalyzing: isTradingAgentAnalyzing,
@@ -353,6 +354,7 @@ function PortfolioContent() {
                   metrics={snapshot.metrics}
                   tradingAgentRecommendation={tradingAgentRecommendation}
                   tradingAgentResult={tradingAgentResult}
+                  tradingAgentPreparedContext={tradingAgentPreparedContext}
                   tradingAgentTrace={tradingAgentTrace}
                   tradingAgentWarnings={tradingAgentWarnings}
                   tradingAgentIsAnalyzing={isTradingAgentAnalyzing}

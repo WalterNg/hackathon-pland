@@ -8,27 +8,91 @@ export type TradingAgentTraceEvent = {
   detail: string;
 };
 
+export type TradingAgentPreparedContextPosition = {
+  symbol: string;
+  weight: number;
+  quantity: number;
+  current_price: number;
+  value_usd: number;
+};
+
+export type TradingAgentPreparedContextAssetSignal = {
+  symbol: string;
+  trend: "Bullish" | "Neutral" | "Bearish";
+  signal_strength: number;
+  rsi: number;
+  ma50_gap_pct: number;
+  rvol: number;
+  obv_trend: "Up" | "Flat" | "Down";
+};
+
+export type TradingAgentPreparedContext = {
+  technical?: {
+    cash_ratio: number;
+    positions: TradingAgentPreparedContextPosition[];
+    per_asset_signals: TradingAgentPreparedContextAssetSignal[];
+    portfolio_technical_summary: {
+      weighted_avg_rsi: number;
+      bullish_weight_ratio: number;
+      bearish_weight_ratio: number;
+      above_ma50_weight_ratio: number;
+      high_rvol_weight_ratio: number;
+      technical_breadth: string;
+    };
+    benchmark_context: {
+      primary_symbol: string | null;
+      primary_trend: "Bullish" | "Neutral" | "Bearish";
+      market_regime: "Risk-on" | "Neutral" | "Risk-off";
+    };
+  };
+  news?: {
+    portfolio_symbols: string[];
+    news_headlines: string[];
+    dominant_narrative: string;
+    macro_context: Record<string, unknown>;
+  };
+  sentiment?: {
+    social_sentiment_score: number;
+    dominant_narrative: string;
+    sentiment_label: "Bullish" | "Neutral" | "Bearish";
+  };
+  structure?: {
+    cash_ratio: number;
+    positions: TradingAgentPreparedContextPosition[];
+    top1_weight: number;
+    top2_weight: number;
+    concentration_score: number;
+    estimated_volatility: number;
+    liquidity_condition: "Tight" | "Normal" | "Loose";
+  };
+};
+
+export type TradingAgentSentimentText = {
+  text: string;
+  sentiment: "Bullish" | "Bearish" | "Neutral";
+};
+
 export type TradingAgentTechnicalReport = {
   portfolio_trend: "Bullish" | "Bearish" | "Neutral";
   signal_strength: number;
   strongest_positions: string[];
   weakest_positions: string[];
   summary: string;
-  evidence: string[];
+  evidence: (string | TradingAgentSentimentText)[];
 };
 
 export type TradingAgentNewsReport = {
   market_bias: "Bullish" | "Bearish" | "Neutral";
   confidence: number;
-  catalysts: string[];
-  headwinds: string[];
+  catalysts: (string | TradingAgentSentimentText)[];
+  headwinds: (string | TradingAgentSentimentText)[];
   summary: string;
 };
 
 export type TradingAgentSentimentReport = {
   sentiment_bias: "Bullish" | "Bearish" | "Neutral";
   confidence: number;
-  drivers: string[];
+  drivers: (string | TradingAgentSentimentText)[];
   summary: string;
 };
 
@@ -67,7 +131,7 @@ export type TradingAgentPortfolioManagerDecision = {
   stance: "Accumulate" | "Hold" | "Reduce Risk" | "Rebalance";
   confidence: number;
   summary: string;
-  reasoning: string[];
+  reasoning: (string | TradingAgentSentimentText)[];
 } | null;
 
 export type TradingAgentTraderProposal = {
@@ -95,7 +159,7 @@ export type TradingAgentFinalDecision = {
   action: PortfolioAIRecommendation["action"];
   confidence: number;
   summary: string;
-  reasoning: string[];
+  reasoning: (string | TradingAgentSentimentText)[];
   portfolio_actions: string[];
   decision_source: "manager_consensus" | "trader_proposal" | "risk_judge" | "guardrail_override";
   overridden_by_guardrail: boolean;
@@ -109,6 +173,7 @@ export type TradingAgentResult = {
     portfolio_id?: string;
     as_of?: string;
     symbols?: string[];
+    portfolio_snapshot?: { asset: string; amount: number; current_price: number }[] | null;
     workflow_version?: string;
   } | null;
   final_decision?: TradingAgentFinalDecision;
@@ -124,7 +189,9 @@ export type TradingAgentResult = {
 
 export type TradingAgentStepEvent = {
   nodes: string[];
-  state: Record<string, unknown>;
+  state: Record<string, unknown> & {
+    prepared_context?: TradingAgentPreparedContext;
+  };
   trace: TradingAgentTraceEvent[];
   warnings: string[];
 };

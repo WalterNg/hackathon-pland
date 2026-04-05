@@ -7,7 +7,11 @@ import type {
   PortfolioMetrics,
   PortfolioSummary as PortfolioSummaryType,
 } from "@/app/lib/portfolio-types";
-import type { TradingAgentResult, TradingAgentTraceEvent } from "@/app/lib/trading-agent-types";
+import type {
+  TradingAgentPreparedContext,
+  TradingAgentResult,
+  TradingAgentTraceEvent,
+} from "@/app/lib/trading-agent-types";
 import { MaterialIcon } from "../dashboard/material-icon";
 import { TradingAgentTraceModal } from "./trading-agent-trace-modal";
 
@@ -17,6 +21,7 @@ type PortfolioSummaryProps = {
   metrics: PortfolioMetrics;
   tradingAgentRecommendation: PortfolioAIRecommendation | null;
   tradingAgentResult: TradingAgentResult | null;
+  tradingAgentPreparedContext: TradingAgentPreparedContext | null;
   tradingAgentTrace: TradingAgentTraceEvent[];
   tradingAgentWarnings: string[];
   tradingAgentIsAnalyzing: boolean;
@@ -182,11 +187,11 @@ function ThinkingStrip({ trace, activeNodes }: ThinkingStripProps) {
  * -------------------------------------------------------------------------*/
 type AIInsightPanelProps = {
   recommendation: PortfolioAIRecommendation;
+  result: TradingAgentResult | null;
 };
 
-function AIInsightPanel({ recommendation }: AIInsightPanelProps) {
+function AIInsightPanel({ recommendation, result }: AIInsightPanelProps) {
   const tone = actionTheme(recommendation.action);
-  const result: TradingAgentResult | null = null;
   
   // Custom title based on action
   const getDisplayTitle = () => {
@@ -253,6 +258,7 @@ export function PortfolioSummary({
   metrics,
   tradingAgentRecommendation,
   tradingAgentResult,
+  tradingAgentPreparedContext,
   tradingAgentTrace,
   tradingAgentWarnings,
   tradingAgentIsAnalyzing,
@@ -386,6 +392,7 @@ export function PortfolioSummary({
             <div className="animate-[fadeSlideIn_0.4s_ease_both]">
               <AIInsightPanel 
                 recommendation={tradingAgentRecommendation!}
+                result={tradingAgentResult}
               />
             </div>
           )}
@@ -416,6 +423,7 @@ export function PortfolioSummary({
         open={isTraceOpen}
         onClose={() => setTraceOpen(false)}
         result={tradingAgentResult}
+        preparedContext={tradingAgentPreparedContext}
         trace={tradingAgentTrace}
         activeNodes={tradingAgentActiveNodes}
         isAnalyzing={tradingAgentIsAnalyzing}
