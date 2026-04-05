@@ -18,6 +18,7 @@ type TradingAgentDecisionCardProps = {
   completedSteps: number;
   totalSteps: number;
   activeNodes: string[];
+  preparedContext: import("@/app/lib/trading-agent-types").TradingAgentPreparedContext | null;
   error: string | null;
   onAnalyze: () => void;
   isDisabled?: boolean;
@@ -47,6 +48,7 @@ export function TradingAgentDecisionCard({
   completedSteps,
   totalSteps,
   activeNodes,
+  preparedContext,
   error,
   onAnalyze,
   isDisabled = false,
@@ -146,6 +148,7 @@ export function TradingAgentDecisionCard({
         result={result}
         trace={trace}
         activeNodes={activeNodes}
+        preparedContext={preparedContext}
         isAnalyzing={isAnalyzing}
         progressLabel={progressLabel}
         portfolioName={portfolioName}

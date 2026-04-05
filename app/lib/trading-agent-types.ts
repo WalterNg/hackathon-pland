@@ -1,4 +1,7 @@
-import type { PortfolioAIRecommendation } from "@/app/lib/portfolio-types";
+import type { 
+  PortfolioAIRecommendation, 
+  AIAnalysisSentimentText 
+} from "@/app/lib/portfolio-types";
 
 export type TradingAgentTraceStatus = "started" | "completed" | "skipped" | "error";
 
@@ -67,10 +70,7 @@ export type TradingAgentPreparedContext = {
   };
 };
 
-export type TradingAgentSentimentText = {
-  text: string;
-  sentiment: "Bullish" | "Bearish" | "Neutral";
-};
+export type TradingAgentSentimentText = AIAnalysisSentimentText;
 
 export type TradingAgentTechnicalReport = {
   portfolio_trend: "Bullish" | "Bearish" | "Neutral";

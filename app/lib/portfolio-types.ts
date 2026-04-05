@@ -100,6 +100,11 @@ export type AIAnalysisAction =
 
 export type AIAnalysisSignalTone = "Bullish" | "Neutral" | "Bearish" | "Cautious" | "Defensive";
 
+export type AIAnalysisSentimentText = {
+  text: string;
+  sentiment: "Bullish" | "Bearish" | "Neutral";
+};
+
 export type AIRecommendationActionKind =
   | "sell-intent"
   | "apply-protective-rules"
@@ -165,7 +170,7 @@ export type PortfolioAIRecommendation = {
   action: AIAnalysisAction;
   confidence: number;
   summary: string;
-  reasoning: string[];
+  reasoning: (string | AIAnalysisSentimentText)[];
   portfolioActions: string[];
   signals: AIAnalysisComponentSignal[];
   analyzedAt: string;
