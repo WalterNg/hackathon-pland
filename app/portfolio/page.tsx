@@ -6,7 +6,6 @@ import { MaterialIcon } from "../components/dashboard/material-icon";
 import { RiskAlertCenterDialog } from "../components/portfolio/risk-alert-center-dialog";
 import { AppTopNavigation } from "../components/ui/app-top-navigation";
 import { AddTransactionDialog } from "../components/portfolio/add-transaction-dialog";
-import { AIPortfolioRecommendationDashboard } from "../components/portfolio/ai-portfolio-recommendation-dashboard";
 import { CreatePortfolioDialog } from "../components/portfolio/create-portfolio-dialog";
 import { SyncBinanceDialog } from "../components/portfolio/sync-binance-dialog";
 import { PortfolioAssetsTable } from "../components/portfolio/portfolio-assets-table";
@@ -20,15 +19,13 @@ import { SelectCoinModal } from "../components/portfolio/select-coin-modal";
 import { Sidebar } from "../components/ui/sidebar";
 import { useRiskAlerts } from "../hooks/use-risk-alerts";
 import { AuthGuard } from "../components/auth/auth-guard";
-import { usePortfolioAIAnalysis } from "../hooks/use-portfolio-ai-analysis";
+import { useTradingAgentAnalysis } from "../hooks/use-trading-agent-analysis";
 import { usePortfolios } from "../hooks/use-portfolios";
 import { useRiskEvents } from "../hooks/use-risk-events";
 import { useRiskRules } from "../hooks/use-risk-rules";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
-import { buildRecommendationActionCards, toSelectedCoin, type AIRecommendationActionPayload } from "@/app/lib/portfolio-ai-actions";
 import type { PortfolioMode } from "@/app/lib/portfolio-types";
 import type { RiskAlertStatus, RiskRulesFormValues } from "@/app/lib/risk-types";
-import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
 
@@ -66,11 +63,18 @@ function PortfolioContent() {
     action: "buy",
     note: "",
   });
-  const [aiActionFeedback, setAIActionFeedback] = useState<{
-    tone: "success" | "error" | "info";
-    message: string;
-  } | null>(null);
-  const { recommendation, isAnalyzing, activeStepId, error: aiError, analyze, steps } = usePortfolioAIAnalysis(portfolioName);
+  const {
+    recommendation: tradingAgentRecommendation,
+    latestResult: tradingAgentResult,
+    preparedContext: tradingAgentPreparedContext,
+    trace: tradingAgentTrace,
+    warnings: tradingAgentWarnings,
+    isAnalyzing: isTradingAgentAnalyzing,
+    error: tradingAgentError,
+    activeNodes: tradingAgentActiveNodes,
+    progressLabel: tradingAgentProgressLabel,
+    analyze: analyzeTradingAgent,
+  } = useTradingAgentAnalysis(portfolioName);
 
   const isMainPortfolio = useMemo(() => portfolioName === DEFAULT_PORTFOLIO_NAME, [portfolioName]);
   const currentPortfolio = useMemo(
@@ -114,10 +118,6 @@ function PortfolioContent() {
         ? "This portfolio syncs automatically from Binance and manual edits are disabled."
         : undefined;
   const defaultPortfolioName = useMemo(() => `Portfolio ${portfolios.length + 1}`, [portfolios.length]);
-  const recommendationActionCards = useMemo(
-    () => (recommendation ? buildRecommendationActionCards(recommendation, riskAlerts, editableRiskProfile) : []),
-    [editableRiskProfile, recommendation, riskAlerts]
-  );
   const criticalActiveAlerts = useMemo(
     () => riskAlerts.filter((alert) => alert.status === "active" && alert.severity === "critical"),
     [riskAlerts]
@@ -207,40 +207,10 @@ function PortfolioContent() {
     setAddDialogOpen(true);
   };
 
-  const logAIActionEvent = async (
-    payload: {
-      actionType: "sell_intent_opened" | "protective_rules_applied" | "alert_center_opened";
-      severity: "info" | "warning" | "critical";
-      title: string;
-      message: string;
-      symbol?: string;
-      details?: Record<string, unknown>;
-    }
-  ) => {
-    try {
-      await fetchWithSupabaseAuth("/api/ai/actions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          portfolioName,
-          ...payload,
-        }),
-      });
-    } catch {
-      return;
-    }
-  };
-
   const handleTransactionCreated = async () => {
     await reload();
     await reloadRisk();
     await reloadAlertCenter();
-    setAIActionFeedback({
-      tone: "success",
-      message: "Portfolio activity recorded. Risk monitor and alerts have been refreshed.",
-    });
   };
 
   const handleSaveRiskRules = async (values: RiskRulesFormValues) => {
@@ -300,117 +270,8 @@ function PortfolioContent() {
     }
   };
 
-  const handleAnalyzeWithAI = () => {
-    analyze({
-      snapshot,
-      profile: riskProfile,
-      events: riskEvents,
-      portfolioName,
-    });
-  };
-
-  const handleOpenSellIntent = async (symbol: string, note: string) => {
-    if (isMainPortfolio) {
-      setAIActionFeedback({
-        tone: "info",
-        message: "Create a child portfolio first before applying AI trade intents.",
-      });
-      setCreatePortfolioOpen(true);
-      return;
-    }
-
-    if (isConnectedPortfolio) {
-      setAIActionFeedback({
-        tone: "info",
-        message: "Connected portfolios are read-only. Review the recommendation, then manage execution on Binance directly.",
-      });
-      return;
-    }
-
-    const nextCoin = toSelectedCoin(symbol);
-    setTransactionIntent({ action: "sell", note });
-    setSelectedCoin(nextCoin);
-    setAddDialogOpen(true);
-    setAIActionFeedback({
-      tone: "info",
-      message: `Sell flow opened for ${nextCoin.baseAsset}. Review quantity and price before confirming.`,
-    });
-
-    await logAIActionEvent({
-      actionType: "sell_intent_opened",
-      severity: riskAlerts.some((alert) => alert.severity === "critical") ? "critical" : "warning",
-      title: "AI sell flow opened",
-      message: note,
-      symbol,
-      details: {
-        source: "ai_recommendation_dashboard",
-      },
-    });
-  };
-
-  const handleApplyProtectiveRules = async (values: RiskRulesFormValues, note: string) => {
-    const saved = await saveRiskRules(values);
-    if (!saved) {
-      setAIActionFeedback({
-        tone: "error",
-        message: "Unable to apply the defensive rule set. Review the rule form and try again.",
-      });
-      return;
-    }
-
-    await reloadRiskRules();
-    await reload();
-    await reloadRisk();
-    await reloadAlertCenter();
-    setRiskRulesOpen(true);
-    setAIActionFeedback({
-      tone: "success",
-      message: "Defensive rules have been applied. Review the updated guardrails and active alerts.",
-    });
-
-    await logAIActionEvent({
-      actionType: "protective_rules_applied",
-      severity: riskAlerts.some((alert) => alert.severity === "critical") ? "critical" : "warning",
-      title: "AI defensive rules applied",
-      message: note,
-      details: {
-        values,
-        source: "ai_recommendation_dashboard",
-      },
-    });
-  };
-
-  const handleOpenAlertCenterFromAI = async (note: string) => {
-    setAlertStatus("active");
-    setAlertCenterOpen(true);
-    setAIActionFeedback({
-      tone: "info",
-      message: "Alert Center opened so you can review the active breaches behind this recommendation.",
-    });
-
-    await logAIActionEvent({
-      actionType: "alert_center_opened",
-      severity: riskAlerts.some((alert) => alert.severity === "critical") ? "critical" : "info",
-      title: "AI-linked alert review opened",
-      message: note,
-      details: {
-        source: "ai_recommendation_dashboard",
-      },
-    });
-  };
-
-  const handleRecommendationAction = async (payload: AIRecommendationActionPayload) => {
-    if (payload.type === "sell-intent") {
-      await handleOpenSellIntent(payload.symbol, payload.note);
-      return;
-    }
-
-    if (payload.type === "apply-protective-rules") {
-      await handleApplyProtectiveRules(payload.values, payload.note);
-      return;
-    }
-
-    await handleOpenAlertCenterFromAI(payload.note);
+  const handleAnalyzeTradingAgent = () => {
+    void analyzeTradingAgent({ portfolioName });
   };
 
   return (
@@ -487,22 +348,21 @@ function PortfolioContent() {
 
             {snapshot && (
               <>
-                <PortfolioSummary summary={snapshot.summary} metrics={snapshot.metrics} />
-                <AIPortfolioRecommendationDashboard
-                  key={portfolioName}
-                  recommendation={recommendation}
-                  actionCards={recommendationActionCards}
-                  alerts={riskAlerts}
-                  isAnalyzing={isAnalyzing}
-                  activeStepId={activeStepId}
-                  steps={steps}
-                  error={aiError}
-                  actionFeedback={aiActionFeedback}
-                  onClearActionFeedback={() => setAIActionFeedback(null)}
-                  onAction={handleRecommendationAction}
-                  onOpenAlertCenter={openAlertCenterForActiveAlerts}
-                  onAnalyze={handleAnalyzeWithAI}
-                  isDisabled={!snapshot || isLoading}
+                <PortfolioSummary
+                  portfolioName={portfolioName}
+                  summary={snapshot.summary}
+                  metrics={snapshot.metrics}
+                  tradingAgentRecommendation={tradingAgentRecommendation}
+                  tradingAgentResult={tradingAgentResult}
+                  tradingAgentPreparedContext={tradingAgentPreparedContext}
+                  tradingAgentTrace={tradingAgentTrace}
+                  tradingAgentWarnings={tradingAgentWarnings}
+                  tradingAgentIsAnalyzing={isTradingAgentAnalyzing}
+                  tradingAgentProgressLabel={tradingAgentProgressLabel}
+                  tradingAgentActiveNodes={tradingAgentActiveNodes}
+                  tradingAgentError={tradingAgentError}
+                  onAnalyzeTradingAgent={handleAnalyzeTradingAgent}
+                  isAnalyzeDisabled={!snapshot || isLoading}
                 />
                 <RiskMonitorPanel
                   metrics={snapshot.metrics}

@@ -533,3 +533,14 @@ a:focus-visible {
   font-weight: 800;
   letter-spacing: -0.05em;
 }
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
