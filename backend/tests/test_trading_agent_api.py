@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
+from trading_agent.agents.researchers import BEAR_CASE_FALLBACK_MESSAGE, BEAR_CASE_FALLBACK_WARNING
 from trading_agent.schemas.input import TradingAgentMeta
 from trading_agent.schemas.output import (
     AnalystReports,
@@ -15,6 +16,7 @@ from trading_agent.schemas.output import (
     RiskDebateState,
     SentimentAnalysisReport,
     TechnicalAnalysisReport,
+    WorkflowTraceEvent,
 )
 
 client = TestClient(app)
@@ -98,3 +100,67 @@ async def test_trading_agent_endpoint_success(mock_ainvoke):
 def test_trading_agent_endpoint_validation_error():
     response = client.post("/api/trading-agent/evaluate", json={"user_id": "user123"})
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+@patch("api.routes.trading_agent.trading_agent_graph.astream")
+async def test_trading_agent_stream_propagates_bear_fallback_warning(mock_astream):
+    async def fake_astream(*_args, **_kwargs):
+        yield {
+            "bear_researcher": {
+                "investment_debate": InvestmentDebateState(
+                    bear_case=BEAR_CASE_FALLBACK_MESSAGE,
+                    latest_message=BEAR_CASE_FALLBACK_MESSAGE,
+                    latest_speaker="Bear Researcher",
+                    round_count=1,
+                ),
+                "warnings": [BEAR_CASE_FALLBACK_WARNING],
+                "trace": [
+                    WorkflowTraceEvent(
+                        step="bear_researcher",
+                        status="completed",
+                        detail="Bear case used fallback content due to empty model output.",
+                    )
+                ],
+            }
+        }
+        yield {
+            "risk_judge": {
+                "final_decision": FinalDecision(
+                    action="Hold",
+                    confidence=6,
+                    summary="Maintain current exposure.",
+                    reasoning=[
+                        "Signals are mixed for now.",
+                        "Risk posture still supports holding rather than adding.",
+                    ],
+                    portfolio_actions=["Keep allocations steady"],
+                    decision_source="risk_judge",
+                    overridden_by_guardrail=False,
+                ),
+                "trace": [
+                    WorkflowTraceEvent(
+                        step="risk_judge",
+                        status="completed",
+                        detail="Risk judge returned final decision before guardrails.",
+                    )
+                ],
+            }
+        }
+
+    mock_astream.side_effect = fake_astream
+
+    payload = {
+        "user_id": "user123",
+        "portfolio": [{"asset": "BTCUSDT", "amount": 0.5, "current_price": 60000}],
+        "stablecoin_reserve": 1000,
+    }
+
+    with client.stream("POST", "/api/trading-agent/evaluate/stream", json=payload) as response:
+        stream_text = "".join(response.iter_text())
+
+    assert response.status_code == 200
+    assert "event: step" in stream_text
+    assert "event: done" in stream_text
+    assert BEAR_CASE_FALLBACK_WARNING in stream_text
+    assert BEAR_CASE_FALLBACK_MESSAGE in stream_text

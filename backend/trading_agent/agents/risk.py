@@ -38,7 +38,7 @@ class AggressiveRiskAnalyst(TradingRoleAgent):
             debate.history.append(turn)
             debate.aggressive_view = turn.message
             debate.latest_message = turn.message
-            debate.latest_speaker = turn.speaker
+            debate.latest_speaker = self.name
             debate.round_count += 1
             return {
                 "risk_debate": debate,
@@ -62,7 +62,7 @@ class ConservativeRiskAnalyst(TradingRoleAgent):
             debate.history.append(turn)
             debate.conservative_view = turn.message
             debate.latest_message = turn.message
-            debate.latest_speaker = turn.speaker
+            debate.latest_speaker = self.name
             debate.round_count += 1
             return {
                 "risk_debate": debate,
@@ -86,7 +86,7 @@ class NeutralRiskAnalyst(TradingRoleAgent):
             debate.history.append(turn)
             debate.neutral_view = turn.message
             debate.latest_message = turn.message
-            debate.latest_speaker = turn.speaker
+            debate.latest_speaker = self.name
             debate.round_count += 1
             return {
                 "risk_debate": debate,

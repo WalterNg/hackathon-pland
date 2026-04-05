@@ -75,7 +75,7 @@ def should_continue_investment_debate(state: TradingAgentState) -> str:
         return "investment_manager"
     if debate.round_count >= 2 * DEFAULT_TRADING_AGENT_CONFIG.investment_debate_rounds:
         return "investment_manager"
-    if debate.latest_speaker == "Bull Researcher":
+    if debate.latest_speaker == "bull_researcher":
         return "bear_researcher"
     return "bull_researcher"
 
@@ -92,9 +92,9 @@ def should_continue_risk_debate(state: TradingAgentState) -> str:
         return "risk_judge"
     if debate.round_count >= 3 * DEFAULT_TRADING_AGENT_CONFIG.risk_debate_rounds:
         return "risk_judge"
-    if debate.latest_speaker == "Aggressive Risk Analyst":
+    if debate.latest_speaker == "aggressive_risk_analyst":
         return "conservative_risk_analyst"
-    if debate.latest_speaker == "Conservative Risk Analyst":
+    if debate.latest_speaker == "conservative_risk_analyst":
         return "neutral_risk_analyst"
     return "aggressive_risk_analyst"
 

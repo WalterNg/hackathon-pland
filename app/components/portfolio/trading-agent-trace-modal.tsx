@@ -55,6 +55,11 @@ const PHASES: PhaseDefinition[] = [
   { id: "finalize_response",          label: "Finalize Response",          icon: "task_alt",           description: "Assemble the final payload for the UI and persistence layer." },
 ];
 
+const BEAR_CASE_FALLBACK_MESSAGE = "Bear case unavailable for this run.";
+const BEAR_CASE_CONTEXTUAL_MESSAGE =
+  "Bear case was unavailable for this run. The system kept the workflow running and applied fallback content.";
+const BEAR_CASE_FALLBACK_WARNING_FRAGMENT = "bear researcher returned an empty case";
+
 /* ---------------------------------------------------------------------------
  * Helpers
  * -------------------------------------------------------------------------*/
@@ -112,7 +117,12 @@ type StepDetailContent = {
   subtitle?: string;
   badge?: { label: string; color: string };
   metrics?: { label: string; value: string; color?: string }[];
-  sections?: { heading: string; items: (string | import("@/app/lib/trading-agent-types").TradingAgentSentimentText)[]; isChecklist?: boolean }[];
+  sections?: { 
+    heading: string; 
+    items: (string | import("@/app/lib/trading-agent-types").TradingAgentSentimentText)[]; 
+    isChecklist?: boolean;
+    forcedSentiment?: "Bullish" | "Bearish" | "Neutral";
+  }[];
   traceDetail?: string;
 };
 
@@ -307,7 +317,7 @@ function buildStepDetail(
       return {
         ...base,
         sections: [
-          { heading: "Bull Case", items: [r.bull_case] },
+          { heading: "Bull Case", items: [r.bull_case], forcedSentiment: "Bullish" },
         ],
       };
     }
@@ -315,10 +325,17 @@ function buildStepDetail(
     case "bear_researcher": {
       const r = result?.investment_debate;
       if (!r) return base;
+      const normalizedBearCase = r.bear_case?.trim() || "";
+      const shouldUseContextualMessage =
+        normalizedBearCase.length === 0 || normalizedBearCase === BEAR_CASE_FALLBACK_MESSAGE;
       return {
         ...base,
         sections: [
-          { heading: "Bear Case", items: [r.bear_case] },
+          { 
+            heading: "Bear Case", 
+            items: [shouldUseContextualMessage ? BEAR_CASE_CONTEXTUAL_MESSAGE : r.bear_case],
+            forcedSentiment: "Bearish"
+          },
         ],
       };
     }
@@ -370,7 +387,7 @@ function buildStepDetail(
       if (!r) return base;
       return {
         ...base,
-        sections: [{ heading: "Aggressive View", items: [r.aggressive_view] }],
+        sections: [{ heading: "Aggressive View", items: [r.aggressive_view], forcedSentiment: "Bullish" }],
       };
     }
 
@@ -379,7 +396,7 @@ function buildStepDetail(
       if (!r) return base;
       return {
         ...base,
-        sections: [{ heading: "Conservative View", items: [r.conservative_view] }],
+        sections: [{ heading: "Conservative View", items: [r.conservative_view], forcedSentiment: "Bearish" }],
       };
     }
 
@@ -388,7 +405,7 @@ function buildStepDetail(
       if (!r) return base;
       return {
         ...base,
-        sections: [{ heading: "Neutral View", items: [r.neutral_view] }],
+        sections: [{ heading: "Neutral View", items: [r.neutral_view], forcedSentiment: "Neutral" }],
       };
     }
 
@@ -723,6 +740,15 @@ function StepDetailPanel({
   warnings: string[];
 }) {
   const content = buildStepDetail(phase, result, trace, portfolioName);
+  const normalizedBearCase = result?.investment_debate?.bear_case?.trim() || "";
+  const hasBearCaseFallbackWarning = warnings.some((warning) =>
+    warning.toLowerCase().includes(BEAR_CASE_FALLBACK_WARNING_FRAGMENT)
+  );
+  const showBearCaseWarning =
+    phase.id === "bear_researcher" &&
+    (hasBearCaseFallbackWarning ||
+      normalizedBearCase.length === 0 ||
+      normalizedBearCase === BEAR_CASE_FALLBACK_MESSAGE);
 
   return (
     <div className="space-y-5 p-5 sm:p-6 animate-[fadeSlideIn_0.2s_ease_both]">
@@ -754,6 +780,15 @@ function StepDetailPanel({
         </div>
       )}
 
+      {showBearCaseWarning && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-400/25 bg-amber-400/8 px-3 py-2.5">
+          <MaterialIcon name="warning" outlined={false} className="shrink-0 text-[0.9rem] text-amber-300 mt-0.5" />
+          <span className="text-[0.8rem] leading-relaxed text-amber-100">
+            Bear Researcher did not return usable content. Fallback text is shown for this run.
+          </span>
+        </div>
+      )}
+
       {/* Metrics row */}
       {content.metrics && content.metrics.length > 0 && (
         <div className="flex flex-wrap gap-3">
@@ -776,7 +811,11 @@ function StepDetailPanel({
             <p className="mb-2 text-[0.72rem] font-bold uppercase tracking-[0.18em] text-slate-500">{sec.heading}</p>
             <div className="space-y-2">
               {sec.items.map((item, i) => {
-                const sentiment = !sec.isChecklist ? getSentimentInfo(item) : null;
+                const sentiment = !sec.isChecklist 
+                  ? (sec.forcedSentiment 
+                      ? getSentimentInfo({ text: "", sentiment: sec.forcedSentiment }) 
+                      : getSentimentInfo(item)) 
+                  : null;
                 return (
                   <div
                     key={i}
