@@ -31,8 +31,8 @@ def validate_inputs(state: TradingAgentState) -> TradingAgentState:
     request = state.get("request")
     if request is None:
         return {"error": "trading_agent request payload is missing"}
-    if not request.portfolio:
-        return {"error": "trading_agent portfolio must contain at least one asset"}
+    if not request.portfolio and request.stablecoin_reserve <= 0:
+        return {"error": "trading_agent request must contain at least one asset or stablecoin reserve"}
     return {"trace": [WorkflowTraceEvent(step="validate_inputs", status="completed", detail="Request validated.")]}
 
 
@@ -235,4 +235,3 @@ def create_trading_agent_graph():
 
 
 trading_agent_graph = create_trading_agent_graph()
-

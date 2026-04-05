@@ -27,6 +27,20 @@ def _merge_stream_state(base: dict[str, Any], delta: dict[str, Any]) -> dict[str
     return merged
 
 
+def _extract_chunk_updates(chunk: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
+    node_names: list[str] = []
+    merged_delta: dict[str, Any] = {}
+
+    for key, value in chunk.items():
+        if isinstance(value, dict):
+            node_names.append(key)
+            merged_delta = _merge_stream_state(merged_delta, value)
+        else:
+            merged_delta = _merge_stream_state(merged_delta, {key: value})
+
+    return node_names, merged_delta
+
+
 def _build_response_payload(final_state: dict[str, Any], *, status: str) -> TradingAgentEvaluationResponse:
     return TradingAgentEvaluationResponse(
         status=status,
@@ -70,13 +84,13 @@ async def stream_trading_agent_evaluation(payload: TradingAgentRequest) -> Strea
                 if not isinstance(chunk, dict):
                     continue
 
-                state_snapshot = _merge_stream_state(state_snapshot, chunk)
-                node_names = list(chunk.keys())
+                node_names, merged_delta = _extract_chunk_updates(chunk)
+                state_snapshot = _merge_stream_state(state_snapshot, merged_delta)
                 yield _sse(
                     "step",
                     {
                         "nodes": node_names,
-                        "state": chunk,
+                        "state": merged_delta,
                         "trace": [event.model_dump() for event in state_snapshot.get("trace", []) if isinstance(event, WorkflowTraceEvent)],
                         "warnings": state_snapshot.get("warnings", []),
                     },

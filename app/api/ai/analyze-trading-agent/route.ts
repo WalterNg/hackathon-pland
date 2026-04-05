@@ -65,6 +65,7 @@ type BackendTradingAgentResponse = {
 const DEFAULT_BACKEND_URL = "http://127.0.0.1:8000";
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
 const WORKFLOW_VERSION = "trading_agent_v1";
+const STABLE_VALUE_SYMBOLS = new Set(["USDT", "USDC", "FDUSD", "BUSD", "USDS", "TUSD"]);
 
 function backendBaseUrl(): string {
   return (
@@ -128,6 +129,39 @@ function recommendationPortfolioId(portfolioId: string): string {
   return `${portfolioId}::${WORKFLOW_VERSION}`;
 }
 
+function buildTradingAgentPortfolioInput(
+  positions: Array<{ symbol: string; quantity: number }>,
+  snapshot: Awaited<ReturnType<typeof buildBinancePortfolioSnapshot>>
+) {
+  let stablecoinReserve = 0;
+
+  const portfolioItems = positions
+    .map((position) => {
+      const normalizedSymbol = position.symbol.toUpperCase().trim();
+      const assetRow = snapshot.assets.find((asset) => asset.symbol === position.symbol);
+      if (!assetRow || assetRow.priceUsd <= 0) {
+        return null;
+      }
+
+      if (STABLE_VALUE_SYMBOLS.has(normalizedSymbol)) {
+        stablecoinReserve += position.quantity * assetRow.priceUsd;
+        return null;
+      }
+
+      return {
+        asset: position.symbol,
+        amount: position.quantity,
+        current_price: assetRow.priceUsd,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+
+  return {
+    portfolioItems,
+    stablecoinReserve,
+  };
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const context = await getAuthorizedPortfolio(request, searchParams.get("portfolioName"));
@@ -178,22 +212,9 @@ export async function POST(request: Request) {
     listRiskAlerts(supabase, user.id, portfolio.id, "active", 20),
   ]);
 
-  const portfolioItems = positions
-    .map((position) => {
-      const assetRow = snapshot.assets.find((asset) => asset.symbol === position.symbol);
-      if (!assetRow || assetRow.priceUsd <= 0) {
-        return null;
-      }
+  const { portfolioItems, stablecoinReserve } = buildTradingAgentPortfolioInput(positions, snapshot);
 
-      return {
-        asset: position.symbol,
-        amount: position.quantity,
-        current_price: assetRow.priceUsd,
-      };
-    })
-    .filter((item): item is NonNullable<typeof item> => item !== null);
-
-  if (portfolioItems.length === 0) {
+  if (portfolioItems.length === 0 && stablecoinReserve <= 0) {
     return NextResponse.json({ error: "Unable to build a live market snapshot for this portfolio." }, { status: 502 });
   }
 
@@ -206,7 +227,7 @@ export async function POST(request: Request) {
     body: JSON.stringify({
       user_id: user.id,
       portfolio: portfolioItems,
-      stablecoin_reserve: 0,
+      stablecoin_reserve: stablecoinReserve,
       news_headlines: [],
       social_dominance: 0,
     }),
