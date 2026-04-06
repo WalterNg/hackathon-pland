@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import { MaterialIcon } from "../dashboard/material-icon";
 import { formatLocaleNumber } from "@/app/lib/number-format";
 
-const BACKEND_API_URL_DEFAULT = "http://127.0.0.1:8000";
-
 type BinanceAsset = {
   asset: string;
   quantity: number;
@@ -22,7 +20,6 @@ type SyncBinanceDialogProps = {
 };
 
 export function SyncBinanceDialog({ open, portfolioName, onClose, onSync }: SyncBinanceDialogProps) {
-  const BACKEND_API_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL?.trim() || BACKEND_API_URL_DEFAULT;
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [showApiSecret, setShowApiSecret] = useState(false);
@@ -62,7 +59,7 @@ export function SyncBinanceDialog({ open, portfolioName, onClose, onSync }: Sync
     setPreview(null);
 
     try {
-      const response = await fetch(`${BACKEND_API_URL}/api/binance/connection/preview`, {
+      const response = await fetch("/api/binance/connection/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: "demo", api_key: apiKeyValue, api_secret: apiSecretValue, include_zero_balances: false, recv_window_ms: 5000 }),
@@ -82,7 +79,7 @@ export function SyncBinanceDialog({ open, portfolioName, onClose, onSync }: Sync
     setLoadingQuickDemo(true);
     setError(null);
     try {
-      const response = await fetch(`${BACKEND_API_URL}/api/binance/connection/demo-credentials`, { cache: "no-store" });
+      const response = await fetch("/api/binance/connection/demo-credentials", { cache: "no-store" });
       const payload = (await response.json().catch(() => null)) as { apiKey?: string; apiSecret?: string; error?: string } | null;
       if (!response.ok) throw new Error(payload?.error ?? "Unable to load demo credentials.");
       if (!payload?.apiKey || !payload?.apiSecret) throw new Error("Demo credentials are missing.");

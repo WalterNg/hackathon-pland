@@ -21,7 +21,6 @@ function createIdempotencyKey(): string {
 }
 
 export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: CreatePortfolioDialogProps) {
-  const BACKEND_API_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL?.trim() || "http://127.0.0.1:8000";
   const [name, setName] = useState(defaultName);
   const [mode, setMode] = useState<PortfolioMode>("manual");
   const [apiKey, setApiKey] = useState("");
@@ -106,7 +105,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
     setPreview(null);
 
     try {
-      const response = await fetch(`${BACKEND_API_URL}/api/binance/connection/preview`, {
+      const response = await fetch("/api/binance/connection/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -145,7 +144,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
     setError(null);
 
     try {
-      const response = await fetch(`${BACKEND_API_URL}/api/binance/connection/demo-credentials`, {
+      const response = await fetch("/api/binance/connection/demo-credentials", {
         method: "GET",
         cache: "no-store"
       });
