@@ -32,9 +32,8 @@ class BinanceConnectorError(Exception):
 
 class BinanceConnector:
     DEMO_BASE_URL = "https://demo-api.binance.com"
-    TESTNET_BASE_URL = "https://testnet.binance.vision"
     SPOT_BASE_URL = "https://api.binance.com"
-    DEFAULT_TIMEOUT = 8.0
+    DEFAULT_TIMEOUT = 10.0
     DEFAULT_RECV_WINDOW_MS = 5000
     STABLECOINS = {
         "USDT",
@@ -53,9 +52,7 @@ class BinanceConnector:
     def _base_url(self, mode: str) -> str:
         if mode == "demo":
             return self.DEMO_BASE_URL
-        if mode == "testnet":
-            return self.TESTNET_BASE_URL
-        raise BinanceConnectorError("Unsupported Binance preview mode.", status_code=400)
+        raise BinanceConnectorError("Unsupported Binance preview mode. Only 'demo' is supported.", status_code=400)
 
     def _normalize_asset(self, asset: str) -> str:
         return asset.strip().upper()
@@ -81,7 +78,6 @@ class BinanceConnector:
     def _credentials_from_env(self, mode: str) -> tuple[str, str]:
         mode_to_env_keys = {
             "demo": ("BINANCE_DEMO_API_KEY", "BINANCE_DEMO_SECRET_KEY"),
-            "testnet": ("BINANCE_TESTNET_API_KEY", "BINANCE_TESTNET_SECRET_KEY"),
         }
 
         env_keys = mode_to_env_keys.get(mode)
@@ -158,10 +154,7 @@ class BinanceConnector:
 
     async def fetch_price_map(self, symbols: Iterable[str], mode: str) -> dict[str, float]:
         base_url = self._base_url(mode)
-        public_price_base_url = os.getenv("BINANCE_PRICE_BASE_URL", "").strip() or self.SPOT_BASE_URL
         price_base_urls = [base_url]
-        if public_price_base_url and public_price_base_url not in price_base_urls:
-            price_base_urls.append(public_price_base_url)
         price_map: dict[str, float] = {}
         unique_symbols = []
         seen = set()
