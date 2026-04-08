@@ -12,11 +12,11 @@ class PortfolioItem(BaseModel):
 
 
 class BinanceConnectionPreviewRequest(BaseModel):
-    """Demo or testnet preview options for a server-side Binance connection check."""
+    """Demo preview options for a server-side Binance connection check."""
 
-    mode: Literal["demo", "testnet"] = Field(default="demo", description="Preview source: Binance demo mode or Binance testnet.")
-    api_key: str | None = Field(default=None, description="Binance API key for testnet or an explicit demo override.")
-    api_secret: str | None = Field(default=None, description="Binance API secret for testnet or an explicit demo override.")
+    mode: Literal["demo"] = Field(default="demo", description="Preview source: Binance demo mode.")
+    api_key: str | None = Field(default=None, description="Binance API key for an explicit demo override.")
+    api_secret: str | None = Field(default=None, description="Binance API secret for an explicit demo override.")
     include_zero_balances: bool = False
     recv_window_ms: int = Field(default=5000, ge=1000, le=60000)
 

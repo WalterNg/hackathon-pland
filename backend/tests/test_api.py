@@ -163,7 +163,7 @@ async def test_binance_connection_preview_error(mock_build_connection_preview):
     response = client.post(
         "/api/binance/connection/preview",
         json={
-            "mode": "testnet",
+            "mode": "demo",
             "api_key": "test-key",
             "api_secret": "test-secret",
             "include_zero_balances": False,

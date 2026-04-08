@@ -32,7 +32,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
   const [isLoadingPreview, setLoadingPreview] = useState(false);
   const [preview, setPreview] = useState<{
     exchange: "binance";
-    mode: "demo" | "testnet";
+    mode: "demo";
     account: {
       account_type: string | null;
       can_trade: boolean;
