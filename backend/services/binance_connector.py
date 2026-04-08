@@ -33,6 +33,7 @@ class BinanceConnectorError(Exception):
 class BinanceConnector:
     DEMO_BASE_URL = "https://demo-api.binance.com"
     TESTNET_BASE_URL = "https://testnet.binance.vision"
+    SPOT_BASE_URL = "https://api.binance.com"
     DEFAULT_TIMEOUT = 8.0
     DEFAULT_RECV_WINDOW_MS = 5000
     STABLECOINS = {
@@ -157,6 +158,10 @@ class BinanceConnector:
 
     async def fetch_price_map(self, symbols: Iterable[str], mode: str) -> dict[str, float]:
         base_url = self._base_url(mode)
+        public_price_base_url = os.getenv("BINANCE_PRICE_BASE_URL", "").strip() or self.SPOT_BASE_URL
+        price_base_urls = [base_url]
+        if public_price_base_url and public_price_base_url not in price_base_urls:
+            price_base_urls.append(public_price_base_url)
         price_map: dict[str, float] = {}
         unique_symbols = []
         seen = set()
@@ -171,22 +176,24 @@ class BinanceConnector:
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             async def fetch_symbol_price(symbol: str) -> tuple[str, float]:
-                url = f"{base_url}/api/v3/ticker/price?symbol={symbol}"
+                for price_base_url in price_base_urls:
+                    url = f"{price_base_url}/api/v3/ticker/price?symbol={symbol}"
 
-                try:
-                    response = await client.get(url)
-                    if response.status_code >= 400:
-                        return symbol, 0.0
-                    payload = response.json()
-                except (httpx.RequestError, httpx.TimeoutException, ValueError):
-                    return symbol, 0.0
-
-                if isinstance(payload, dict):
                     try:
-                        return symbol, float(payload.get("price", 0) or 0)
-                    except (TypeError, ValueError):
-                        return symbol, 0.0
+                        response = await client.get(url)
+                        if response.status_code >= 400:
+                            continue
+                        payload = response.json()
+                    except (httpx.RequestError, httpx.TimeoutException, ValueError):
+                        continue
 
+                    if isinstance(payload, dict):
+                        try:
+                            price = float(payload.get("price", 0) or 0)
+                        except (TypeError, ValueError):
+                            price = 0.0
+                        if price > 0:
+                            return symbol, price
                 return symbol, 0.0
 
             results = await asyncio.gather(*(fetch_symbol_price(symbol) for symbol in unique_symbols))
