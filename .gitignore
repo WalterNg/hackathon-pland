@@ -47,3 +47,7 @@ TradingAgents/
 .codex/
 .understand-anything/
 .cursor/
+
+# Data files
+backend/scripts/data_model/
+backend/scripts/data_raw/
