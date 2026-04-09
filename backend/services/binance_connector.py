@@ -32,7 +32,6 @@ class BinanceConnectorError(Exception):
 
 class BinanceConnector:
     DEMO_BASE_URL = "https://demo-api.binance.com"
-    SPOT_BASE_URL = "https://api.binance.com"
     DEFAULT_TIMEOUT = 10.0
     DEFAULT_RECV_WINDOW_MS = 5000
     STABLECOINS = {
@@ -48,11 +47,6 @@ class BinanceConnector:
 
     def __init__(self, timeout: float | None = None):
         self.timeout = timeout or self.DEFAULT_TIMEOUT
-
-    def _base_url(self, mode: str) -> str:
-        if mode == "demo":
-            return self.DEMO_BASE_URL
-        raise BinanceConnectorError("Unsupported Binance preview mode. Only 'demo' is supported.", status_code=400)
 
     def _normalize_asset(self, asset: str) -> str:
         return asset.strip().upper()
@@ -75,30 +69,16 @@ class BinanceConnector:
         ).hexdigest()
         return signature
 
-    def _credentials_from_env(self, mode: str) -> tuple[str, str]:
-        mode_to_env_keys = {
-            "demo": ("BINANCE_DEMO_API_KEY", "BINANCE_DEMO_SECRET_KEY"),
-        }
-
-        env_keys = mode_to_env_keys.get(mode)
-        if not env_keys:
-            raise BinanceConnectorError("Unsupported Binance preview mode.", status_code=400)
-
-        api_key_name, api_secret_name = env_keys
+    def _credentials_from_env(self) -> tuple[str, str]:
+        api_key_name, api_secret_name = "BINANCE_DEMO_API_KEY", "BINANCE_DEMO_SECRET_KEY"
         api_key = os.getenv(api_key_name, "").strip()
         api_secret = os.getenv(api_secret_name, "").strip()
 
         if api_key and api_secret:
             return api_key, api_secret
 
-        # Backward compatibility while environments migrate to mode-specific vars.
-        legacy_api_key = os.getenv("BINANCE_API_KEY", "").strip()
-        legacy_api_secret = os.getenv("BINANCE_SECRET_KEY", "").strip()
-        if legacy_api_key and legacy_api_secret:
-            return legacy_api_key, legacy_api_secret
-
         raise BinanceConnectorError(
-            f"{mode.title()} credentials are missing. Set {api_key_name} and {api_secret_name} in the server .env.",
+            f"Demo credentials are missing. Set {api_key_name} and {api_secret_name} in the server .env.",
             status_code=400,
         )
 
@@ -122,7 +102,6 @@ class BinanceConnector:
         self,
         api_key: str,
         api_secret: str,
-        mode: str,
         recv_window_ms: int = DEFAULT_RECV_WINDOW_MS,
     ) -> dict:
         timestamp = int(time.time() * 1000)
@@ -133,8 +112,7 @@ class BinanceConnector:
             }
         )
         signature = self._sign_query(query_string, api_secret)
-        base_url = self._base_url(mode)
-        url = f"{base_url}/api/v3/account?{query_string}&signature={signature}"
+        url = f"{self.DEMO_BASE_URL}/api/v3/account?{query_string}&signature={signature}"
 
         try:
             payload = await self._request_json(
@@ -152,9 +130,11 @@ class BinanceConnector:
 
         return payload
 
-    async def fetch_price_map(self, symbols: Iterable[str], mode: str) -> dict[str, float]:
-        base_url = self._base_url(mode)
-        price_base_urls = [base_url]
+    async def fetch_price_map(self, symbols: Iterable[str]) -> dict[str, float]:
+        """
+        Fetches current market prices for a list of symbols using the Demo base URL.
+        """
+        price_base_urls = [self.DEMO_BASE_URL]
         price_map: dict[str, float] = {}
         unique_symbols = []
         seen = set()
@@ -196,19 +176,25 @@ class BinanceConnector:
         return price_map
 
     async def build_connection_preview(self, payload: BinanceConnectionPreviewRequest) -> BinanceConnectionPreviewData:
+        """
+        Orchestrates the full Binance connection preview process.
+        Returns a structured payload containing account metadata, asset balances, 
+        and aggregate USD totals.
+        """
+        # 1. Resolve credentials (API key and Secret)
         api_key = payload.api_key
         api_secret = payload.api_secret
 
         if not api_key or not api_secret:
-            api_key, api_secret = self._credentials_from_env(payload.mode)
+            api_key, api_secret = self._credentials_from_env()
 
         if not api_key or not api_secret:
             raise BinanceConnectorError("Binance API key and secret are required.", status_code=400)
 
+        # 2. Fetch raw account data from Binance
         account_payload = await self.fetch_account_balances(
             api_key=api_key,
             api_secret=api_secret,
-            mode=payload.mode,
             recv_window_ms=payload.recv_window_ms,
         )
 
@@ -216,14 +202,15 @@ class BinanceConnector:
         if not isinstance(balances, list):
             raise BinanceConnectorError("Invalid balances payload returned by Binance.")
 
-        normalized_balances = []
-        warnings: list[BinanceConnectionWarning] = []
-
+        # 3. Pre-fetch a price map for all assets present in the account
+        # We fetch all prices in parallel before processing the loop for better performance.
         price_map = await self.fetch_price_map(
             (balance.get("asset", "") for balance in balances if isinstance(balance, dict)),
-            mode=payload.mode,
         )
 
+        # 4. Process and normalize individual balances
+        normalized_balances = []
+        warnings: list[BinanceConnectionWarning] = []
         total_estimated_usd = 0.0
         non_zero_asset_count = 0
 
@@ -231,10 +218,12 @@ class BinanceConnector:
             if not isinstance(balance, dict):
                 continue
 
+            # Identify and normalize the asset name (e.g., 'btc ' -> 'BTC')
             asset = self._normalize_asset(str(balance.get("asset", "") or ""))
             if not asset:
                 continue
 
+            # Extract and validate quantities
             try:
                 free = float(balance.get("free", 0) or 0)
                 locked = float(balance.get("locked", 0) or 0)
@@ -243,16 +232,23 @@ class BinanceConnector:
                 locked = 0.0
 
             quantity = max(0.0, free + locked)
+            
+            # Filter zero-balance assets if requested
             if quantity <= 0 and not payload.include_zero_balances:
                 continue
 
+            # Resolve USD price
             is_stablecoin = asset in self.STABLECOINS
             price_symbol = self._asset_to_price_symbol(asset)
+            
+            # Use fixed 1.0 for stablecoins, otherwise lookup in the pre-fetched map
             price_usd = 1.0 if is_stablecoin else price_map.get(price_symbol or "", 0.0)
             estimated_usd = quantity * price_usd
 
+            # Track global statistics and warnings
             if quantity > 0:
                 non_zero_asset_count += 1
+            
             if quantity > 0 and not is_stablecoin and price_usd <= 0:
                 warnings.append(
                     BinanceConnectionWarning(
@@ -262,6 +258,7 @@ class BinanceConnector:
                     )
                 )
 
+            # Assemble the normalized asset object
             normalized_balances.append(
                 BinanceConnectionAsset(
                     asset=asset,
@@ -275,6 +272,7 @@ class BinanceConnector:
             )
             total_estimated_usd += estimated_usd
 
+        # 5. Handle cases with no returned balances
         if not normalized_balances:
             warnings.append(
                 BinanceConnectionWarning(
@@ -284,6 +282,7 @@ class BinanceConnector:
                 )
             )
 
+        # 6. Build the final response objects
         account_info = BinanceConnectionAccountInfo(
             account_type=account_payload.get("accountType"),
             can_trade=bool(account_payload.get("canTrade", False)),
@@ -293,7 +292,6 @@ class BinanceConnector:
         )
 
         return BinanceConnectionPreviewData(
-            mode=payload.mode,
             account=account_info,
             assets=normalized_balances,
             totals=BinanceConnectionTotals(

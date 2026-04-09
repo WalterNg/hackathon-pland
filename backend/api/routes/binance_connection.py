@@ -29,8 +29,7 @@ async def get_demo_credentials():
 @router.post("/binance/connection/preview", response_model=BinanceConnectionPreviewResponse)
 async def preview_binance_connection(payload: BinanceConnectionPreviewRequest):
     logger.info(
-        "Received Binance connection preview request | mode=%s | zero_balances=%s",
-        payload.mode,
+        "Received Binance connection preview request | zero_balances=%s",
         payload.include_zero_balances,
     )
 
@@ -49,8 +48,7 @@ async def preview_binance_connection(payload: BinanceConnectionPreviewRequest):
 @router.post("/binance/connection/positions", response_model=BinanceConnectedPositionsResponse)
 async def get_connected_positions(payload: BinanceConnectionPreviewRequest):
     logger.info(
-        "Received Binance connected positions request | mode=%s | zero_balances=%s",
-        payload.mode,
+        "Received Binance connection positions request | zero_balances=%s",
         payload.include_zero_balances,
     )
 
