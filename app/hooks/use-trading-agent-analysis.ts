@@ -13,6 +13,7 @@ import type {
   TradingAgentTraceEvent,
 } from "@/app/lib/trading-agent-types";
 import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
+import { createSupabaseBrowserClient } from "@/app/lib/supabase/client";
 
 type TradingAgentRunStatus = "idle" | "streaming" | "completed" | "error";
 
@@ -37,6 +38,8 @@ type UseTradingAgentAnalysisResult = {
 };
 
 const TOTAL_STEPS = 10;
+const RECOMMENDATION_LOAD_COOLDOWN_MS = 1_500;
+const latestRecommendationRequestAt = new Map<string, number>();
 
 function humanizeNodeLabel(node: string): string {
   return node
@@ -105,8 +108,24 @@ export function useTradingAgentAnalysis(scopeKey?: string | null): UseTradingAge
         return;
       }
 
+      const now = Date.now();
+      const lastRequestedAt = latestRecommendationRequestAt.get(scopeKey) ?? 0;
+      if (now - lastRequestedAt < RECOMMENDATION_LOAD_COOLDOWN_MS) {
+        return;
+      }
+      latestRecommendationRequestAt.set(scopeKey, now);
+
       try {
-        const response = await fetch(`/api/ai/analyze-trading-agent?portfolioName=${encodeURIComponent(scopeKey)}`, {
+        const supabase = await createSupabaseBrowserClient();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session?.access_token) {
+          return;
+        }
+
+        const response = await fetchWithSupabaseAuth(`/api/ai/analyze-trading-agent?portfolioName=${encodeURIComponent(scopeKey)}`, {
           cache: "no-store",
         });
         const payload = (await response.json().catch(() => null)) as

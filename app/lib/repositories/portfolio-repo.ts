@@ -27,6 +27,8 @@ export async function getUserPortfolioPositions(
   let targetPortfolioIds: string[] = [];
 
   if (normalizedName === MAIN_PORTFOLIO_NAME) {
+    // "Main Portfolio" is intentionally treated as the aggregate view across
+    // all user-created portfolios, excluding the synthetic/default row itself.
     const { data: portfolios, error: portfoliosError } = await supabase
       .from("portfolios")
       .select("id, name")

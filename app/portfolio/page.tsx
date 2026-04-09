@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MaterialIcon } from "../components/dashboard/material-icon";
 import { RiskAlertCenterDialog } from "../components/portfolio/risk-alert-center-dialog";
@@ -24,10 +24,14 @@ import { usePortfolios } from "../hooks/use-portfolios";
 import { useRiskEvents } from "../hooks/use-risk-events";
 import { useRiskRules } from "../hooks/use-risk-rules";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
-import type { PortfolioMode } from "@/app/lib/portfolio-types";
+import { RefreshIntervals } from "@/app/lib/refresh-intervals";
+import type { PortfolioMode, PortfolioSnapshot } from "@/app/lib/portfolio-types";
 import type { RiskAlertStatus, RiskRulesFormValues } from "@/app/lib/risk-types";
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
+const SUMMARY_RENDER_INTERVAL_MS = RefreshIntervals.PORTFOLIO_SUMMARY_RENDER_MS;
+const ASSETS_RENDER_INTERVAL_MS = RefreshIntervals.PORTFOLIO_ASSETS_RENDER_MS;
+const CHART_RENDER_INTERVAL_MS = RefreshIntervals.PORTFOLIO_CHART_RENDER_MS;
 
 function formatSyncTimestamp(timestamp: string): string {
   const date = new Date(timestamp);
@@ -39,6 +43,40 @@ function formatSyncTimestamp(timestamp: string): string {
     hour: "numeric",
     minute: "2-digit",
   }).format(date);
+}
+
+function useThrottledValue<T>(value: T, intervalMs: number, resetKey?: string | number | null): T {
+  const [throttledValue, setThrottledValue] = useState(value);
+  const lastFlushAtRef = useRef(0);
+
+  useEffect(() => {
+    lastFlushAtRef.current = 0;
+    setThrottledValue(value);
+  }, [resetKey]);
+
+  useEffect(() => {
+    const now = Date.now();
+    const shouldFlushImmediately =
+      lastFlushAtRef.current === 0 ||
+      now - lastFlushAtRef.current >= intervalMs;
+
+    if (shouldFlushImmediately) {
+      lastFlushAtRef.current = now;
+      setThrottledValue(value);
+      return () => undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      lastFlushAtRef.current = Date.now();
+      setThrottledValue(value);
+    }, intervalMs - (now - lastFlushAtRef.current));
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [value, intervalMs, resetKey]);
+
+  return throttledValue;
 }
 
 function PortfolioContent() {
@@ -58,6 +96,7 @@ function PortfolioContent() {
   const [isRemovingPortfolio, setRemovingPortfolio] = useState(false);
   const [isSyncingPortfolio, setSyncingPortfolio] = useState(false);
   const [showCharts, setShowCharts] = useState(true);
+  const [snapshotCacheByPortfolio, setSnapshotCacheByPortfolio] = useState<Record<string, PortfolioSnapshot>>({});
   const [selectedCoin, setSelectedCoin] = useState<{ symbol: string; name: string | null; baseAsset: string; quoteAsset: string } | null>(null);
   const [transactionIntent, setTransactionIntent] = useState<{ action: "buy" | "sell" | "transfer"; note: string }>({
     action: "buy",
@@ -82,7 +121,16 @@ function PortfolioContent() {
     [portfolios, portfolioName]
   );
   const portfolioId = currentPortfolio?.id ?? null;
-  const { snapshot, isLoading, error, reload } = usePortfolioSnapshot(portfolioId, portfolioName);
+  const {
+    snapshot,
+    isLoading,
+    error,
+    snapshotSource,
+    lastServerSyncAt,
+    lastRealtimeTickAt,
+    isServerSnapshotStale,
+    reload
+  } = usePortfolioSnapshot(portfolioId, portfolioName);
   const {
     profile: riskProfile,
     events: riskEvents,
@@ -109,11 +157,38 @@ function PortfolioContent() {
     acknowledge,
     resolve,
   } = useRiskAlerts(portfolioName, alertStatus, 15_000, isAlertCenterOpen);
+  const scopedSnapshot = snapshot?.summary.name === portfolioName ? snapshot : null;
+
+  useEffect(() => {
+    if (!scopedSnapshot) {
+      return;
+    }
+
+    setSnapshotCacheByPortfolio((current) => {
+      const existing = current[portfolioName];
+      if (
+        existing &&
+        existing.summary.timestamp === scopedSnapshot.summary.timestamp &&
+        existing.summary.totalValueUsd === scopedSnapshot.summary.totalValueUsd
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [portfolioName]: scopedSnapshot,
+      };
+    });
+  }, [portfolioName, scopedSnapshot]);
+
+  const effectiveSnapshot = scopedSnapshot ?? snapshotCacheByPortfolio[portfolioName] ?? null;
+
   const isConnectedPortfolio = currentPortfolio?.mode === "binance_connected";
   const primaryActionLabel = isMainPortfolio ? "Create portfolio" : isConnectedPortfolio ? "Read-only" : "Add transaction";
+  const connectedPortfolioTimestamp = lastServerSyncAt ?? effectiveSnapshot?.summary.timestamp ?? null;
   const connectedStatusDescription =
-    isConnectedPortfolio && snapshot?.summary.timestamp
-      ? `This portfolio syncs automatically from Binance and manual edits are disabled. Last synced at ${formatSyncTimestamp(snapshot.summary.timestamp)}.`
+    isConnectedPortfolio && connectedPortfolioTimestamp
+      ? `This portfolio syncs automatically from Binance and manual edits are disabled. Last synced at ${formatSyncTimestamp(connectedPortfolioTimestamp)}.`
       : isConnectedPortfolio
         ? "This portfolio syncs automatically from Binance and manual edits are disabled."
         : undefined;
@@ -126,10 +201,18 @@ function PortfolioContent() {
     () => riskAlerts.filter((alert) => alert.status === "active" && alert.severity !== "critical"),
     [riskAlerts]
   );
+  const scopedSummary = effectiveSnapshot?.summary ?? null;
+  const scopedMetrics = effectiveSnapshot?.metrics ?? null;
+  const scopedAssets = effectiveSnapshot?.assets ?? [];
+  const scopedChart = effectiveSnapshot?.chart ?? [];
   const pinnedCriticalAlert = useMemo(
     () => criticalActiveAlerts.find((alert) => alert.triggerCount >= 3) ?? criticalActiveAlerts[0] ?? null,
     [criticalActiveAlerts]
   );
+  const throttledSummary = useThrottledValue(scopedSummary, SUMMARY_RENDER_INTERVAL_MS, portfolioName);
+  const throttledMetrics = useThrottledValue(scopedMetrics, SUMMARY_RENDER_INTERVAL_MS, portfolioName);
+  const throttledAssets = useThrottledValue(scopedAssets, ASSETS_RENDER_INTERVAL_MS, portfolioName);
+  const throttledChart = useThrottledValue(scopedChart, CHART_RENDER_INTERVAL_MS, portfolioName);
 
   useEffect(() => {
     if (shouldOpenCreatePortfolio) {
@@ -283,7 +366,17 @@ function PortfolioContent() {
       </header>
 
       <div className="app-shell flex overflow-hidden">
-        <Sidebar />
+        <Sidebar
+          portfolios={portfolios}
+          livePortfolioValue={
+            throttledSummary
+              ? {
+                  name: portfolioName,
+                  totalValueUsd: throttledSummary.totalValueUsd,
+                }
+              : null
+          }
+        />
 
         <main className="app-main overflow-y-auto px-4 pb-6 pt-5 sm:px-6 sm:pb-8 lg:px-8">
           <div className="content-shell max-w-7xl pb-6">
@@ -336,7 +429,7 @@ function PortfolioContent() {
               </section>
             ) : null}
 
-            {isLoading && (
+            {isLoading && !effectiveSnapshot && (
               <div className="panel-low mb-6 p-5 text-sm text-muted">Loading portfolio snapshot…</div>
             )}
 
@@ -346,26 +439,28 @@ function PortfolioContent() {
               </div>
             )}
 
-            {snapshot && (
+            {effectiveSnapshot && (
               <>
-                <PortfolioSummary
-                  portfolioName={portfolioName}
-                  summary={snapshot.summary}
-                  metrics={snapshot.metrics}
-                  tradingAgentRecommendation={tradingAgentRecommendation}
-                  tradingAgentResult={tradingAgentResult}
-                  tradingAgentPreparedContext={tradingAgentPreparedContext}
-                  tradingAgentTrace={tradingAgentTrace}
-                  tradingAgentWarnings={tradingAgentWarnings}
-                  tradingAgentIsAnalyzing={isTradingAgentAnalyzing}
-                  tradingAgentProgressLabel={tradingAgentProgressLabel}
-                  tradingAgentActiveNodes={tradingAgentActiveNodes}
-                  tradingAgentError={tradingAgentError}
-                  onAnalyzeTradingAgent={handleAnalyzeTradingAgent}
-                  isAnalyzeDisabled={!snapshot || isLoading}
-                />
+                {throttledSummary && throttledMetrics ? (
+                  <PortfolioSummary
+                    portfolioName={portfolioName}
+                    summary={throttledSummary}
+                    metrics={throttledMetrics}
+                    tradingAgentRecommendation={tradingAgentRecommendation}
+                    tradingAgentResult={tradingAgentResult}
+                    tradingAgentPreparedContext={tradingAgentPreparedContext}
+                    tradingAgentTrace={tradingAgentTrace}
+                    tradingAgentWarnings={tradingAgentWarnings}
+                    tradingAgentIsAnalyzing={isTradingAgentAnalyzing}
+                    tradingAgentProgressLabel={tradingAgentProgressLabel}
+                    tradingAgentActiveNodes={tradingAgentActiveNodes}
+                    tradingAgentError={tradingAgentError}
+                    onAnalyzeTradingAgent={handleAnalyzeTradingAgent}
+                    isAnalyzeDisabled={!effectiveSnapshot || isLoading}
+                  />
+                ) : null}
                 <RiskMonitorPanel
-                  metrics={snapshot.metrics}
+                  metrics={scopedMetrics}
                   profile={riskProfile}
                   events={riskEvents}
                   alerts={riskAlerts}
@@ -374,15 +469,15 @@ function PortfolioContent() {
                   onManageRules={() => setRiskRulesOpen(true)}
                   onViewAlerts={openAlertCenterForActiveAlerts}
                 />
-                <PortfolioMetrics metrics={snapshot.metrics} />
+                <PortfolioMetrics metrics={throttledMetrics ?? scopedMetrics} />
                 {showCharts && (
                   <PortfolioCharts
-                    chart={snapshot.chart}
-                    assets={snapshot.assets}
-                    allTimeProfitPercent={snapshot.metrics.allTimeProfitPercent}
+                    chart={throttledChart}
+                    assets={throttledAssets}
+                    allTimeProfitPercent={(throttledMetrics ?? scopedMetrics).allTimeProfitPercent}
                   />
                 )}
-                <PortfolioAssetsTable assets={snapshot.assets} />
+                <PortfolioAssetsTable assets={throttledAssets} />
               </>
             )}
           </div>
@@ -409,10 +504,10 @@ function PortfolioContent() {
         onClose={closeAddDialog}
         portfolioName={portfolioName}
         coin={selectedCoin}
-        portfolioAssets={snapshot?.assets.map((asset) => ({
+        portfolioAssets={scopedAssets.map((asset) => ({
           symbol: asset.symbol,
           priceUsd: asset.priceUsd
-        })) ?? []}
+        }))}
         initialAction={transactionIntent.action}
         initialNote={transactionIntent.note}
         onChangeCoin={() => {

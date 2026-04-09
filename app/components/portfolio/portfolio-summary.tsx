@@ -277,6 +277,7 @@ export function PortfolioSummary({
   });
   const totalValueUsdLabel = usdFormatter.format(summary.totalValueUsd);
   const isProfitPositive = metrics.allTimeProfitPercent >= 0;
+  const allTimeProfitUsdLabel = `${isProfitPositive ? "+" : "-"}${usdFormatter.format(Math.abs(metrics.allTimeProfitUsd))}`;
   const allTimeProfitPercentLabel = `${isProfitPositive ? "+" : ""}${metrics.allTimeProfitPercent.toFixed(2)}%`;
 
   const hasRecommendation = !!tradingAgentRecommendation && !tradingAgentIsAnalyzing;
@@ -300,13 +301,16 @@ export function PortfolioSummary({
                 {totalValueUsdLabel}
               </h2>
               
-              <div className={`flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5 ${isProfitPositive ? "text-emerald-400" : "text-rose-400"}`}>
+              <div className={`flex items-center gap-2 rounded-2xl bg-white/5 px-3 py-1.5 ${isProfitPositive ? "text-emerald-400" : "text-rose-400"}`}>
                 <MaterialIcon
                   name={isProfitPositive ? "arrow_upward" : "arrow_downward"}
                   outlined={false}
-                  className="text-[0.7rem]"
+                  className="text-[0.8rem]"
                 />
-                <span className="text-[0.78rem] font-bold">{allTimeProfitPercentLabel}</span>
+                <div className="leading-none">
+                  <div className="text-[0.82rem] font-bold">{allTimeProfitUsdLabel}</div>
+                  <div className="mt-1 text-[0.72rem] font-semibold opacity-90">{allTimeProfitPercentLabel}</div>
+                </div>
               </div>
             </div>
           </div>
