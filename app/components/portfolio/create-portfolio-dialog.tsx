@@ -32,7 +32,6 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
   const [isLoadingPreview, setLoadingPreview] = useState(false);
   const [preview, setPreview] = useState<{
     exchange: "binance";
-    mode: "demo";
     account: {
       account_type: string | null;
       can_trade: boolean;
@@ -109,7 +108,6 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mode: "demo",
           api_key: apiKeyValue,
           api_secret: apiSecretValue,
           include_zero_balances: false,

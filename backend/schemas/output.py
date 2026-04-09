@@ -82,7 +82,6 @@ class BinanceConnectionPreviewData(BaseModel):
     """Full preview payload for a Binance-connected portfolio setup."""
 
     exchange: Literal["binance"] = Field(default="binance", description="Exchange source for the preview.")
-    mode: Literal["demo"] = Field(default="demo", description="Binance environment used for the preview.")
     account: BinanceConnectionAccountInfo = Field(..., description="Basic metadata for the connected account.")
     assets: List[BinanceConnectionAsset] = Field(default_factory=list, description="Normalized asset balances.")
     totals: BinanceConnectionTotals = Field(..., description="Aggregate totals for the preview.")

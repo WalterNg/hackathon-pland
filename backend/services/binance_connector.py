@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 
 import httpx
 
+from core.config import settings
 from schemas.input import BinanceConnectionPreviewRequest
 from schemas.output import (
     BinanceConnectedPosition,
@@ -32,7 +33,6 @@ class BinanceConnectorError(Exception):
 
 class BinanceConnector:
     DEMO_BASE_URL = "https://demo-api.binance.com"
-    SPOT_BASE_URL = "https://api.binance.com"
     DEFAULT_TIMEOUT = 10.0
     DEFAULT_RECV_WINDOW_MS = 5000
     STABLECOINS = {
@@ -45,14 +45,57 @@ class BinanceConnector:
         "USDP",
         "PYUSD",
     }
+    COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3"
+    
+    # Cache for symbol to CoinGecko ID mapping
+    _cg_id_cache: dict[str, str] = {}
+    _cg_cache_ttl: int = 3600  # 1 hour
+    _cg_cache_last_refresh: float = 0
+
+    async def _fetch_coingecko_id_map(self) -> dict[str, str]:
+        """
+        Fetches the mapping of Binance base assets to CoinGecko IDs from Supabase.
+        Uses a 1-hour cache to avoid redundant database calls.
+        """
+        now = time.time()
+        if self._cg_id_cache and (now - self._cg_cache_last_refresh < self._cg_cache_ttl):
+            return self._cg_id_cache
+
+        logger.info("Fetching CoinGecko ID mapping from Supabase...")
+        
+        # We use the Supabase REST API (Postgrest) to fetch mappings
+        # where coingecko_id is not null
+        url = f"{settings.supabase_url}/rest/v1/market_symbols?select=base_asset,coingecko_id&coingecko_id=not.is.null"
+        headers = {
+            "apikey": settings.supabase_service_role_key,
+            "Authorization": f"Bearer {settings.supabase_service_role_key}"
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+                
+                new_cache = {
+                    item["base_asset"]: item["coingecko_id"]
+                    for item in data
+                    if item.get("base_asset") and item.get("coingecko_id")
+                }
+                
+                # Update class-level cache
+                BinanceConnector._cg_id_cache = new_cache
+                BinanceConnector._cg_cache_last_refresh = now
+                logger.info("Successfully refreshed CoinGecko ID cache with %d mappings", len(new_cache))
+                return new_cache
+
+        except Exception as e:
+            logger.error("Failed to fetch CoinGecko ID mapping from Supabase: %s", str(e))
+            # Fallback to current cache if it exists, even if stale
+            return self._cg_id_cache
 
     def __init__(self, timeout: float | None = None):
         self.timeout = timeout or self.DEFAULT_TIMEOUT
-
-    def _base_url(self, mode: str) -> str:
-        if mode == "demo":
-            return self.DEMO_BASE_URL
-        raise BinanceConnectorError("Unsupported Binance preview mode. Only 'demo' is supported.", status_code=400)
 
     def _normalize_asset(self, asset: str) -> str:
         return asset.strip().upper()
@@ -75,30 +118,16 @@ class BinanceConnector:
         ).hexdigest()
         return signature
 
-    def _credentials_from_env(self, mode: str) -> tuple[str, str]:
-        mode_to_env_keys = {
-            "demo": ("BINANCE_DEMO_API_KEY", "BINANCE_DEMO_SECRET_KEY"),
-        }
-
-        env_keys = mode_to_env_keys.get(mode)
-        if not env_keys:
-            raise BinanceConnectorError("Unsupported Binance preview mode.", status_code=400)
-
-        api_key_name, api_secret_name = env_keys
+    def _credentials_from_env(self) -> tuple[str, str]:
+        api_key_name, api_secret_name = "BINANCE_DEMO_API_KEY", "BINANCE_DEMO_SECRET_KEY"
         api_key = os.getenv(api_key_name, "").strip()
         api_secret = os.getenv(api_secret_name, "").strip()
 
         if api_key and api_secret:
             return api_key, api_secret
 
-        # Backward compatibility while environments migrate to mode-specific vars.
-        legacy_api_key = os.getenv("BINANCE_API_KEY", "").strip()
-        legacy_api_secret = os.getenv("BINANCE_SECRET_KEY", "").strip()
-        if legacy_api_key and legacy_api_secret:
-            return legacy_api_key, legacy_api_secret
-
         raise BinanceConnectorError(
-            f"{mode.title()} credentials are missing. Set {api_key_name} and {api_secret_name} in the server .env.",
+            f"Demo credentials are missing. Set {api_key_name} and {api_secret_name} in the server .env.",
             status_code=400,
         )
 
@@ -122,7 +151,6 @@ class BinanceConnector:
         self,
         api_key: str,
         api_secret: str,
-        mode: str,
         recv_window_ms: int = DEFAULT_RECV_WINDOW_MS,
     ) -> dict:
         timestamp = int(time.time() * 1000)
@@ -133,8 +161,7 @@ class BinanceConnector:
             }
         )
         signature = self._sign_query(query_string, api_secret)
-        base_url = self._base_url(mode)
-        url = f"{base_url}/api/v3/account?{query_string}&signature={signature}"
+        url = f"{self.DEMO_BASE_URL}/api/v3/account?{query_string}&signature={signature}"
 
         try:
             payload = await self._request_json(
@@ -152,63 +179,88 @@ class BinanceConnector:
 
         return payload
 
-    async def fetch_price_map(self, symbols: Iterable[str], mode: str) -> dict[str, float]:
-        base_url = self._base_url(mode)
-        price_base_urls = [base_url]
+    async def fetch_price_map(self, symbols: Iterable[str]) -> dict[str, float]:
+        """
+        Fetches current market prices for a list of symbols using CoinGecko's public batch API.
+        This approach is more robust in cloud environments (like GCP) where Binance market
+        data endpoints may be blocked.
+        """
         price_map: dict[str, float] = {}
-        unique_symbols = []
-        seen = set()
-
-        for raw_symbol in symbols:
-            symbol = self._normalize_asset(raw_symbol)
-            price_symbol = self._asset_to_price_symbol(symbol)
-            if not price_symbol or price_symbol in seen:
+        unique_assets: set[str] = set()
+        
+        # 1. Normalize and deduplicate assets
+        for raw_asset in symbols:
+            asset = self._normalize_asset(raw_asset)
+            if not asset or asset in self.STABLECOINS:
                 continue
-            seen.add(price_symbol)
-            unique_symbols.append(price_symbol)
+            unique_assets.add(asset)
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            async def fetch_symbol_price(symbol: str) -> tuple[str, float]:
-                for price_base_url in price_base_urls:
-                    url = f"{price_base_url}/api/v3/ticker/price?symbol={symbol}"
+        if not unique_assets:
+            return price_map
 
-                    try:
-                        response = await client.get(url)
-                        if response.status_code >= 400:
-                            continue
-                        payload = response.json()
-                    except (httpx.RequestError, httpx.TimeoutException, ValueError):
-                        continue
+        # 2. Map Binance symbols to CoinGecko IDs using the dynamic mapping
+        cg_id_map = await self._fetch_coingecko_id_map()
+        
+        asset_to_id = {
+            asset: cg_id_map[asset] 
+            for asset in unique_assets 
+            if asset in cg_id_map
+        }
+        
+        coingecko_ids = list(asset_to_id.values())
 
-                    if isinstance(payload, dict):
-                        try:
-                            price = float(payload.get("price", 0) or 0)
-                        except (TypeError, ValueError):
-                            price = 0.0
-                        if price > 0:
-                            return symbol, price
-                return symbol, 0.0
+        if not coingecko_ids:
+            # If no mapping found, return empty map (will result in $0 price warnings)
+            return price_map
 
-            results = await asyncio.gather(*(fetch_symbol_price(symbol) for symbol in unique_symbols))
+        # 3. Perform batch request to CoinGecko
+        ids_param = ",".join(coingecko_ids)
+        url = f"{self.COINGECKO_BASE_URL}/simple/price?ids={ids_param}&vs_currencies=usd"
+        
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(url)
+                if response.status_code != 200:
+                    logger.warning(f"CoinGecko API returned status {response.status_code}")
+                    return price_map
+                
+                data = response.json()
+                
+                # 4. Map back to Binance symbols
+                # Note: CoinGecko returns {"bitcoin": {"usd": 123}, ...}
+                for asset, cg_id in asset_to_id.items():
+                    price_info = data.get(cg_id)
+                    if price_info and "usd" in price_info:
+                        # Map to the price_symbol used by the rest of the class (usually ASSETUSDT)
+                        price_symbol = self._asset_to_price_symbol(asset)
+                        if price_symbol:
+                            price_map[price_symbol] = float(price_info["usd"])
 
-        for symbol, price in results:
-            price_map[symbol] = price
+        except (httpx.RequestError, httpx.TimeoutException, ValueError) as exc:
+            logger.warning(f"Failed to fetch prices from CoinGecko: {str(exc)}")
+            
         return price_map
 
     async def build_connection_preview(self, payload: BinanceConnectionPreviewRequest) -> BinanceConnectionPreviewData:
+        """
+        Orchestrates the full Binance connection preview process.
+        Returns a structured payload containing account metadata, asset balances, 
+        and aggregate USD totals.
+        """
+        # 1. Resolve credentials (API key and Secret)
         api_key = payload.api_key
         api_secret = payload.api_secret
 
         if not api_key or not api_secret:
-            api_key, api_secret = self._credentials_from_env(payload.mode)
+            api_key, api_secret = self._credentials_from_env()
 
         if not api_key or not api_secret:
             raise BinanceConnectorError("Binance API key and secret are required.", status_code=400)
 
+        # 2. Fetch raw account data from Binance
         account_payload = await self.fetch_account_balances(
             api_key=api_key,
             api_secret=api_secret,
-            mode=payload.mode,
             recv_window_ms=payload.recv_window_ms,
         )
 
@@ -216,14 +268,15 @@ class BinanceConnector:
         if not isinstance(balances, list):
             raise BinanceConnectorError("Invalid balances payload returned by Binance.")
 
-        normalized_balances = []
-        warnings: list[BinanceConnectionWarning] = []
-
+        # 3. Pre-fetch a price map for all assets present in the account
+        # We fetch all prices in parallel before processing the loop for better performance.
         price_map = await self.fetch_price_map(
             (balance.get("asset", "") for balance in balances if isinstance(balance, dict)),
-            mode=payload.mode,
         )
 
+        # 4. Process and normalize individual balances
+        normalized_balances = []
+        warnings: list[BinanceConnectionWarning] = []
         total_estimated_usd = 0.0
         non_zero_asset_count = 0
 
@@ -231,10 +284,12 @@ class BinanceConnector:
             if not isinstance(balance, dict):
                 continue
 
+            # Identify and normalize the asset name (e.g., 'btc ' -> 'BTC')
             asset = self._normalize_asset(str(balance.get("asset", "") or ""))
             if not asset:
                 continue
 
+            # Extract and validate quantities
             try:
                 free = float(balance.get("free", 0) or 0)
                 locked = float(balance.get("locked", 0) or 0)
@@ -243,16 +298,23 @@ class BinanceConnector:
                 locked = 0.0
 
             quantity = max(0.0, free + locked)
+            
+            # Filter zero-balance assets if requested
             if quantity <= 0 and not payload.include_zero_balances:
                 continue
 
+            # Resolve USD price
             is_stablecoin = asset in self.STABLECOINS
             price_symbol = self._asset_to_price_symbol(asset)
+            
+            # Use fixed 1.0 for stablecoins, otherwise lookup in the pre-fetched map
             price_usd = 1.0 if is_stablecoin else price_map.get(price_symbol or "", 0.0)
             estimated_usd = quantity * price_usd
 
+            # Track global statistics and warnings
             if quantity > 0:
                 non_zero_asset_count += 1
+            
             if quantity > 0 and not is_stablecoin and price_usd <= 0:
                 warnings.append(
                     BinanceConnectionWarning(
@@ -262,6 +324,7 @@ class BinanceConnector:
                     )
                 )
 
+            # Assemble the normalized asset object
             normalized_balances.append(
                 BinanceConnectionAsset(
                     asset=asset,
@@ -275,6 +338,7 @@ class BinanceConnector:
             )
             total_estimated_usd += estimated_usd
 
+        # 5. Handle cases with no returned balances
         if not normalized_balances:
             warnings.append(
                 BinanceConnectionWarning(
@@ -284,6 +348,7 @@ class BinanceConnector:
                 )
             )
 
+        # 6. Build the final response objects
         account_info = BinanceConnectionAccountInfo(
             account_type=account_payload.get("accountType"),
             can_trade=bool(account_payload.get("canTrade", False)),
@@ -293,7 +358,6 @@ class BinanceConnector:
         )
 
         return BinanceConnectionPreviewData(
-            mode=payload.mode,
             account=account_info,
             assets=normalized_balances,
             totals=BinanceConnectionTotals(
