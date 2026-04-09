@@ -31,6 +31,29 @@ const safeNumber = (value: string | number | undefined, fallback = 0): number =>
 };
 
 const BTC_USDT_SYMBOL = "BTCUSDT";
+const STABLE_ASSET_SYMBOLS = new Set([
+  "USDT",
+  "USDC",
+  "BUSD",
+  "FDUSD",
+  "TUSD",
+  "USDP",
+  "DAI",
+  "USDS"
+]);
+
+function baseAssetFromSymbol(symbol: string): string {
+  const normalized = symbol.trim().toUpperCase();
+  if (normalized.endsWith("USDT") && normalized.length > 4) {
+    return normalized.slice(0, -4);
+  }
+
+  return normalized;
+}
+
+function isPerformerCandidate(symbol: string): boolean {
+  return !STABLE_ASSET_SYMBOLS.has(baseAssetFromSymbol(symbol));
+}
 
 function normalizePositions(positions?: ReadonlyArray<PortfolioPosition>): ReadonlyArray<PortfolioPosition> {
   if (!positions || positions.length === 0) {
@@ -312,7 +335,9 @@ export async function buildBinancePortfolioSnapshot(
     allocationPercent: totalValueUsdRaw > 0 ? round((asset.valueUsd / totalValueUsdRaw) * 100) : 0,
   }));
 
-  const sortedBy24h = [...assets].sort((a, b) => b.change24hPercent - a.change24hPercent);
+  const sortedBy24h = [...assets]
+    .filter((asset) => isPerformerCandidate(asset.symbol))
+    .sort((a, b) => b.change24hPercent - a.change24hPercent);
   const best = sortedBy24h[0] ?? null;
   const worst = sortedBy24h[sortedBy24h.length - 1] ?? null;
   const chart = buildChart(heldSymbols, klinesMap, prices, positions);

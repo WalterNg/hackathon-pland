@@ -23,6 +23,7 @@ import {
   logRiskViolations,
 } from "@/app/lib/repositories/risk-repo";
 import { refreshMarketPricesFromSnapshot } from "@/app/lib/repositories/market-data-repo";
+import { RefreshIntervals } from "@/app/lib/refresh-intervals";
 import { hasSupabaseEnv, hasSupabaseServiceEnv } from "@/app/lib/supabase/env";
 import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
 import { createSupabaseServiceClient } from "@/app/lib/supabase/service";
@@ -31,7 +32,6 @@ import { createSupabaseServerClient } from "@/app/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
-const CONNECTED_PORTFOLIO_SYNC_INTERVAL_MS = 30_000;
 
 type AuthContext = {
   supabase: SupabaseClient;
@@ -49,6 +49,26 @@ function isSnapshotFresh(snapshot: { summary: { timestamp: string } } | null, ma
   }
 
   return Date.now() - snapshotTime <= maxAgeMs;
+}
+
+function snapshotHasHoldings(snapshot: { summary: { totalValueUsd: number }; assets: Array<unknown> } | null): boolean {
+  if (!snapshot) {
+    return false;
+  }
+
+  return snapshot.assets.length > 0 || snapshot.summary.totalValueUsd > 0;
+}
+
+function isTransientEmptySnapshot(
+  snapshot: { summary: { totalValueUsd: number }; assets: Array<unknown> },
+  positionsOverride: PortfolioPosition[],
+  cachedSnapshot: { summary: { totalValueUsd: number }; assets: Array<unknown> } | null
+): boolean {
+  const incomingHasHoldings = positionsOverride.some((position) => position.quantity > 0);
+  const previousHadHoldings = snapshotHasHoldings(cachedSnapshot);
+  const nextLooksEmpty = snapshot.assets.length === 0 || snapshot.summary.totalValueUsd === 0;
+
+  return nextLooksEmpty && (incomingHasHoldings || previousHadHoldings);
 }
 
 async function getAuthContext(request: Request): Promise<AuthContext> {
@@ -71,9 +91,30 @@ async function buildAndCachePortfolioSnapshot(
   userId: string,
   portfolio: { id: string; mode: "manual" | "binance_connected" },
   portfolioName: string,
-  positionsOverride: PortfolioPosition[]
+  positionsOverride: PortfolioPosition[],
+  cachedSnapshot: Awaited<ReturnType<typeof getLatestPortfolioSnapshotCache>>
 ) {
   const snapshot = await buildBinancePortfolioSnapshot(portfolioName, positionsOverride);
+
+  if (cachedSnapshot && isTransientEmptySnapshot(snapshot, positionsOverride, cachedSnapshot)) {
+    console.warn("[portfolio-snapshot] Prevented transient zero snapshot fallback", {
+      portfolioId: portfolio.id,
+      portfolioName,
+      portfolioMode: portfolio.mode,
+      positionsCount: positionsOverride.length,
+      cachedAssetsCount: cachedSnapshot?.assets.length ?? 0,
+      cachedTotalValueUsd: cachedSnapshot?.summary.totalValueUsd ?? 0,
+      nextAssetsCount: snapshot.assets.length,
+      nextTotalValueUsd: snapshot.summary.totalValueUsd,
+    });
+
+    return {
+      snapshot: cachedSnapshot,
+      source: "cache-fallback" as const,
+      isStale: true,
+    };
+  }
+
   const nowIso = new Date().toISOString();
   const riskProfile = await getActiveRiskProfileByPortfolio(supabase, userId, portfolio.id);
   let riskViolations: PortfolioRiskViolation[] = [];
@@ -144,7 +185,20 @@ async function buildAndCachePortfolioSnapshot(
     await updatePortfolioConnectionSyncState(supabase, userId, portfolio.id, "active", nowIso);
   }
 
-  return snapshotWithRisk;
+  console.info("[portfolio-snapshot] Saved live snapshot", {
+    portfolioId: portfolio.id,
+    portfolioName,
+    portfolioMode: portfolio.mode,
+    positionsCount: positionsOverride.length,
+    assetsCount: snapshotWithRisk.assets.length,
+    totalValueUsd: snapshotWithRisk.summary.totalValueUsd,
+  });
+
+  return {
+    snapshot: snapshotWithRisk,
+    source: "live" as const,
+    isStale: false,
+  };
 }
 
 function snapshotHeaders(portfolioMode: "manual" | "binance_connected", source: string, isStale = false) {
@@ -194,8 +248,12 @@ export async function GET(request: Request) {
   }
 
   const cached = await getLatestPortfolioSnapshotCache(context.supabase, context.userId, context.portfolio.id);
-  if (context.portfolio.mode === "binance_connected" && cached) {
-    const isFresh = isSnapshotFresh(cached, CONNECTED_PORTFOLIO_SYNC_INTERVAL_MS);
+  if (cached) {
+    const freshnessWindowMs =
+      context.portfolio.mode === "binance_connected"
+        ? RefreshIntervals.PORTFOLIO_CONNECTED_SNAPSHOT_FRESH_MS
+        : RefreshIntervals.PORTFOLIO_MANUAL_SNAPSHOT_FRESH_MS;
+    const isFresh = isSnapshotFresh(cached, freshnessWindowMs);
     return NextResponse.json(cached, {
       status: 200,
       headers: snapshotHeaders(context.portfolio.mode, "cache", !isFresh),
@@ -203,23 +261,24 @@ export async function GET(request: Request) {
   }
 
   try {
-    const snapshotWithRisk = await buildAndCachePortfolioSnapshot(
+    const liveResult = await buildAndCachePortfolioSnapshot(
       context.supabase,
       context.userId,
       context.portfolio,
       context.name,
-      context.positionsOverride
+      context.positionsOverride,
+      cached
     );
 
-    return NextResponse.json(snapshotWithRisk, {
+    return NextResponse.json(liveResult.snapshot, {
       status: 200,
-      headers: snapshotHeaders(context.portfolio.mode, "live"),
+      headers: snapshotHeaders(context.portfolio.mode, liveResult.source, liveResult.isStale),
     });
   } catch {
     if (cached) {
       return NextResponse.json(cached, {
         status: 200,
-        headers: snapshotHeaders(context.portfolio.mode, "cache-fallback"),
+        headers: snapshotHeaders(context.portfolio.mode, "cache-fallback", true),
       });
     }
 
@@ -252,24 +311,26 @@ export async function POST(request: Request) {
   }
 
   try {
-    const snapshotWithRisk = await buildAndCachePortfolioSnapshot(
+    const cached = await getLatestPortfolioSnapshotCache(supabase, user.id, portfolio.id);
+    const liveResult = await buildAndCachePortfolioSnapshot(
       supabase,
       user.id,
       portfolio,
       name,
-      positionsOverride
+      positionsOverride,
+      cached
     );
 
-    return NextResponse.json(snapshotWithRisk, {
+    return NextResponse.json(liveResult.snapshot, {
       status: 200,
-      headers: snapshotHeaders(portfolio.mode, "live"),
+      headers: snapshotHeaders(portfolio.mode, liveResult.source, liveResult.isStale),
     });
   } catch {
     const cached = await getLatestPortfolioSnapshotCache(supabase, user.id, portfolio.id);
     if (cached) {
       return NextResponse.json(cached, {
         status: 200,
-        headers: snapshotHeaders(portfolio.mode, "cache-fallback"),
+        headers: snapshotHeaders(portfolio.mode, "cache-fallback", true),
       });
     }
 

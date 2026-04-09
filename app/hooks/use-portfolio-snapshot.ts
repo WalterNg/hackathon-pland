@@ -9,19 +9,34 @@ import {
   calculateVolatilityFromSeries,
 } from "@/app/lib/risk-calculator";
 import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
+import { RefreshIntervals } from "@/app/lib/refresh-intervals";
 
 type UsePortfolioSnapshotResult = {
   snapshot: PortfolioSnapshot | null;
   isLoading: boolean;
   error: string | null;
+  snapshotSource: "live" | "cache" | "cache-fallback";
+  lastServerSyncAt: string | null;
+  lastRealtimeTickAt: string | null;
+  isServerSnapshotStale: boolean;
   reload: () => Promise<void>;
 };
 
-const DEFAULT_REFRESH_INTERVAL_MS = 10_000;
+const DEFAULT_REFRESH_INTERVAL_MS = RefreshIntervals.PORTFOLIO_SNAPSHOT_SYNC_MS;
 const BACKGROUND_SYNC_COOLDOWN_MS = 30_000;
-const REALTIME_RECONNECT_DELAY_MS = 2_000;
+const REALTIME_RECONNECT_DELAY_MS = RefreshIntervals.PORTFOLIO_REALTIME_RECONNECT_MS;
 const BTC_USDT_SYMBOL = "BTCUSDT";
 const PORTFOLIO_CACHE_PREFIX = "portfolio";
+const STABLE_ASSET_SYMBOLS = new Set([
+  "USDT",
+  "USDC",
+  "BUSD",
+  "FDUSD",
+  "TUSD",
+  "USDP",
+  "DAI",
+  "USDS"
+]);
 
 type BinanceTickerStreamMessage = {
   data?: {
@@ -41,6 +56,19 @@ const safeNumber = (value: string | number | undefined, fallback = 0): number =>
   const numberValue = typeof value === "number" ? value : Number(value);
   return Number.isFinite(numberValue) ? numberValue : fallback;
 };
+
+function baseAssetFromSymbol(symbol: string): string {
+  const normalized = symbol.trim().toUpperCase();
+  if (normalized.endsWith("USDT") && normalized.length > 4) {
+    return normalized.slice(0, -4);
+  }
+
+  return normalized;
+}
+
+function isPerformerCandidate(symbol: string): boolean {
+  return !STABLE_ASSET_SYMBOLS.has(baseAssetFromSymbol(symbol));
+}
 
 function applyRealtimeTicker(
   currentSnapshot: PortfolioSnapshot,
@@ -79,7 +107,9 @@ function applyRealtimeTicker(
   const allTimeProfitUsd = round(totalValueUsdRaw - totalCostBasisUsd);
   const allTimeProfitPercent = totalCostBasisUsd > 0 ? round((allTimeProfitUsd / totalCostBasisUsd) * 100) : 0;
 
-  const sortedBy24h = [...updatedAssets].sort((a, b) => b.change24hPercent - a.change24hPercent);
+  const sortedBy24h = [...updatedAssets]
+    .filter((asset) => isPerformerCandidate(asset.symbol))
+    .sort((a, b) => b.change24hPercent - a.change24hPercent);
   const bestPerformer = sortedBy24h[0] ?? null;
   const worstPerformer = sortedBy24h[sortedBy24h.length - 1] ?? null;
 
@@ -162,6 +192,10 @@ export function usePortfolioSnapshot(
   const [snapshot, setSnapshot] = useState<PortfolioSnapshot | null>(null);
   const [isLoading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [snapshotSource, setSnapshotSource] = useState<"live" | "cache" | "cache-fallback">("cache");
+  const [lastServerSyncAt, setLastServerSyncAt] = useState<string | null>(null);
+  const [lastRealtimeTickAt, setLastRealtimeTickAt] = useState<string | null>(null);
+  const [isServerSnapshotStale, setIsServerSnapshotStale] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const isFetchingRef = useRef(false);
   const isBackgroundSyncingRef = useRef(false);
@@ -217,6 +251,10 @@ export function usePortfolioSnapshot(
     setSnapshot(cachedSnapshot);
     setLoading(!cachedSnapshot);
     setError(null);
+    setSnapshotSource("cache");
+    setLastServerSyncAt(cachedSnapshot?.summary.timestamp ?? null);
+    setLastRealtimeTickAt(null);
+    setIsServerSnapshotStale(false);
 
     const syncLiveSnapshot = async () => {
       if (isBackgroundSyncingRef.current) {
@@ -254,6 +292,9 @@ export function usePortfolioSnapshot(
         writeCachedSnapshot(data);
         setSnapshot(data);
         setError(null);
+        setSnapshotSource((response.headers.get("x-snapshot-source") as "live" | "cache" | "cache-fallback" | null) ?? "live");
+        setLastServerSyncAt(data.summary.timestamp ?? new Date().toISOString());
+        setIsServerSnapshotStale(response.headers.get("x-snapshot-stale") === "true");
       } catch {
         return;
       } finally {
@@ -299,13 +340,17 @@ export function usePortfolioSnapshot(
 
           const data = (await response.json()) as PortfolioSnapshot;
           const snapshotStale = response.headers.get("x-snapshot-stale") === "true";
+          const sourceHeader = (response.headers.get("x-snapshot-source") as "live" | "cache" | "cache-fallback" | null) ?? "cache";
           const portfolioMode = response.headers.get("x-portfolio-mode");
           if (!isCancelled) {
             writeCachedSnapshot(data);
             setSnapshot(data);
+            setSnapshotSource(sourceHeader);
+            setLastServerSyncAt(data.summary.timestamp ?? new Date().toISOString());
+            setIsServerSnapshotStale(snapshotStale);
           }
 
-          if (portfolioMode === "binance_connected" && snapshotStale) {
+          if (snapshotStale) {
             void syncLiveSnapshot();
           }
 
@@ -393,6 +438,7 @@ export function usePortfolioSnapshot(
             return;
           }
 
+          setLastRealtimeTickAt(new Date().toISOString());
           setSnapshot((currentSnapshot) => {
             if (!currentSnapshot) {
               return currentSnapshot;
@@ -434,5 +480,14 @@ export function usePortfolioSnapshot(
     setRefreshNonce((value) => value + 1);
   }, [cacheKeys]);
 
-  return { snapshot, isLoading, error, reload };
+  return {
+    snapshot,
+    isLoading,
+    error,
+    snapshotSource,
+    lastServerSyncAt,
+    lastRealtimeTickAt,
+    isServerSnapshotStale,
+    reload
+  };
 }

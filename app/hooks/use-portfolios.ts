@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
+import { RefreshIntervals } from "@/app/lib/refresh-intervals";
 
 const MAIN_PORTFOLIO_NAME = "Main Portfolio";
-const PORTFOLIOS_REFRESH_INTERVAL_MS = 15_000;
 
 type PortfolioResponseRow = {
   id: string;
@@ -48,7 +48,15 @@ type UsePortfoliosResult = {
   reload: () => Promise<void>;
 };
 
-export function usePortfolios(): UsePortfoliosResult {
+type UsePortfoliosOptions = {
+  refreshIntervalMs?: number;
+};
+
+export function usePortfolios(options?: UsePortfoliosOptions): UsePortfoliosResult {
+  const refreshIntervalMs = Math.max(
+    options?.refreshIntervalMs ?? RefreshIntervals.PORTFOLIO_LIST_DEFAULT_MS,
+    RefreshIntervals.PORTFOLIO_LIST_MIN_MS
+  );
   const [portfolios, setPortfolios] = useState<PortfolioItem[]>([]);
   const [isLoading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +99,7 @@ export function usePortfolios(): UsePortfoliosResult {
 
     const intervalId = window.setInterval(() => {
       void loadPortfolios();
-    }, PORTFOLIOS_REFRESH_INTERVAL_MS);
+    }, refreshIntervalMs);
 
     const handleVisibilityChange = () => {
       if (!document.hidden) {
@@ -105,7 +113,7 @@ export function usePortfolios(): UsePortfoliosResult {
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [loadPortfolios]);
+  }, [loadPortfolios, refreshIntervalMs]);
 
   const createPortfolio = useCallback(async (
     name: string,

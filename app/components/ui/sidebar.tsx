@@ -6,6 +6,8 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { MaterialIcon } from "../dashboard/material-icon";
 import { createSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { usePortfolios } from "@/app/hooks/use-portfolios";
+import { RefreshIntervals } from "@/app/lib/refresh-intervals";
+import type { PortfolioItem } from "@/app/hooks/use-portfolios";
 
 const DEFAULT_PORTFOLIOS = ["Main Portfolio"];
 
@@ -31,20 +33,48 @@ function normalizePath(path: string): string {
   return path.endsWith("/") ? path.slice(0, -1) : path;
 }
 
-export function Sidebar() {
+type SidebarProps = {
+  portfolios?: PortfolioItem[];
+  livePortfolioValue?: {
+    name: string;
+    totalValueUsd: number;
+  } | null;
+};
+
+export function Sidebar({ portfolios, livePortfolioValue = null }: SidebarProps) {
   return (
     <Suspense
       fallback={<aside className="sidebar-container text-inverse z-20 mb-4 hidden w-64 shrink-0 md:flex" />}
     >
-      <SidebarContent />
+      {portfolios ? (
+        <SidebarContent portfolios={portfolios} livePortfolioValue={livePortfolioValue} />
+      ) : (
+        <SidebarContentWithAutoLoad />
+      )}
     </Suspense>
   );
 }
 
-function SidebarContent() {
+function SidebarContentWithAutoLoad() {
+  const { portfolios } = usePortfolios({
+    refreshIntervalMs: RefreshIntervals.SIDEBAR_PORTFOLIOS_REFRESH_MS,
+  });
+
+  return <SidebarContent portfolios={portfolios} livePortfolioValue={null} />;
+}
+
+function SidebarContent({
+  portfolios,
+  livePortfolioValue,
+}: {
+  portfolios: PortfolioItem[];
+  livePortfolioValue: {
+    name: string;
+    totalValueUsd: number;
+  } | null;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { portfolios } = usePortfolios();
   const [isLoggingOut, setLoggingOut] = useState(false);
 
   const currentPath = normalizePath(pathname);
@@ -110,6 +140,10 @@ function SidebarContent() {
                 const portfolioName = portfolio.name;
                 const portfolioHref = `/portfolio?name=${encodeURIComponent(portfolioName)}`;
                 const isSelected = portfolioActive && selectedPortfolio === portfolioName;
+                const displayTotalValueUsd =
+                  livePortfolioValue && livePortfolioValue.name === portfolioName
+                    ? livePortfolioValue.totalValueUsd
+                    : portfolio.totalValueUsd;
 
                 return (
                   <Link
@@ -126,7 +160,7 @@ function SidebarContent() {
                     </div>
                     <div className="min-w-0">
                       <div className="typo-body truncate font-semibold text-current">{portfolioName}</div>
-                      <div className="typo-body-sm text-muted">{formatPortfolioTotal(portfolio.totalValueUsd)}</div>
+                      <div className="typo-body-sm text-muted">{formatPortfolioTotal(displayTotalValueUsd)}</div>
                     </div>
                   </Link>
                 );
