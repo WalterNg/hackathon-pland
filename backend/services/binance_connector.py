@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 
 import httpx
 
+from core.config import settings
 from schemas.input import BinanceConnectionPreviewRequest
 from schemas.output import (
     BinanceConnectedPosition,
@@ -44,6 +45,54 @@ class BinanceConnector:
         "USDP",
         "PYUSD",
     }
+    COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3"
+    
+    # Cache for symbol to CoinGecko ID mapping
+    _cg_id_cache: dict[str, str] = {}
+    _cg_cache_ttl: int = 3600  # 1 hour
+    _cg_cache_last_refresh: float = 0
+
+    async def _fetch_coingecko_id_map(self) -> dict[str, str]:
+        """
+        Fetches the mapping of Binance base assets to CoinGecko IDs from Supabase.
+        Uses a 1-hour cache to avoid redundant database calls.
+        """
+        now = time.time()
+        if self._cg_id_cache and (now - self._cg_cache_last_refresh < self._cg_cache_ttl):
+            return self._cg_id_cache
+
+        logger.info("Fetching CoinGecko ID mapping from Supabase...")
+        
+        # We use the Supabase REST API (Postgrest) to fetch mappings
+        # where coingecko_id is not null
+        url = f"{settings.supabase_url}/rest/v1/market_symbols?select=base_asset,coingecko_id&coingecko_id=not.is.null"
+        headers = {
+            "apikey": settings.supabase_service_role_key,
+            "Authorization": f"Bearer {settings.supabase_service_role_key}"
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+                
+                new_cache = {
+                    item["base_asset"]: item["coingecko_id"]
+                    for item in data
+                    if item.get("base_asset") and item.get("coingecko_id")
+                }
+                
+                # Update class-level cache
+                BinanceConnector._cg_id_cache = new_cache
+                BinanceConnector._cg_cache_last_refresh = now
+                logger.info("Successfully refreshed CoinGecko ID cache with %d mappings", len(new_cache))
+                return new_cache
+
+        except Exception as e:
+            logger.error("Failed to fetch CoinGecko ID mapping from Supabase: %s", str(e))
+            # Fallback to current cache if it exists, even if stale
+            return self._cg_id_cache
 
     def __init__(self, timeout: float | None = None):
         self.timeout = timeout or self.DEFAULT_TIMEOUT
@@ -132,47 +181,64 @@ class BinanceConnector:
 
     async def fetch_price_map(self, symbols: Iterable[str]) -> dict[str, float]:
         """
-        Fetches current market prices for a list of symbols using the Demo base URL.
+        Fetches current market prices for a list of symbols using CoinGecko's public batch API.
+        This approach is more robust in cloud environments (like GCP) where Binance market
+        data endpoints may be blocked.
         """
-        price_base_urls = [self.DEMO_BASE_URL]
         price_map: dict[str, float] = {}
-        unique_symbols = []
-        seen = set()
-
-        for raw_symbol in symbols:
-            symbol = self._normalize_asset(raw_symbol)
-            price_symbol = self._asset_to_price_symbol(symbol)
-            if not price_symbol or price_symbol in seen:
+        unique_assets: set[str] = set()
+        
+        # 1. Normalize and deduplicate assets
+        for raw_asset in symbols:
+            asset = self._normalize_asset(raw_asset)
+            if not asset or asset in self.STABLECOINS:
                 continue
-            seen.add(price_symbol)
-            unique_symbols.append(price_symbol)
+            unique_assets.add(asset)
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            async def fetch_symbol_price(symbol: str) -> tuple[str, float]:
-                for price_base_url in price_base_urls:
-                    url = f"{price_base_url}/api/v3/ticker/price?symbol={symbol}"
+        if not unique_assets:
+            return price_map
 
-                    try:
-                        response = await client.get(url)
-                        if response.status_code >= 400:
-                            continue
-                        payload = response.json()
-                    except (httpx.RequestError, httpx.TimeoutException, ValueError):
-                        continue
+        # 2. Map Binance symbols to CoinGecko IDs using the dynamic mapping
+        cg_id_map = await self._fetch_coingecko_id_map()
+        
+        asset_to_id = {
+            asset: cg_id_map[asset] 
+            for asset in unique_assets 
+            if asset in cg_id_map
+        }
+        
+        coingecko_ids = list(asset_to_id.values())
 
-                    if isinstance(payload, dict):
-                        try:
-                            price = float(payload.get("price", 0) or 0)
-                        except (TypeError, ValueError):
-                            price = 0.0
-                        if price > 0:
-                            return symbol, price
-                return symbol, 0.0
+        if not coingecko_ids:
+            # If no mapping found, return empty map (will result in $0 price warnings)
+            return price_map
 
-            results = await asyncio.gather(*(fetch_symbol_price(symbol) for symbol in unique_symbols))
+        # 3. Perform batch request to CoinGecko
+        ids_param = ",".join(coingecko_ids)
+        url = f"{self.COINGECKO_BASE_URL}/simple/price?ids={ids_param}&vs_currencies=usd"
+        
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(url)
+                if response.status_code != 200:
+                    logger.warning(f"CoinGecko API returned status {response.status_code}")
+                    return price_map
+                
+                data = response.json()
+                
+                # 4. Map back to Binance symbols
+                # Note: CoinGecko returns {"bitcoin": {"usd": 123}, ...}
+                for asset, cg_id in asset_to_id.items():
+                    price_info = data.get(cg_id)
+                    if price_info and "usd" in price_info:
+                        # Map to the price_symbol used by the rest of the class (usually ASSETUSDT)
+                        price_symbol = self._asset_to_price_symbol(asset)
+                        if price_symbol:
+                            price_map[price_symbol] = float(price_info["usd"])
 
-        for symbol, price in results:
-            price_map[symbol] = price
+        except (httpx.RequestError, httpx.TimeoutException, ValueError) as exc:
+            logger.warning(f"Failed to fetch prices from CoinGecko: {str(exc)}")
+            
         return price_map
 
     async def build_connection_preview(self, payload: BinanceConnectionPreviewRequest) -> BinanceConnectionPreviewData:
