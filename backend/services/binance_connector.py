@@ -221,7 +221,10 @@ class BinanceConnector:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.get(url)
                 if response.status_code != 200:
-                    logger.warning(f"CoinGecko API returned status {response.status_code}")
+                    if response.status_code in [403, 429, 1015]:
+                        logger.error("❌ GCP was blocked by CoinGecko (Status: %d)", response.status_code)
+                    else:
+                        logger.warning(f"CoinGecko API returned status {response.status_code}")
                     return price_map
                 
                 data = response.json()
