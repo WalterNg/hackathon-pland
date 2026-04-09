@@ -63,9 +63,13 @@ class BinanceConnector:
 
         logger.info("Fetching CoinGecko ID mapping from Supabase...")
         
+        # Ensure the URL has a protocol (GCP env vars can sometimes be missing this)
+        base_url = settings.supabase_url
+        if base_url and not base_url.startswith("http"):
+            base_url = f"https://{base_url}"
+
         # We use the Supabase REST API (Postgrest) to fetch mappings
-        # where coingecko_id is not null
-        url = f"{settings.supabase_url}/rest/v1/market_symbols?select=base_asset,coingecko_id&coingecko_id=not.is.null"
+        url = f"{base_url}/rest/v1/market_symbols?select=base_asset,coingecko_id&coingecko_id=not.is.null"
         headers = {
             "apikey": settings.supabase_service_role_key,
             "Authorization": f"Bearer {settings.supabase_service_role_key}"
@@ -221,7 +225,10 @@ class BinanceConnector:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.get(url)
                 if response.status_code != 200:
-                    logger.warning(f"CoinGecko API returned status {response.status_code}")
+                    if response.status_code in [403, 429, 1015]:
+                        logger.error("❌ GCP was blocked by CoinGecko (Status: %d)", response.status_code)
+                    else:
+                        logger.warning(f"CoinGecko API returned status {response.status_code}")
                     return price_map
                 
                 data = response.json()
