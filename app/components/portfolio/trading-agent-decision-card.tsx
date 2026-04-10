@@ -26,7 +26,7 @@ type TradingAgentDecisionCardProps = {
 
 function actionTone(action: PortfolioAIRecommendation["action"] | "Pending") {
   if (action === "Accumulate") {
-    return "text-emerald-300";
+    return "text-success-soft";
   }
   if (action === "Reduce Risk" || action === "Stop Loss") {
     return "text-rose-300";
@@ -107,7 +107,7 @@ export function TradingAgentDecisionCard({
                   <p className="text-sm font-medium text-slate-200">{progressLabel}</p>
                   <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500">{compactTraceLabel}</p>
                 </div>
-                <span className={`inline-flex h-2.5 w-2.5 rounded-full ${isAnalyzing ? "animate-pulse bg-sky-300" : error ? "bg-rose-400" : "bg-emerald-400"}`} />
+                <span className={`inline-flex h-2.5 w-2.5 rounded-full ${isAnalyzing ? "animate-pulse bg-sky-300" : error ? "bg-rose-400" : "bg-success-indicator"}`} />
               </div>
 
               {warnings[0] ? (

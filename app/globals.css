@@ -11,16 +11,24 @@
   --surface-container: #1d2026;
   --surface-container-highest: #32353c;
   --surface-glass: rgba(32, 36, 44, 0.64);
-  --surface-glow: rgba(60, 227, 106, 0.14);
+  --color-primary-rgb: 22, 199, 132;
+  --surface-glow: rgba(var(--color-primary-rgb), 0.14);
 
-  --color-primary: #3ce36a;
-  --color-primary-hover: #2fcb59;
+  --color-primary: #16c784;
+  --color-primary-hover: #13b376;
   --color-secondary: #00963c;
   --color-background: var(--surface);
   --color-background-light: var(--surface);
   --color-card-light: var(--surface-container);
   --color-sidebar-dark: var(--surface-container-low);
-  --color-mint-light: rgba(60, 227, 106, 0.12);
+  --color-primary-faint: rgba(var(--color-primary-rgb), 0.03);
+  --color-primary-soft: rgba(var(--color-primary-rgb), 0.1);
+  --color-primary-soft-strong: rgba(var(--color-primary-rgb), 0.18);
+  --color-primary-border-subtle: rgba(var(--color-primary-rgb), 0.15);
+  --color-primary-border: rgba(var(--color-primary-rgb), 0.25);
+  --color-primary-border-strong: rgba(var(--color-primary-rgb), 0.35);
+  --color-primary-border-emphasis: rgba(var(--color-primary-rgb), 0.48);
+  --color-mint-light: rgba(var(--color-primary-rgb), 0.12);
   --color-mint-card: var(--surface-container-highest);
 
   --outline-variant: rgba(68, 71, 77, 0.2);
@@ -33,19 +41,22 @@
   --text-subtle: #8d919d;
   --text-inverse: #e1e2eb;
   --text-on-primary: #07110c;
-  --text-success: #3ce36a;
-  --text-positive: #3ce36a;
-  --text-accent: #78f09a;
+  --text-success: #16c784;
+  --text-positive: #16c784;
+  --text-accent: #73dfb6;
+  --text-success-strong: #d9f7eb;
+  --text-success-muted: rgba(115, 223, 182, 0.72);
+  --text-success-dim: rgba(var(--color-primary-rgb), 0.7);
   --text-danger: #eb4446;
   --text-warning: #ffb86a;
   --text-info: #88b4ff;
 
-  --color-success-soft: rgba(60, 227, 106, 0.12);
+  --color-success-soft: rgba(var(--color-primary-rgb), 0.12);
   --color-danger-soft: rgba(235, 68, 70, 0.12);
   --color-info-soft: rgba(136, 180, 255, 0.12);
   --color-info: #88b4ff;
 
-  --chart-fill-start: 60 227 106;
+  --chart-fill-start: 22 199 132;
   --chart-fill-end: 16 19 26;
   --chart-point-bg: 50 53 60;
   --chart-grid: 50 53 60;
@@ -315,7 +326,7 @@ a:focus-visible {
 }
 
 .ui-button-primary {
-  border: 1px solid rgba(60, 227, 106, 0.18);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.18);
   background: var(--color-primary);
   color: var(--text-on-primary);
   border-radius: 0.75rem;
@@ -325,14 +336,14 @@ a:focus-visible {
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  box-shadow: 0 18px 36px rgba(0, 150, 60, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: 0 18px 36px rgba(var(--color-primary-rgb), 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .ui-button-primary:hover {
   background: var(--color-primary-hover);
-  border-color: rgba(60, 227, 106, 0.28);
-  box-shadow: 0 22px 40px rgba(0, 150, 60, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-color: rgba(var(--color-primary-rgb), 0.28);
+  box-shadow: 0 22px 40px rgba(var(--color-primary-rgb), 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   transform: translateY(-1px);
 }
 
@@ -357,16 +368,16 @@ a:focus-visible {
 }
 
 .ui-button-tonal-success {
-  background: rgba(60, 227, 106, 0.12);
-  border: 1px solid rgba(60, 227, 106, 0.35);
+  background: var(--color-success-soft);
+  border: 1px solid var(--color-primary-border-strong);
   color: var(--text-accent);
-  box-shadow: 0 14px 28px rgba(60, 227, 106, 0.1);
+  box-shadow: 0 14px 28px rgba(var(--color-primary-rgb), 0.1);
 }
 
 .ui-button-tonal-success:hover {
-  background: rgba(60, 227, 106, 0.18);
-  border-color: rgba(60, 227, 106, 0.48);
-  box-shadow: 0 18px 32px rgba(60, 227, 106, 0.14);
+  background: var(--color-primary-soft-strong);
+  border-color: var(--color-primary-border-emphasis);
+  box-shadow: 0 18px 32px rgba(var(--color-primary-rgb), 0.14);
 }
 
 .ui-button-tonal-info {
@@ -439,6 +450,83 @@ a:focus-visible {
 .status-pill-positive {
   background: var(--color-success-soft);
   color: var(--text-success);
+}
+
+.border-success-subtle {
+  border-color: var(--color-primary-border-subtle);
+}
+
+.border-success-soft {
+  border-color: var(--color-primary-border);
+}
+
+.border-success-strong {
+  border-color: var(--color-primary-border-strong);
+}
+
+.bg-success-faint {
+  background-color: var(--color-primary-faint);
+}
+
+.bg-success-strong {
+  background-color: var(--color-primary-soft);
+}
+
+.bg-success-emphasis {
+  background-color: var(--color-primary-soft-strong);
+}
+
+.bg-success-ghost {
+  background-color: rgba(var(--color-primary-rgb), 0.08);
+}
+
+.bg-success-indicator {
+  background-color: rgba(var(--color-primary-rgb), 0.5);
+}
+
+.text-success-soft {
+  color: var(--text-accent);
+}
+
+.text-success-strong {
+  color: var(--text-success-strong);
+}
+
+.text-success-muted {
+  color: var(--text-success-muted);
+}
+
+.text-success-dim {
+  color: var(--text-success-dim);
+}
+
+.shadow-success-hairline {
+  box-shadow: 0 0 0 1px rgba(var(--color-primary-rgb), 0.06);
+}
+
+.shadow-success-selected {
+  box-shadow: 0 0 0 1px rgba(var(--color-primary-rgb), 0.18), 0 12px 28px rgba(0, 0, 0, 0.22);
+}
+
+.status-badge-success {
+  border: 1px solid var(--color-primary-border-strong);
+  background: var(--color-primary-soft);
+  color: var(--text-success-strong);
+}
+
+.status-badge-success-soft {
+  border: 1px solid var(--color-primary-border);
+  background: var(--color-success-soft);
+  color: var(--text-accent);
+}
+
+.spinner-ring-success {
+  border-color: rgba(var(--color-primary-rgb), 0.28);
+  border-top-color: var(--text-accent);
+}
+
+.group:hover .group-hover\:bg-success-emphasis {
+  background-color: var(--color-primary-soft-strong);
 }
 
 .status-pill-negative {
@@ -543,6 +631,14 @@ a:focus-visible {
 
 .text-accent {
   color: var(--text-accent);
+}
+
+.hover\:text-accent:hover {
+  color: var(--text-accent);
+}
+
+.hover\:shadow-success-soft:hover {
+  box-shadow: 0 8px 20px rgba(var(--color-primary-rgb), 0.14);
 }
 
 .text-danger {

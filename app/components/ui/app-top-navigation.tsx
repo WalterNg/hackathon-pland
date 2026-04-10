@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { label: "Portfolio", href: "/portfolio" },
+  { label: "Risk Management", href: "/risk" },
   { label: "Journal", href: "/journal" }
 ] as const;
 
@@ -18,9 +19,10 @@ function normalizePath(path: string): string {
 
 type AppTopNavigationProps = {
   portfolioHref?: string;
+  riskHref?: string;
 };
 
-export function AppTopNavigation({ portfolioHref = "/portfolio" }: AppTopNavigationProps) {
+export function AppTopNavigation({ portfolioHref = "/portfolio", riskHref = "/risk" }: AppTopNavigationProps) {
   const pathname = usePathname();
   const currentPath = normalizePath(pathname);
 
@@ -33,7 +35,11 @@ export function AppTopNavigation({ portfolioHref = "/portfolio" }: AppTopNavigat
       <nav className="min-w-0 flex-1 overflow-x-auto">
         <div className="flex min-w-max items-center gap-5 pr-4 lg:pr-0">
         {navItems.map((item) => {
-          const href = item.href === "/portfolio" ? portfolioHref : item.href;
+          const href = item.href === "/portfolio"
+            ? portfolioHref
+            : item.href === "/risk"
+              ? riskHref
+              : item.href;
           const normalizedHref = normalizePath(item.href);
           const isActive = currentPath === normalizedHref || currentPath.startsWith(`${normalizedHref}/`);
 

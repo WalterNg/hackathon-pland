@@ -61,12 +61,12 @@ function sl(step: string) {
 function actionTheme(action: string) {
   if (action === "Accumulate") {
     return {
-      heroBorder: "border-emerald-500/25",
-      heroBg: "bg-emerald-500/[0.03]",
-      actionText: "text-emerald-300",
-      accentText: "text-emerald-400",
-      accentDot: "bg-emerald-500/50",
-      actionLabel: "text-emerald-300/70",
+      heroBorder: "border-success-soft",
+      heroBg: "bg-success-faint",
+      actionText: "text-success-soft",
+      accentText: "text-success",
+      accentDot: "bg-success-indicator",
+      actionLabel: "text-success-muted",
     };
   }
 
@@ -148,7 +148,7 @@ function ThinkingStrip({ trace, activeNodes }: ThinkingStripProps) {
             outlined={false}
             className={[
               "shrink-0 text-[0.85rem]",
-              evt.status === "error" ? "text-rose-400" : "text-emerald-500/70",
+              evt.status === "error" ? "text-rose-400" : "text-success-dim",
             ].join(" ")}
           />
           <span className={[
@@ -205,7 +205,7 @@ function AIInsightPanel({ recommendation, result }: AIInsightPanelProps) {
   const getRiskColor = (score: number) => {
     if (score >= 8) return "bg-rose-500/20 text-rose-400 border-rose-500/30";
     if (score >= 5) return "bg-amber-500/20 text-amber-400 border-amber-500/30";
-    return "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
+    return "status-badge-success-soft";
   };
 
   // Derive granular content from result (the "Expand" data)
@@ -277,8 +277,10 @@ export function PortfolioSummary({
   });
   const totalValueUsdLabel = usdFormatter.format(summary.totalValueUsd);
   const isProfitPositive = metrics.allTimeProfitPercent >= 0;
-  const allTimeProfitUsdLabel = `${isProfitPositive ? "+" : "-"}${usdFormatter.format(Math.abs(metrics.allTimeProfitUsd))}`;
-  const allTimeProfitPercentLabel = `${isProfitPositive ? "+" : ""}${metrics.allTimeProfitPercent.toFixed(2)}%`;
+  const allTimeProfitPercentLabel = `${Math.abs(metrics.allTimeProfitPercent).toFixed(2)}%`;
+  const profitChangeClassName = isProfitPositive ? "text-success" : "text-rose-400";
+  const profitChangeArrowGlyph = isProfitPositive ? "↑" : "↓";
+  const profitChangeArrowLabel = isProfitPositive ? "Increase" : "Decrease";
 
   const hasRecommendation = !!tradingAgentRecommendation && !tradingAgentIsAnalyzing;
 
@@ -301,16 +303,12 @@ export function PortfolioSummary({
                 {totalValueUsdLabel}
               </h2>
               
-              <div className={`flex items-center gap-2 rounded-2xl bg-white/5 px-3 py-1.5 ${isProfitPositive ? "text-emerald-400" : "text-rose-400"}`}>
-                <MaterialIcon
-                  name={isProfitPositive ? "arrow_upward" : "arrow_downward"}
-                  outlined={false}
-                  className="text-[0.8rem]"
-                />
-                <div className="leading-none">
-                  <div className="text-[0.82rem] font-bold">{allTimeProfitUsdLabel}</div>
-                  <div className="mt-1 text-[0.72rem] font-semibold opacity-90">{allTimeProfitPercentLabel}</div>
-                </div>
+              <div className={`inline-flex items-baseline gap-1 leading-none ${profitChangeClassName}`}>
+                <span aria-hidden="true" className="text-[0.7rem] leading-none">
+                  {profitChangeArrowGlyph}
+                </span>
+                <span className="sr-only">{profitChangeArrowLabel}</span>
+                <span className="text-[0.82rem] font-semibold leading-none">{allTimeProfitPercentLabel}</span>
               </div>
             </div>
           </div>

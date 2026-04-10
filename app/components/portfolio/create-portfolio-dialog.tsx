@@ -240,11 +240,11 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
                 onClick={() => setMode("manual")}
                 className={`${optionCardBase} ${
                   mode === "manual"
-                    ? "border-primary/70 bg-(--surface-container-highest) shadow-[0_0_0_1px_rgba(60,227,106,0.18),0_12px_28px_rgba(0,0,0,0.22)]"
+                    ? "border-primary/70 bg-(--surface-container-highest) shadow-success-selected"
                     : "border-(--surface-outline) bg-(--surface-container-low) hover:border-primary/35 hover:bg-(--surface-bright)"
                 }`}
               >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success-soft text-success transition-all duration-200 ease-out group-hover:scale-105 group-hover:bg-success/15">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success-soft text-success transition-all duration-200 ease-out group-hover:scale-105 group-hover:bg-success-emphasis">
                   <MaterialIcon name="edit" outlined={false} className="text-base" />
                 </span>
                 <span className="min-w-0">
@@ -257,7 +257,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
                 onClick={() => setMode("binance_connected")}
                 className={`${optionCardBase} ${
                   mode === "binance_connected"
-                    ? "border-primary/70 bg-(--surface-container-highest) shadow-[0_0_0_1px_rgba(60,227,106,0.18),0_12px_28px_rgba(0,0,0,0.22)]"
+                    ? "border-primary/70 bg-(--surface-container-highest) shadow-success-selected"
                     : "border-(--surface-outline) bg-(--surface-container-low) hover:border-primary/35 hover:bg-(--surface-bright)"
                 }`}
               >
@@ -354,11 +354,11 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
                     type="button"
                     onClick={() => void loadDemoPreview()}
                     disabled={isLoadingPreview}
-                    className="ui-button-tonal-success flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold tracking-wide transition-all duration-200 ease-out hover:-translate-y-0.5 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                    className="ui-button-tonal-success flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold tracking-wide transition-all duration-200 ease-out hover:-translate-y-0.5 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
                   >
                     {isLoadingPreview ? (
                       <>
-                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-400/40 border-t-emerald-300" />
+                          <span className="spinner-ring-success h-4 w-4 animate-spin rounded-full border-2" />
                         Loading…
                       </>
                     ) : (

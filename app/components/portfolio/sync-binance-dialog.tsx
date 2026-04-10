@@ -213,7 +213,7 @@ export function SyncBinanceDialog({ open, portfolioName, onClose, onSync }: Sync
                 >
                   {isLoadingPreview ? (
                     <>
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-400/40 border-t-emerald-300" />
+                      <span className="spinner-ring-success h-4 w-4 animate-spin rounded-full border-2" />
                       Loading…
                     </>
                   ) : (

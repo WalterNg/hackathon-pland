@@ -98,7 +98,7 @@ const PROCESSING_AGENTS = [
     id: "ta",
     label: "Quant / TA Agent",
     icon: "query_stats",
-    accentClass: "bg-emerald-400/8",
+    accentClass: "bg-success-ghost",
   },
   {
     id: "news",
@@ -137,7 +137,7 @@ function factAccentClasses(accent: MarketFact["accent"], highlighted: boolean, d
     accent === "danger"
       ? "border-rose-500/20 shadow-[0_0_0_1px_rgba(244,63,94,0.08)]"
       : accent === "success"
-        ? "border-emerald-400/15 shadow-[0_0_0_1px_rgba(52,211,153,0.06)]"
+        ? "border-success-subtle shadow-success-hairline"
         : "border-sky-400/15 shadow-[0_0_0_1px_rgba(56,189,248,0.06)]";
 
   if (highlighted) {
@@ -153,7 +153,7 @@ function factAccentClasses(accent: MarketFact["accent"], highlighted: boolean, d
 
 function accordionToneClasses(tone: AgentAccordion["tone"]): string {
   if (tone === "success") {
-    return "border-emerald-400/25 bg-emerald-500/10 text-emerald-200";
+    return "border-success-soft bg-success-strong text-success-strong";
   }
 
   if (tone === "danger") {
@@ -543,7 +543,7 @@ export function AIPortfolioRecommendationDashboard({
               <div
                 className={`mt-4 flex items-start justify-between gap-3 rounded-2xl px-4 py-3 text-sm ${
                   actionFeedback.tone === "success"
-                    ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
+                    ? "status-badge-success"
                     : actionFeedback.tone === "error"
                       ? "border border-rose-500/20 bg-rose-500/10 text-rose-100"
                       : "border border-sky-400/20 bg-sky-500/10 text-sky-100"

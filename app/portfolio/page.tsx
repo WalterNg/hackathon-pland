@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MaterialIcon } from "../components/dashboard/material-icon";
-import { RiskAlertCenterDialog } from "../components/portfolio/risk-alert-center-dialog";
 import { AppTopNavigation } from "../components/ui/app-top-navigation";
 import { AddTransactionDialog } from "../components/portfolio/add-transaction-dialog";
 import { CreatePortfolioDialog } from "../components/portfolio/create-portfolio-dialog";
@@ -12,21 +11,17 @@ import { PortfolioAssetsTable } from "../components/portfolio/portfolio-assets-t
 import { PortfolioCharts } from "@/app/components/portfolio/portfolio-charts";
 import { PortfolioHeader } from "../components/portfolio/portfolio-header";
 import { PortfolioMetrics } from "../components/portfolio/portfolio-metrics";
-import { RiskRulesDialog } from "../components/portfolio/risk-rules-dialog";
 import { RiskMonitorPanel } from "../components/portfolio/risk-monitor-panel";
 import { PortfolioSummary } from "../components/portfolio/portfolio-summary";
 import { SelectCoinModal } from "../components/portfolio/select-coin-modal";
 import { Sidebar } from "../components/ui/sidebar";
-import { useRiskAlerts } from "../hooks/use-risk-alerts";
 import { AuthGuard } from "../components/auth/auth-guard";
 import { useTradingAgentAnalysis } from "../hooks/use-trading-agent-analysis";
 import { usePortfolios } from "../hooks/use-portfolios";
 import { useRiskEvents } from "../hooks/use-risk-events";
-import { useRiskRules } from "../hooks/use-risk-rules";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
 import { RefreshIntervals } from "@/app/lib/refresh-intervals";
 import type { PortfolioMode, PortfolioSnapshot } from "@/app/lib/portfolio-types";
-import type { RiskAlertStatus, RiskRulesFormValues } from "@/app/lib/risk-types";
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
 const SUMMARY_RENDER_INTERVAL_MS = RefreshIntervals.PORTFOLIO_SUMMARY_RENDER_MS;
@@ -90,9 +85,6 @@ function PortfolioContent() {
   const [isAddDialogOpen, setAddDialogOpen] = useState(false);
   const [isCreatePortfolioOpen, setCreatePortfolioOpen] = useState(false);
   const [isSyncDialogOpen, setSyncDialogOpen] = useState(false);
-  const [isRiskRulesOpen, setRiskRulesOpen] = useState(false);
-  const [isAlertCenterOpen, setAlertCenterOpen] = useState(false);
-  const [alertStatus, setAlertStatus] = useState<RiskAlertStatus | "all">("all");
   const [isRemovingPortfolio, setRemovingPortfolio] = useState(false);
   const [isSyncingPortfolio, setSyncingPortfolio] = useState(false);
   const [showCharts, setShowCharts] = useState(true);
@@ -139,24 +131,6 @@ function PortfolioContent() {
     error: riskError,
     reload: reloadRisk,
   } = useRiskEvents(portfolioId, portfolioName);
-  const {
-    profile: editableRiskProfile,
-    source: riskRuleSource,
-    isLoading: isRiskRulesLoading,
-    isSaving: isRiskRulesSaving,
-    error: riskRulesError,
-    save: saveRiskRules,
-    reload: reloadRiskRules,
-  } = useRiskRules(portfolioName);
-  const {
-    alerts: alertCenterAlerts,
-    isLoading: isAlertCenterLoading,
-    isUpdatingId: updatingAlertId,
-    error: alertCenterError,
-    reload: reloadAlertCenter,
-    acknowledge,
-    resolve,
-  } = useRiskAlerts(portfolioName, alertStatus, 15_000, isAlertCenterOpen);
   const scopedSnapshot = snapshot?.summary.name === portfolioName ? snapshot : null;
 
   useEffect(() => {
@@ -185,6 +159,7 @@ function PortfolioContent() {
 
   const isConnectedPortfolio = currentPortfolio?.mode === "binance_connected";
   const primaryActionLabel = isMainPortfolio ? "Create portfolio" : isConnectedPortfolio ? "Read-only" : "Add transaction";
+  const riskManagementHref = `/risk?name=${encodeURIComponent(portfolioName)}`;
   const connectedPortfolioTimestamp = lastServerSyncAt ?? effectiveSnapshot?.summary.timestamp ?? null;
   const connectedStatusDescription =
     isConnectedPortfolio && connectedPortfolioTimestamp
@@ -231,8 +206,11 @@ function PortfolioContent() {
   }, [shouldOpenCreatePortfolio]);
 
   const openAlertCenterForActiveAlerts = () => {
-    setAlertStatus("active");
-    setAlertCenterOpen(true);
+    router.push(`${riskManagementHref}&status=active&focus=alerts`);
+  };
+
+  const openRiskRules = () => {
+    router.push(`${riskManagementHref}&focus=rules`);
   };
 
   const closeAddDialog = () => {
@@ -303,39 +281,6 @@ function PortfolioContent() {
   const handleTransactionCreated = async () => {
     await reload();
     await reloadRisk();
-    await reloadAlertCenter();
-  };
-
-  const handleSaveRiskRules = async (values: RiskRulesFormValues) => {
-    const saved = await saveRiskRules(values);
-    if (!saved) {
-      return;
-    }
-
-    await reloadRiskRules();
-    await reload();
-    await reloadRisk();
-    setRiskRulesOpen(false);
-  };
-
-  const handleAcknowledgeAlert = async (alertId: string) => {
-    const ok = await acknowledge(alertId);
-    if (!ok) {
-      return;
-    }
-
-    await reloadRisk();
-    await reloadAlertCenter();
-  };
-
-  const handleResolveAlert = async (alertId: string) => {
-    const ok = await resolve(alertId);
-    if (!ok) {
-      return;
-    }
-
-    await reloadRisk();
-    await reloadAlertCenter();
   };
 
   const handleRemovePortfolio = async () => {
@@ -371,7 +316,10 @@ function PortfolioContent() {
     <>
       <header className="page-header shrink-0 px-4 sm:px-6 lg:px-8">
         <div className="w-full">
-          <AppTopNavigation portfolioHref={`/portfolio?name=${encodeURIComponent(portfolioName)}`} />
+          <AppTopNavigation
+            portfolioHref={`/portfolio?name=${encodeURIComponent(portfolioName)}`}
+            riskHref={riskManagementHref}
+          />
         </div>
       </header>
 
@@ -424,7 +372,7 @@ function PortfolioContent() {
                     <button type="button" onClick={openAlertCenterForActiveAlerts} className="ui-button-secondary">
                       Review alerts
                     </button>
-                    <button type="button" onClick={() => setRiskRulesOpen(true)} className="ui-button-primary">
+                    <button type="button" onClick={openRiskRules} className="ui-button-primary">
                       Tighten rules
                     </button>
                   </div>
@@ -469,7 +417,7 @@ function PortfolioContent() {
                   alerts={riskAlerts}
                   isLoading={isRiskLoading}
                   error={riskError}
-                  onManageRules={() => setRiskRulesOpen(true)}
+                  onManageRules={openRiskRules}
                   onViewAlerts={openAlertCenterForActiveAlerts}
                 />
                 <PortfolioMetrics metrics={throttledMetrics ?? scopedMetrics} />
@@ -533,35 +481,6 @@ function PortfolioContent() {
         portfolioName={portfolioName}
         onClose={() => setSyncDialogOpen(false)}
         onSync={handleSyncPortfolio}
-      />
-
-      <RiskRulesDialog
-        open={isRiskRulesOpen}
-        portfolioName={portfolioName}
-        profile={editableRiskProfile}
-        source={riskRuleSource}
-        isLoading={isRiskRulesLoading}
-        isSaving={isRiskRulesSaving}
-        error={riskRulesError}
-        onClose={() => setRiskRulesOpen(false)}
-        onSave={handleSaveRiskRules}
-      />
-
-      <RiskAlertCenterDialog
-        open={isAlertCenterOpen}
-        alerts={alertCenterAlerts}
-        status={alertStatus}
-        isLoading={isAlertCenterLoading}
-        isUpdatingId={updatingAlertId}
-        error={alertCenterError}
-        onClose={() => setAlertCenterOpen(false)}
-        onStatusChange={setAlertStatus}
-        onAcknowledge={handleAcknowledgeAlert}
-        onResolve={handleResolveAlert}
-        onReviewRules={() => {
-          setAlertCenterOpen(false);
-          setRiskRulesOpen(true);
-        }}
       />
     </>
   );
