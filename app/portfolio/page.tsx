@@ -102,6 +102,8 @@ function PortfolioContent() {
     action: "buy",
     note: "",
   });
+  const isMainPortfolio = useMemo(() => portfolioName === DEFAULT_PORTFOLIO_NAME, [portfolioName]);
+  const tradingAgentScopeKey = isMainPortfolio ? null : portfolioName;
   const {
     recommendation: tradingAgentRecommendation,
     latestResult: tradingAgentResult,
@@ -113,9 +115,8 @@ function PortfolioContent() {
     activeNodes: tradingAgentActiveNodes,
     progressLabel: tradingAgentProgressLabel,
     analyze: analyzeTradingAgent,
-  } = useTradingAgentAnalysis(portfolioName);
+  } = useTradingAgentAnalysis(tradingAgentScopeKey);
 
-  const isMainPortfolio = useMemo(() => portfolioName === DEFAULT_PORTFOLIO_NAME, [portfolioName]);
   const currentPortfolio = useMemo(
     () => portfolios.find((portfolio) => portfolio.name === portfolioName) ?? null,
     [portfolios, portfolioName]
@@ -364,6 +365,10 @@ function PortfolioContent() {
   };
 
   const handleAnalyzeTradingAgent = () => {
+    if (isMainPortfolio) {
+      return;
+    }
+
     void analyzeTradingAgent({ portfolioName });
   };
 
@@ -458,8 +463,9 @@ function PortfolioContent() {
                     tradingAgentProgressLabel={tradingAgentProgressLabel}
                     tradingAgentActiveNodes={tradingAgentActiveNodes}
                     tradingAgentError={tradingAgentError}
+                    showTradingAgentControls={!isMainPortfolio}
                     onAnalyzeTradingAgent={handleAnalyzeTradingAgent}
-                    isAnalyzeDisabled={!effectiveSnapshot || isLoading}
+                    isAnalyzeDisabled={isMainPortfolio || !effectiveSnapshot || isLoading}
                   />
                 ) : null}
                 <RiskMonitorPanel
