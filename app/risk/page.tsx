@@ -5,8 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AuthGuard } from "../components/auth/auth-guard";
 import { RiskAlertsSection } from "../components/risk/risk-alerts-section";
 import { RiskHeader } from "../components/risk/risk-header";
+import { RiskMonitorPanel } from "../components/risk/risk-monitor-panel";
 import { RiskRulesSection } from "../components/risk/risk-rules-section";
 import { Sidebar } from "../components/ui/sidebar";
+import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
 import { usePortfolios } from "../hooks/use-portfolios";
 import { useRiskManagementState } from "../hooks/use-risk-management-state";
 import type { RiskAlertStatus } from "@/app/lib/risk-types";
@@ -35,6 +37,11 @@ function RiskPageContent() {
     [portfolios, portfolioName]
   );
   const portfolioId = currentPortfolio?.id ?? null;
+  const {
+    snapshot,
+    isLoading: isSnapshotLoading,
+    error: snapshotError,
+  } = usePortfolioSnapshot(portfolioId, portfolioName);
   const portfolioHref = `/portfolio?name=${encodeURIComponent(portfolioName)}`;
   const riskHref = `/risk?name=${encodeURIComponent(portfolioName)}`;
   const {
@@ -56,6 +63,9 @@ function RiskPageContent() {
     handleAcknowledgeAlert,
     handleResolveAlert,
   } = useRiskManagementState(portfolioId, portfolioName, alertStatus);
+  const metrics = snapshot?.metrics ?? null;
+  const monitorError = riskError ?? snapshotError;
+  const isMonitorLoading = isRiskLoading || isSnapshotLoading;
 
   const criticalActiveAlerts = useMemo(
     () => alerts.filter((alert) => alert.status === "active" && alert.severity === "critical"),
@@ -167,33 +177,24 @@ function RiskPageContent() {
 
               {riskError && <div className="panel-low mt-5 p-4 text-sm text-danger">{riskError}</div>}
 
-              {!riskError && !isRiskLoading && events.length > 0 && (
-                <div className="mt-5 rounded-2xl border border-white/6 bg-(--surface-container) p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="typo-body font-semibold text-strong">Recent risk events</p>
-                    <span className="text-xs uppercase tracking-[0.16em] text-subtle">Live monitor</span>
-                  </div>
-
-                  <div className="space-y-2">
-                    {events.slice(0, 4).map((event) => (
-                      <div key={event.id} className="flex items-start justify-between gap-3 rounded-2xl bg-(--surface-container-low) px-4 py-3">
-                        <div>
-                          <p className="text-sm font-semibold capitalize text-strong">{event.eventType.replaceAll("_", " ")}</p>
-                          <p className="mt-1 text-xs text-muted">{new Date(event.occurredAt).toLocaleString()}</p>
-                        </div>
-                        <span className="status-pill status-pill-neutral capitalize">{event.severity}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {!riskError && !isRiskLoading && profile && (
                 <div className="mt-5 rounded-2xl border border-white/6 bg-(--surface-container) p-4 text-sm text-body">
                   Active profile: <span className="font-semibold text-strong">{profile.name}</span>
                 </div>
               )}
             </section>
+
+            <RiskMonitorPanel
+              metrics={metrics}
+              events={events}
+              alerts={alerts}
+              isLoading={isMonitorLoading}
+              error={monitorError}
+              onViewAlerts={() => {
+                updateSearchParams({ status: "active", focus: "alerts" });
+                scrollToSection("alerts");
+              }}
+            />
 
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
               <div ref={rulesSectionRef}>

@@ -4,9 +4,6 @@ type PortfolioHeaderProps = {
   portfolioName: string;
   statusLabel?: string;
   statusDescription?: string;
-  criticalAlertCount?: number;
-  warningAlertCount?: number;
-  onOpenAlertCenter?: () => void;
   primaryActionLabel: string;
   onPrimaryAction: () => void;
   isPrimaryActionDisabled?: boolean;
@@ -24,9 +21,6 @@ export function PortfolioHeader({
   portfolioName,
   statusLabel,
   statusDescription,
-  criticalAlertCount = 0,
-  warningAlertCount = 0,
-  onOpenAlertCenter,
   primaryActionLabel,
   onPrimaryAction,
   isPrimaryActionDisabled = false,
@@ -50,25 +44,6 @@ export function PortfolioHeader({
             <span className="inline-flex items-center rounded-full border border-(--surface-outline) bg-(--surface-container-low) px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">
               {statusLabel}
             </span>
-          ) : null}
-          {criticalAlertCount > 0 ? (
-            <button
-              type="button"
-              onClick={onOpenAlertCenter}
-              className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/22 bg-rose-500/12 px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-rose-200 transition-colors hover:border-rose-300/30 hover:bg-rose-500/18"
-            >
-              <span className="inline-flex h-2 w-2 rounded-full bg-rose-300" />
-              {criticalAlertCount} critical alert{criticalAlertCount === 1 ? "" : "s"}
-            </button>
-          ) : warningAlertCount > 0 ? (
-            <button
-              type="button"
-              onClick={onOpenAlertCenter}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-(--surface-container-low) px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted transition-colors hover:text-strong"
-            >
-              <span className="inline-flex h-2 w-2 rounded-full bg-amber-300" />
-              {warningAlertCount} active alert{warningAlertCount === 1 ? "" : "s"}
-            </button>
           ) : null}
         </div>
         {statusDescription ? <p className="mt-2 max-w-xl text-sm italic text-muted">{statusDescription}</p> : null}

@@ -11,14 +11,12 @@ import { PortfolioAssetsTable } from "../components/portfolio/portfolio-assets-t
 import { PortfolioCharts } from "@/app/components/portfolio/portfolio-charts";
 import { PortfolioHeader } from "../components/portfolio/portfolio-header";
 import { PortfolioMetrics } from "../components/portfolio/portfolio-metrics";
-import { RiskMonitorPanel } from "../components/portfolio/risk-monitor-panel";
 import { PortfolioSummary } from "../components/portfolio/portfolio-summary";
 import { SelectCoinModal } from "../components/portfolio/select-coin-modal";
 import { Sidebar } from "../components/ui/sidebar";
 import { AuthGuard } from "../components/auth/auth-guard";
 import { useTradingAgentAnalysis } from "../hooks/use-trading-agent-analysis";
 import { usePortfolios } from "../hooks/use-portfolios";
-import { useRiskEvents } from "../hooks/use-risk-events";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
 import { RefreshIntervals } from "@/app/lib/refresh-intervals";
 import type { PortfolioMode, PortfolioSnapshot } from "@/app/lib/portfolio-types";
@@ -123,14 +121,6 @@ function PortfolioContent() {
     isServerSnapshotStale,
     reload
   } = usePortfolioSnapshot(portfolioId, portfolioName);
-  const {
-    profile: riskProfile,
-    events: riskEvents,
-    alerts: riskAlerts,
-    isLoading: isRiskLoading,
-    error: riskError,
-    reload: reloadRisk,
-  } = useRiskEvents(portfolioId, portfolioName);
   const scopedSnapshot = snapshot?.summary.name === portfolioName ? snapshot : null;
 
   useEffect(() => {
@@ -168,22 +158,10 @@ function PortfolioContent() {
         ? "This portfolio syncs automatically from Binance and manual edits are disabled."
         : undefined;
   const defaultPortfolioName = useMemo(() => `Portfolio ${portfolios.length + 1}`, [portfolios.length]);
-  const criticalActiveAlerts = useMemo(
-    () => riskAlerts.filter((alert) => alert.status === "active" && alert.severity === "critical"),
-    [riskAlerts]
-  );
-  const warningActiveAlerts = useMemo(
-    () => riskAlerts.filter((alert) => alert.status === "active" && alert.severity !== "critical"),
-    [riskAlerts]
-  );
   const scopedSummary = effectiveSnapshot?.summary ?? null;
   const scopedMetrics = effectiveSnapshot?.metrics ?? null;
   const scopedAssets = effectiveSnapshot?.assets ?? [];
   const scopedChart = effectiveSnapshot?.chart ?? [];
-  const pinnedCriticalAlert = useMemo(
-    () => criticalActiveAlerts.find((alert) => alert.triggerCount >= 3) ?? criticalActiveAlerts[0] ?? null,
-    [criticalActiveAlerts]
-  );
   const throttledSummary = useThrottledValue(scopedSummary, SUMMARY_RENDER_INTERVAL_MS, portfolioName);
   const throttledMetrics = useThrottledValue(scopedMetrics, SUMMARY_RENDER_INTERVAL_MS, portfolioName);
   const throttledAssets = useThrottledValue(scopedAssets, ASSETS_RENDER_INTERVAL_MS, portfolioName);
@@ -204,14 +182,6 @@ function PortfolioContent() {
       setCreatePortfolioOpen(true);
     }
   }, [shouldOpenCreatePortfolio]);
-
-  const openAlertCenterForActiveAlerts = () => {
-    router.push(`${riskManagementHref}&status=active&focus=alerts`);
-  };
-
-  const openRiskRules = () => {
-    router.push(`${riskManagementHref}&focus=rules`);
-  };
 
   const closeAddDialog = () => {
     setAddDialogOpen(false);
@@ -280,7 +250,6 @@ function PortfolioContent() {
 
   const handleTransactionCreated = async () => {
     await reload();
-    await reloadRisk();
   };
 
   const handleRemovePortfolio = async () => {
@@ -335,9 +304,6 @@ function PortfolioContent() {
               portfolioName={portfolioName}
               statusLabel={isConnectedPortfolio ? "Connected to Binance" : undefined}
               statusDescription={connectedStatusDescription}
-              criticalAlertCount={criticalActiveAlerts.length}
-              warningAlertCount={warningActiveAlerts.length}
-              onOpenAlertCenter={openAlertCenterForActiveAlerts}
               primaryActionLabel={primaryActionLabel}
               onPrimaryAction={openTransactionFlow}
               isPrimaryActionDisabled={isConnectedPortfolio}
@@ -350,35 +316,6 @@ function PortfolioContent() {
               onSync={() => setSyncDialogOpen(true)}
               isSyncing={isSyncingPortfolio}
             />
-
-            {pinnedCriticalAlert ? (
-              <section className="ui-surface-danger mb-6 overflow-hidden rounded-3xl px-4 py-4 sm:px-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-rose-200/88">
-                      <span className="inline-flex h-2.5 w-2.5 rounded-full bg-rose-300 animate-pulse" />
-                      Critical alert requires action
-                      {pinnedCriticalAlert.triggerCount >= 3 ? (
-                        <span className="rounded-full border border-rose-300/20 bg-rose-500/12 px-2 py-0.5 text-[0.64rem] text-rose-100/90">
-                          Repeated {pinnedCriticalAlert.triggerCount} times
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-2 text-base font-semibold text-white sm:text-lg">{pinnedCriticalAlert.title}</p>
-                    <p className="mt-1 max-w-3xl text-sm text-rose-50/78">{pinnedCriticalAlert.message}</p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" onClick={openAlertCenterForActiveAlerts} className="ui-button-secondary">
-                      Review alerts
-                    </button>
-                    <button type="button" onClick={openRiskRules} className="ui-button-primary">
-                      Tighten rules
-                    </button>
-                  </div>
-                </div>
-              </section>
-            ) : null}
 
             {isLoading && !effectiveSnapshot && (
               <div className="panel-low mb-6 p-5 text-sm text-muted">Loading portfolio snapshot…</div>
@@ -410,16 +347,6 @@ function PortfolioContent() {
                     isAnalyzeDisabled={!effectiveSnapshot || isLoading}
                   />
                 ) : null}
-                <RiskMonitorPanel
-                  metrics={scopedMetrics}
-                  profile={riskProfile}
-                  events={riskEvents}
-                  alerts={riskAlerts}
-                  isLoading={isRiskLoading}
-                  error={riskError}
-                  onManageRules={openRiskRules}
-                  onViewAlerts={openAlertCenterForActiveAlerts}
-                />
                 <PortfolioMetrics metrics={throttledMetrics ?? scopedMetrics} />
                 {showCharts && (
                   <PortfolioCharts
