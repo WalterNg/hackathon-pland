@@ -319,7 +319,7 @@ export function PortfolioCharts({ chart, assets, allTimeProfitPercent }: Portfol
           </div>
         </div>
 
-        <div className="relative h-48 overflow-hidden rounded-xl bg-(--surface-container-low)">
+        <div className="relative h-48 overflow-hidden rounded-xl">
           <svg viewBox="0 0 100 50" preserveAspectRatio="none" className="h-full w-full pr-14">
             <defs>
               <linearGradient id="btc-performance-gradient" x1="0" y1="0" x2="0" y2="1">

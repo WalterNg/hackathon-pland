@@ -354,7 +354,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
                     type="button"
                     onClick={() => void loadDemoPreview()}
                     disabled={isLoadingPreview}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-linear-to-r from-emerald-500/15 to-emerald-400/10 px-4 py-3 text-sm font-semibold tracking-wide text-emerald-300 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-emerald-400/60 hover:from-emerald-500/25 hover:to-emerald-400/20 hover:text-emerald-200 hover:shadow-[0_14px_28px_rgba(60,227,106,0.14)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                    className="ui-button-tonal-success flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold tracking-wide transition-all duration-200 ease-out hover:-translate-y-0.5 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
                   >
                     {isLoadingPreview ? (
                       <>

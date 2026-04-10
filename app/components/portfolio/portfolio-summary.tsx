@@ -135,7 +135,7 @@ function ThinkingStrip({ trace, activeNodes }: ThinkingStripProps) {
   return (
     <div
       ref={scrollRef}
-      className="mt-2.5 space-y-1.5 max-h-[5.25rem] overflow-y-auto pr-2 custom-scrollbar scroll-smooth [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/20"
+      className="mt-2.5 max-h-21 space-y-1.5 overflow-y-auto pr-2 custom-scrollbar scroll-smooth [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/10 hover:[&::-webkit-scrollbar-thumb]:bg-white/20"
     >
       {/* Completed steps — green ticks */}
       {completedSteps.map((evt, i) => (
@@ -328,21 +328,17 @@ export function PortfolioSummary({
                   onClick={onAnalyzeTradingAgent}
                   disabled={isAnalyzeDisabled || tradingAgentIsAnalyzing}
                   className={[
+                    "ui-button-tonal-info",
                     "group relative inline-flex items-center gap-2.5 overflow-hidden",
                     "rounded-2xl px-5 py-2.5",
-                    "text-[0.85rem] font-bold tracking-wide text-white",
+                    "text-[0.85rem] font-bold tracking-wide",
                     "shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_4px_24px_rgba(14,165,233,0.3)]",
                     "transition-all duration-300",
                     "hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_8px_32px_rgba(99,102,241,0.5)]",
                     "hover:scale-[1.02] active:scale-[0.97]",
                     "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100",
-                    "bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-600",
                   ].join(" ")}
                 >
-                   <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 -translate-x-full skew-x-[-15deg] bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-1000 group-hover:translate-x-full"
-                  />
                   {tradingAgentIsAnalyzing ? (
                     <span className="relative flex h-3 w-3 items-center justify-center">
                       <span className="absolute h-3 w-3 animate-ping rounded-full bg-white/40" />
@@ -361,7 +357,7 @@ export function PortfolioSummary({
                 type="button"
                 onClick={onAnalyzeTradingAgent}
                 disabled={isAnalyzeDisabled}
-                className="group inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-[0.78rem] font-bold text-slate-300 transition-all hover:bg-white/[0.1] hover:text-white"
+                className="group inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/4 px-4 py-2 text-[0.78rem] font-bold text-slate-300 transition-all hover:bg-white/10 hover:text-white"
               >
                 <MaterialIcon name="refresh" outlined={false} className="text-[0.85rem] transition-transform group-hover:rotate-180 duration-500" />
                 <span>Re-analyze</span>
@@ -371,7 +367,7 @@ export function PortfolioSummary({
             <button
               type="button"
               onClick={() => setTraceOpen(true)}
-              className="rounded-xl border border-white/5 bg-white/[0.02] p-2 text-slate-500 transition hover:bg-white/5 hover:text-slate-300"
+              className="rounded-xl border border-white/5 bg-white/2 p-2 text-slate-500 transition hover:bg-white/5 hover:text-slate-300"
               title="View full trace logs"
             >
               <MaterialIcon name="open_in_full" outlined={false} className="text-[0.85rem]" />
@@ -383,7 +379,7 @@ export function PortfolioSummary({
         <div className="mt-6">
           {/* 1. Thinking — Hide when done */}
           {tradingAgentIsAnalyzing && (
-             <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 animate-[fadeSlideIn_0.3s_ease_both]">
+             <div className="animate-[fadeSlideIn_0.3s_ease_both] rounded-2xl border border-white/5 bg-white/2 p-4">
                <ThinkingStrip
                   trace={tradingAgentTrace}
                   activeNodes={tradingAgentActiveNodes}
@@ -403,11 +399,11 @@ export function PortfolioSummary({
 
           {/* 3. Empty/Getting started */}
           {!tradingAgentIsAnalyzing && !tradingAgentRecommendation && !tradingAgentError && tradingAgentTrace.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.01] py-10">
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/1 py-10">
                <div className="mb-3 rounded-full bg-white/5 p-3 text-slate-500">
                   <MaterialIcon name="auto_awesome" outlined={false} className="text-2xl" />
                </div>
-               <p className="max-w-[280px] text-center text-[0.82rem] leading-relaxed text-slate-500">
+              <p className="max-w-70 text-center text-[0.82rem] leading-relaxed text-slate-500">
                   Take full control of your strategy. Let AI scan your entire portfolio for risks and opportunities.
                </p>
             </div>

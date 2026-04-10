@@ -55,11 +55,7 @@
 html {
   min-height: 100%;
   color-scheme: dark;
-  background-color: #10131a;
-  background:
-    radial-gradient(circle at top left, rgba(60, 227, 106, 0.08), transparent 28%),
-    radial-gradient(circle at top right, rgba(136, 180, 255, 0.09), transparent 24%),
-    linear-gradient(180deg, #121720 0%, #10131a 42%, #0d1016 100%);
+  background-color: var(--surface);
 }
 
 * {
@@ -79,11 +75,7 @@ body {
   min-height: 100vh;
   font-family: var(--font-sans);
   color-scheme: dark;
-  background-color: #10131a;
-  background:
-    radial-gradient(circle at top left, rgba(60, 227, 106, 0.08), transparent 28%),
-    radial-gradient(circle at top right, rgba(136, 180, 255, 0.09), transparent 24%),
-    linear-gradient(180deg, #121720 0%, #10131a 42%, #0d1016 100%);
+  background-color: var(--surface);
   color: var(--text-body);
   letter-spacing: -0.01em;
 }
@@ -179,6 +171,51 @@ a:focus-visible {
   border-radius: 1rem;
   backdrop-filter: blur(20px);
   box-shadow: var(--shadow-floating);
+}
+
+.ui-nav-link-active {
+  background: rgba(52, 87, 255, 0.18);
+  color: var(--text-inverse);
+  box-shadow: inset 0 0 0 1px rgba(136, 180, 255, 0.18), 0 18px 40px rgba(31, 49, 125, 0.24);
+}
+
+.ui-surface-card {
+  background: #0d131d;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.28);
+}
+
+.ui-surface-panel {
+  background: #0c121b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ui-surface-deep {
+  background: #0a0f18;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ui-surface-hero {
+  background: #4f3aa1;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.32);
+}
+
+.ui-surface-danger {
+  background: rgba(35, 12, 18, 0.9);
+  border: 1px solid rgba(244, 63, 94, 0.22);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.24);
+}
+
+.ui-surface-danger-soft {
+  background: rgba(35, 12, 18, 0.76);
+  border: 1px solid rgba(244, 63, 94, 0.18);
+}
+
+.ui-surface-info {
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  box-shadow: 0 0 28px rgba(59, 130, 246, 0.12);
 }
 
 .modal-backdrop {
@@ -278,7 +315,8 @@ a:focus-visible {
 }
 
 .ui-button-primary {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  border: 1px solid rgba(60, 227, 106, 0.18);
+  background: var(--color-primary);
   color: var(--text-on-primary);
   border-radius: 0.75rem;
   padding: 0.85rem 1.2rem;
@@ -287,17 +325,20 @@ a:focus-visible {
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  box-shadow: 0 18px 36px rgba(0, 150, 60, 0.22);
-  transition: transform 180ms ease, filter 180ms ease;
+  box-shadow: 0 18px 36px rgba(0, 150, 60, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .ui-button-primary:hover {
-  filter: brightness(1.04);
+  background: var(--color-primary-hover);
+  border-color: rgba(60, 227, 106, 0.28);
+  box-shadow: 0 22px 40px rgba(0, 150, 60, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   transform: translateY(-1px);
 }
 
 .ui-button-secondary {
   background: var(--surface-container-highest);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--color-primary);
   border-radius: 0.75rem;
   padding: 0.8rem 1rem;
@@ -306,6 +347,66 @@ a:focus-visible {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.ui-button-tonal-success,
+.ui-button-tonal-info,
+.ui-button-tonal-danger,
+.ui-button-hero {
+  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, color 180ms ease;
+}
+
+.ui-button-tonal-success {
+  background: rgba(60, 227, 106, 0.12);
+  border: 1px solid rgba(60, 227, 106, 0.35);
+  color: var(--text-accent);
+  box-shadow: 0 14px 28px rgba(60, 227, 106, 0.1);
+}
+
+.ui-button-tonal-success:hover {
+  background: rgba(60, 227, 106, 0.18);
+  border-color: rgba(60, 227, 106, 0.48);
+  box-shadow: 0 18px 32px rgba(60, 227, 106, 0.14);
+}
+
+.ui-button-tonal-info {
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(56, 189, 248, 0.24);
+  color: #dbeafe;
+  box-shadow: 0 14px 36px rgba(37, 99, 235, 0.16);
+}
+
+.ui-button-tonal-info:hover {
+  background: rgba(59, 130, 246, 0.22);
+  border-color: rgba(125, 211, 252, 0.3);
+  box-shadow: 0 18px 40px rgba(37, 99, 235, 0.2);
+}
+
+.ui-button-tonal-danger {
+  background: rgba(244, 63, 94, 0.16);
+  border: 1px solid rgba(244, 63, 94, 0.24);
+  color: #ffe4e6;
+  box-shadow: 0 14px 32px rgba(244, 63, 94, 0.14);
+}
+
+.ui-button-tonal-danger:hover {
+  background: rgba(244, 63, 94, 0.22);
+  border-color: rgba(251, 113, 133, 0.34);
+  box-shadow: 0 18px 36px rgba(244, 63, 94, 0.18);
+}
+
+.ui-button-hero {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: var(--text-inverse);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 12px 32px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(22px);
+}
+
+.ui-button-hero:hover {
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(255, 255, 255, 0.34);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 16px 36px rgba(0, 0, 0, 0.22);
 }
 
 .icon-button {

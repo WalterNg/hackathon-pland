@@ -57,8 +57,7 @@ export function StatBanner({ totalValueBtc, totalValueUsd, btcPriceUsd, totalVol
   const totalVolume24hBtc = btcPriceUsd && btcPriceUsd > 0 ? totalVolume24hUsd / btcPriceUsd : null;
 
   return (
-    <div className="text-inverse relative flex min-h-40 flex-col items-start gap-8 overflow-hidden rounded-[1.5rem] bg-sidebar-dark p-6 shadow-[0_24px_60px_rgba(0,0,0,0.34)] sm:p-7 md:flex-row md:items-center lg:p-10">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(60,227,106,0.18),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(136,180,255,0.12),transparent_24%)]" />
+    <div className="text-inverse relative flex min-h-40 flex-col items-start gap-8 overflow-hidden rounded-3xl border border-white/8 bg-sidebar-dark p-6 shadow-[0_24px_60px_rgba(0,0,0,0.34)] sm:p-7 md:flex-row md:items-center lg:p-10">
       <div className="relative flex h-full w-full flex-1 flex-col justify-center md:w-auto md:pr-12">
         <BannerBlock
           title="Portfolio Value"

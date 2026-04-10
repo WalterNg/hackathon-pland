@@ -135,7 +135,7 @@ export function RiskAlertCenterDialog({
         </div>
 
         {criticalActiveAlerts.length > 0 ? (
-          <div className="mb-5 rounded-2xl border border-rose-500/22 bg-[linear-gradient(90deg,rgba(127,29,29,0.22),rgba(62,9,18,0.12),rgba(16,19,26,0.96))] px-4 py-4">
+          <div className="ui-surface-danger mb-5 rounded-2xl px-4 py-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-rose-300/85">
@@ -171,7 +171,7 @@ export function RiskAlertCenterDialog({
                 key={alert.id}
                 className={`rounded-2xl p-4 ${
                   alert.severity === "critical" && alert.status === "active"
-                    ? "border border-rose-500/20 bg-[linear-gradient(180deg,rgba(62,9,18,0.3),rgba(25,12,18,0.92))]"
+                    ? "ui-surface-danger-soft"
                     : "bg-(--surface-container-low)"
                 }`}
               >

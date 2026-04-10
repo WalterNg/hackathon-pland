@@ -404,7 +404,7 @@ function PortfolioContent() {
             />
 
             {pinnedCriticalAlert ? (
-              <section className="mb-6 overflow-hidden rounded-3xl border border-rose-500/20 bg-[linear-gradient(90deg,rgba(127,29,29,0.18),rgba(58,12,25,0.1),rgba(8,13,22,0.96))] px-4 py-4 shadow-[0_20px_60px_rgba(0,0,0,0.24)] sm:px-5">
+              <section className="ui-surface-danger mb-6 overflow-hidden rounded-3xl px-4 py-4 sm:px-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-rose-200/88">

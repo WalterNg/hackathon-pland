@@ -113,7 +113,7 @@ function SidebarContent({
             href={mainPortfolioHref}
             className={
               isMainPortfolioActive
-                ? "flex items-center gap-3 rounded-3xl bg-linear-to-r from-[#3f66ff] to-[#3352d9] px-4 py-4 text-white shadow-[0_18px_40px_rgba(52,87,255,0.28)] transition-transform hover:-translate-y-0.5"
+                ? "ui-nav-link-active flex items-center gap-3 rounded-3xl px-4 py-4 text-white transition-transform hover:-translate-y-0.5"
                 : "flex items-center gap-3 rounded-3xl bg-(--surface-container-low) px-4 py-4 text-inverse transition-colors hover:bg-(--surface-container)"
             }
           >
