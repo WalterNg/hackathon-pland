@@ -28,6 +28,7 @@ type PortfolioSummaryProps = {
   tradingAgentProgressLabel: string;
   tradingAgentActiveNodes: string[];
   tradingAgentError: string | null;
+  showTradingAgentControls?: boolean;
   onAnalyzeTradingAgent: () => void;
   isAnalyzeDisabled?: boolean;
 };
@@ -265,6 +266,7 @@ export function PortfolioSummary({
   tradingAgentProgressLabel,
   tradingAgentActiveNodes,
   tradingAgentError,
+  showTradingAgentControls = true,
   onAnalyzeTradingAgent,
   isAnalyzeDisabled = false,
 }: PortfolioSummaryProps) {
@@ -316,6 +318,7 @@ export function PortfolioSummary({
           </div>
 
           {/* CTA: Large Primary (Initial) or Compact Secondary (Re-analyze) */}
+          {showTradingAgentControls ? (
           <div className="flex shrink-0 items-center gap-2">
             {!hasRecommendation || tradingAgentIsAnalyzing ? (
               <div className="relative">
@@ -377,9 +380,11 @@ export function PortfolioSummary({
               <MaterialIcon name="open_in_full" outlined={false} className="text-[0.85rem]" />
             </button>
           </div>
+          ) : null}
         </div>
 
         {/* Card Body: Thinking Strip OR Search Result Insight */}
+        {showTradingAgentControls ? (
         <div className="mt-6">
           {/* 1. Thinking — Hide when done */}
           {tradingAgentIsAnalyzing && (
@@ -421,21 +426,24 @@ export function PortfolioSummary({
              </div>
           )}
         </div>
+        ) : null}
       </div>
 
-      <TradingAgentTraceModal
-        open={isTraceOpen}
-        onClose={() => setTraceOpen(false)}
-        result={tradingAgentResult}
-        preparedContext={tradingAgentPreparedContext}
-        trace={tradingAgentTrace}
-        activeNodes={tradingAgentActiveNodes}
-        isAnalyzing={tradingAgentIsAnalyzing}
-        progressLabel={tradingAgentProgressLabel}
-        portfolioName={portfolioName}
-        warnings={tradingAgentWarnings}
-        error={tradingAgentError}
-      />
+      {showTradingAgentControls ? (
+        <TradingAgentTraceModal
+          open={isTraceOpen}
+          onClose={() => setTraceOpen(false)}
+          result={tradingAgentResult}
+          preparedContext={tradingAgentPreparedContext}
+          trace={tradingAgentTrace}
+          activeNodes={tradingAgentActiveNodes}
+          isAnalyzing={tradingAgentIsAnalyzing}
+          progressLabel={tradingAgentProgressLabel}
+          portfolioName={portfolioName}
+          warnings={tradingAgentWarnings}
+          error={tradingAgentError}
+        />
+      ) : null}
     </section>
   );
 }
