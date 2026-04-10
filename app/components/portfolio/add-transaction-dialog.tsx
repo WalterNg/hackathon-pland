@@ -240,7 +240,7 @@ export function AddTransactionDialog({
         <button
           type="button"
           onClick={onChangeCoin}
-          className="mb-5 flex w-full items-center justify-between rounded-xl border border-transparent bg-(--surface-container-highest) px-3.5 py-3 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-(--outline-variant) hover:bg-(--surface-bright) hover:shadow-[0_10px_22px_rgba(0,0,0,0.18)]"
+          className="mb-5 flex w-full items-center justify-between rounded-xl border border-transparent bg-(--surface-container-highest) px-3.5 py-3 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-(--outline-variant) hover:bg-(--surface-bright)"
         >
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-(--surface-bright) text-xs font-bold text-warning">

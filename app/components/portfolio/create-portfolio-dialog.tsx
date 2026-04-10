@@ -88,7 +88,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
     { balanceWidth: "w-16", valueWidth: "w-16" }
   ];
   const optionCardBase =
-    "group flex h-full items-center gap-3 rounded-2xl border px-4 py-4 text-left transition-all duration-200 ease-out will-change-transform hover:-translate-y-0.5 hover:shadow-[0_16px_32px_rgba(0,0,0,0.22)]";
+    "group flex h-full items-center gap-3 rounded-2xl border px-4 py-4 text-left transition-all duration-200 ease-out will-change-transform hover:-translate-y-0.5";
 
   const loadDemoPreview = async (overrideApiKey?: string, overrideApiSecret?: string) => {
     const apiKeyValue = (overrideApiKey ?? apiKey).trim();
@@ -296,7 +296,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
                       type="button"
                       onClick={() => void loadQuickDemo()}
                       disabled={isLoadingQuickDemo}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-warning/30 bg-warning-soft px-2.5 py-1 text-[0.68rem] font-semibold text-warning transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-warning/60 hover:bg-warning/15 hover:shadow-[0_10px_20px_rgba(255,184,106,0.12)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-warning/30 bg-warning-soft px-2.5 py-1 text-[0.68rem] font-semibold text-warning transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-warning/60 hover:bg-warning/15 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
                     >
                       <MaterialIcon name="bolt" outlined={false} className="text-[0.85rem]" />
                       {isLoadingQuickDemo ? "Loading..." : "Quick Demo"}
@@ -354,7 +354,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
                     type="button"
                     onClick={() => void loadDemoPreview()}
                     disabled={isLoadingPreview}
-                    className="ui-button-tonal-success flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold tracking-wide transition-all duration-200 ease-out hover:-translate-y-0.5 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                    className="ui-button-tonal-success flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold tracking-wide transition-all duration-200 ease-out hover:-translate-y-0.5 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
                   >
                     {isLoadingPreview ? (
                       <>
@@ -429,7 +429,7 @@ export function CreatePortfolioDialog({ open, defaultName, onClose, onSubmit }: 
                       {preview.assets.map((asset) => (
                         <div
                           key={asset.asset}
-                          className="grid grid-cols-[1.1fr_1fr_0.8fr] items-center gap-4 rounded-xl border border-(--surface-outline) bg-(--surface-container-highest) px-4 py-2.5 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/25 hover:bg-(--surface-bright) hover:shadow-[0_10px_22px_rgba(0,0,0,0.18)]"
+                          className="grid grid-cols-[1.1fr_1fr_0.8fr] items-center gap-4 rounded-xl border border-(--surface-outline) bg-(--surface-container-highest) px-4 py-2.5 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/25 hover:bg-(--surface-bright)"
                         >
                           <div className="flex items-center gap-2.5">
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/8 text-[0.65rem] font-bold text-strong">

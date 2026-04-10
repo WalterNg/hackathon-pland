@@ -389,7 +389,7 @@ export function AIPortfolioRecommendationDashboard({
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div className="max-w-3xl">
                   <div className="flex items-center gap-3">
-                    <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-sky-400/25 bg-sky-400/10 text-sky-200 shadow-[0_0_24px_rgba(56,189,248,0.18)]">
+                    <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-sky-400/25 bg-sky-400/10 text-sky-200">
                       <MaterialIcon name="psychology" outlined={false} className="text-xl" />
                     </span>
                     <div>
@@ -479,14 +479,14 @@ export function AIPortfolioRecommendationDashboard({
                 <p className="mt-4 text-center text-sm text-slate-400">{activeStepLabel}</p>
               </div>
             ) : recommendation ? (
-              <div className="ui-surface-danger-soft mt-5 rounded-[1.3rem] px-4 py-4 shadow-[0_0_0_1px_rgba(244,63,94,0.08),0_18px_40px_rgba(0,0,0,0.18)]">
+              <div className="ui-surface-danger-soft mt-5 rounded-[1.3rem] px-4 py-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-center gap-4">
                     <div className="flex items-center -space-x-2">
                       {[
-                        { icon: "query_stats", className: "bg-sky-400/12 text-sky-100 shadow-[0_0_20px_rgba(59,130,246,0.18)]" },
-                        { icon: "public", className: "bg-sky-400/12 text-sky-100 shadow-[0_0_20px_rgba(59,130,246,0.18)]" },
-                        { icon: "shield", className: "bg-rose-500/18 text-rose-100 shadow-[0_0_20px_rgba(244,63,94,0.22)]" },
+                        { icon: "query_stats", className: "bg-sky-400/12 text-sky-100" },
+                        { icon: "public", className: "bg-sky-400/12 text-sky-100" },
+                        { icon: "shield", className: "bg-rose-500/18 text-rose-100" },
                       ].map((item, index) => (
                         <span
                           key={item.icon}
@@ -512,7 +512,7 @@ export function AIPortfolioRecommendationDashboard({
                           onClick={onOpenAlertCenter}
                           className="mt-2 inline-flex items-center gap-2 rounded-full border border-rose-400/30 bg-rose-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-rose-100 transition hover:bg-rose-500/16"
                         >
-                          <span className="h-2 w-2 rounded-full bg-rose-300 animate-pulse" />
+                          <span className="h-2 w-2 rounded-full bg-rose-300" />
                           {criticalAlertCount} critical alert{criticalAlertCount > 1 ? "s" : ""}
                         </button>
                       ) : null}

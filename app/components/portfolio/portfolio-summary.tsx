@@ -316,10 +316,7 @@ export function PortfolioSummary({
           {/* CTA: Large Primary (Initial) or Compact Secondary (Re-analyze) */}
           <div className="flex shrink-0 items-center gap-2">
             {!hasRecommendation || tradingAgentIsAnalyzing ? (
-              <div className="relative">
-                {tradingAgentIsAnalyzing && (
-                  <span className="pointer-events-none absolute inset-0 rounded-2xl bg-sky-400/20 blur-md animate-pulse" />
-                )}
+                <div>
                 <button
                   type="button"
                   id="analyze-with-ai-btn"
@@ -330,18 +327,13 @@ export function PortfolioSummary({
                     "group relative inline-flex items-center gap-2.5 overflow-hidden",
                     "rounded-2xl px-5 py-2.5",
                     "text-[0.85rem] font-bold tracking-wide",
-                    "shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_4px_24px_rgba(14,165,233,0.3)]",
                     "transition-all duration-300",
-                    "hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_8px_32px_rgba(99,102,241,0.5)]",
                     "hover:scale-[1.02] active:scale-[0.97]",
                     "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100",
                   ].join(" ")}
                 >
                   {tradingAgentIsAnalyzing ? (
-                    <span className="relative flex h-3 w-3 items-center justify-center">
-                      <span className="absolute h-3 w-3 animate-ping rounded-full bg-white/40" />
-                      <span className="relative h-1.5 w-1.5 rounded-full bg-white" />
-                    </span>
+                      <MaterialIcon name="hourglass_top" outlined={false} className="text-[0.9rem] text-white/90" />
                   ) : (
                     <MaterialIcon name="auto_awesome" outlined={false} className="text-[0.9rem] text-white/90" />
                   )}

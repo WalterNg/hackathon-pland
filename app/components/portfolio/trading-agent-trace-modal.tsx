@@ -80,7 +80,6 @@ function actionTheme(action: string | undefined) {
     return {
       heroBorder: "border-success-strong",
       heroBg: "bg-success-faint",
-      heroBgGlow: "shadow-[0_0_40px_rgba(22,199,132,0.07)]",
       actionText: "text-success-soft",
       actionLabel: "text-success-muted",
     };
@@ -88,7 +87,6 @@ function actionTheme(action: string | undefined) {
     return {
       heroBorder: "border-rose-500/30",
       heroBg: "bg-rose-500/[0.04]",
-      heroBgGlow: "shadow-[0_0_40px_rgba(239,68,68,0.07)]",
       actionText: "text-rose-300",
       actionLabel: "text-rose-400/60",
     };
@@ -96,14 +94,12 @@ function actionTheme(action: string | undefined) {
     return {
       heroBorder: "border-amber-500/30",
       heroBg: "bg-amber-500/[0.04]",
-      heroBgGlow: "shadow-[0_0_40px_rgba(245,158,11,0.07)]",
       actionText: "text-amber-300",
       actionLabel: "text-amber-400/60",
     };
   return {
     heroBorder: "border-sky-500/25",
     heroBg: "bg-sky-500/[0.04]",
-    heroBgGlow: "shadow-[0_0_40px_rgba(14,165,233,0.07)]",
     actionText: "text-sky-200",
     actionLabel: "text-sky-400/60",
   };
@@ -880,7 +876,7 @@ function DecisionHeroPanel({
       )}
 
       {/* Decision Hero */}
-      <div className={`rounded-2xl border p-5 ${theme.heroBorder} ${theme.heroBg} ${theme.heroBgGlow}`}>
+      <div className={`rounded-2xl border p-5 ${theme.heroBorder} ${theme.heroBg}`}>
         <p className={`text-[0.68rem] font-bold uppercase tracking-[0.22em] ${theme.actionLabel}`}>
           Recommended Action
         </p>
