@@ -213,6 +213,16 @@ function PortfolioContent() {
   const throttledMetrics = useThrottledValue(scopedMetrics, SUMMARY_RENDER_INTERVAL_MS, portfolioName);
   const throttledAssets = useThrottledValue(scopedAssets, ASSETS_RENDER_INTERVAL_MS, portfolioName);
   const throttledChart = useThrottledValue(scopedChart, CHART_RENDER_INTERVAL_MS, portfolioName);
+  const livePortfolioValuesByName = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(snapshotCacheByPortfolio).map(([name, snapshotItem]) => [
+          name,
+          snapshotItem.summary.totalValueUsd,
+        ])
+      ),
+    [snapshotCacheByPortfolio]
+  );
 
   useEffect(() => {
     if (shouldOpenCreatePortfolio) {
@@ -368,14 +378,7 @@ function PortfolioContent() {
       <div className="app-shell flex overflow-hidden">
         <Sidebar
           portfolios={portfolios}
-          livePortfolioValue={
-            throttledSummary
-              ? {
-                  name: portfolioName,
-                  totalValueUsd: throttledSummary.totalValueUsd,
-                }
-              : null
-          }
+          livePortfolioValuesByName={livePortfolioValuesByName}
         />
 
         <main className="app-main overflow-y-auto px-4 pb-6 pt-5 sm:px-6 sm:pb-8 lg:px-8">

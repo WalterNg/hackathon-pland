@@ -35,19 +35,16 @@ function normalizePath(path: string): string {
 
 type SidebarProps = {
   portfolios?: PortfolioItem[];
-  livePortfolioValue?: {
-    name: string;
-    totalValueUsd: number;
-  } | null;
+  livePortfolioValuesByName?: Record<string, number>;
 };
 
-export function Sidebar({ portfolios, livePortfolioValue = null }: SidebarProps) {
+export function Sidebar({ portfolios, livePortfolioValuesByName = {} }: SidebarProps) {
   return (
     <Suspense
       fallback={<aside className="sidebar-container text-inverse z-20 mb-4 hidden w-64 shrink-0 md:flex" />}
     >
       {portfolios ? (
-        <SidebarContent portfolios={portfolios} livePortfolioValue={livePortfolioValue} />
+        <SidebarContent portfolios={portfolios} livePortfolioValuesByName={livePortfolioValuesByName} />
       ) : (
         <SidebarContentWithAutoLoad />
       )}
@@ -60,18 +57,15 @@ function SidebarContentWithAutoLoad() {
     refreshIntervalMs: RefreshIntervals.SIDEBAR_PORTFOLIOS_REFRESH_MS,
   });
 
-  return <SidebarContent portfolios={portfolios} livePortfolioValue={null} />;
+  return <SidebarContent portfolios={portfolios} livePortfolioValuesByName={{}} />;
 }
 
 function SidebarContent({
   portfolios,
-  livePortfolioValue,
+  livePortfolioValuesByName,
 }: {
   portfolios: PortfolioItem[];
-  livePortfolioValue: {
-    name: string;
-    totalValueUsd: number;
-  } | null;
+  livePortfolioValuesByName: Record<string, number>;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -141,8 +135,8 @@ function SidebarContent({
                 const portfolioHref = `/portfolio?name=${encodeURIComponent(portfolioName)}`;
                 const isSelected = portfolioActive && selectedPortfolio === portfolioName;
                 const displayTotalValueUsd =
-                  livePortfolioValue && livePortfolioValue.name === portfolioName
-                    ? livePortfolioValue.totalValueUsd
+                  typeof livePortfolioValuesByName[portfolioName] === "number"
+                    ? livePortfolioValuesByName[portfolioName]
                     : portfolio.totalValueUsd;
 
                 return (
