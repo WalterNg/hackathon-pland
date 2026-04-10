@@ -125,6 +125,7 @@ function PortfolioContent() {
   const {
     snapshot,
     isLoading,
+    isRefreshing,
     error,
     snapshotSource,
     lastServerSyncAt,
@@ -484,6 +485,7 @@ function PortfolioContent() {
                     chart={throttledChart}
                     assets={throttledAssets}
                     allTimeProfitPercent={(throttledMetrics ?? scopedMetrics).allTimeProfitPercent}
+                    isLoading={isLoading || isRefreshing || throttledChart.length === 0}
                   />
                 )}
                 <PortfolioAssetsTable assets={throttledAssets} />

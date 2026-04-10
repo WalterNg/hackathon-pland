@@ -9,6 +9,7 @@ import { calculateRiskMetricsFromPortfolio } from "./risk-calculator";
 
 const BINANCE_BASE_URL = "https://api.binance.com";
 const KLINE_HISTORY_DAYS = 35;
+const KLINE_INTRADAY_HOURS = 24;
 
 type Kline = {
   openTime: number;
@@ -172,6 +173,61 @@ async function fetchKlinesAll(symbols: string[]): Promise<KlinesMap> {
   return out;
 }
 
+async function fetchSymbolHourlyKlines(symbol: string): Promise<Kline[]> {
+  try {
+    const response = await fetch(
+      `${BINANCE_BASE_URL}/api/v3/klines?symbol=${symbol}&interval=1h&limit=${KLINE_INTRADAY_HOURS}`,
+      { cache: "no-store" }
+    );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const rows = (await response.json()) as Array<[
+      number, string, string, string, string, string,
+      number, string, number, string, string, string,
+    ]>;
+
+    return rows.map((row) => ({
+      openTime: row[0],
+      closePrice: safeNumber(row[4], 0),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function fetchHourlyKlinesAll(symbols: string[]): Promise<KlinesMap> {
+  if (symbols.length === 0) {
+    return {};
+  }
+
+  const entries = await Promise.all(
+    symbols.map(async (symbol) => [symbol, await fetchSymbolHourlyKlines(symbol)] as const)
+  );
+
+  const out = {} as KlinesMap;
+  for (const [symbol, klines] of entries) {
+    out[symbol] = klines;
+  }
+  return out;
+}
+
+/**
+ * Merge daily and hourly klines for a symbol into a single chronological array.
+ *
+ * Strategy: keep daily klines whose openTime predates the oldest hourly kline,
+ * then append all hourly klines. This eliminates any temporal overlap so the
+ * chart transitions smoothly from daily history into intraday resolution.
+ */
+function mergeKlines(daily: Kline[], hourly: Kline[]): Kline[] {
+  if (hourly.length === 0) return daily;
+  const oldestHourlyTime = hourly[0].openTime;
+  const historicalDaily = daily.filter((k) => k.openTime < oldestHourlyTime);
+  return [...historicalDaily, ...hourly];
+}
+
 function get7dChangePercent(klines: Kline[]): number {
   if (klines.length < 2) {
     return 0;
@@ -267,10 +323,20 @@ export async function buildBinancePortfolioSnapshot(
   const heldSymbols = Array.from(new Set(positions.map((position) => position.symbol.toUpperCase())));
   const tickerSymbols = Array.from(new Set([...heldSymbols, BTC_USDT_SYMBOL]));
 
-  const [tickerMap, klinesMap] = await Promise.all([
+  const [tickerMap, dailyKlinesMap, hourlyKlinesMap] = await Promise.all([
     fetch24hTickers(tickerSymbols, positions),
-    fetchKlinesAll(heldSymbols)
+    fetchKlinesAll(heldSymbols),
+    fetchHourlyKlinesAll(heldSymbols),
   ]);
+
+  // Merge: daily history + intraday hourly resolution for the last 24h
+  const klinesMap: KlinesMap = {};
+  for (const symbol of heldSymbols) {
+    klinesMap[symbol] = mergeKlines(
+      dailyKlinesMap[symbol] ?? [],
+      hourlyKlinesMap[symbol] ?? []
+    );
+  }
 
   const prices = {} as PriceMap;
   const changes24h = {} as Change24hMap;
@@ -321,7 +387,7 @@ export async function buildBinancePortfolioSnapshot(
       priceUsd: round(priceUsd),
       valueUsd: round(valueUsd),
       change24hPercent: round(changes24h[symbol] ?? 0),
-      change7dPercent: round(get7dChangePercent(klinesMap[symbol] ?? [])),
+      change7dPercent: round(get7dChangePercent(dailyKlinesMap[symbol] ?? [])),
       pnlUsd: round(pnlUsd),
       pnlPercent: round(pnlPercent),
       volume24hUsd: round(volumes24h[symbol]),

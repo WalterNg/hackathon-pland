@@ -47,6 +47,7 @@ TradingAgents/
 .codex/
 .understand-anything/
 .cursor/
+.claude/
 
 # Data files
 backend/scripts/data_model/
