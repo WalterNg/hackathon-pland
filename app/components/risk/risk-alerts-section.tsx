@@ -11,7 +11,6 @@ type RiskAlertsSectionProps = {
   onStatusChange: (status: RiskAlertStatus | "all") => void;
   onAcknowledge: (alertId: string) => Promise<boolean>;
   onResolve: (alertId: string) => Promise<boolean>;
-  onReviewRules: () => void;
 };
 
 const filters: Array<{ value: RiskAlertStatus | "all"; label: string }> = [
@@ -90,10 +89,7 @@ export function RiskAlertsSection({
   onStatusChange,
   onAcknowledge,
   onResolve,
-  onReviewRules,
 }: RiskAlertsSectionProps) {
-  const criticalActiveAlerts = alerts.filter((alert) => alert.status === "active" && alert.severity === "critical");
-
   return (
     <section className="panel-base rounded-3xl p-5 sm:p-6" aria-labelledby="risk-alerts-heading">
       <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -121,29 +117,6 @@ export function RiskAlertsSection({
           </button>
         ))}
       </div>
-
-      {criticalActiveAlerts.length > 0 ? (
-        <div className="ui-surface-danger mb-5 rounded-2xl px-4 py-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-rose-300/85">
-                <span className="inline-flex h-2.5 w-2.5 rounded-full bg-rose-300 animate-pulse" />
-                Critical attention required
-              </div>
-              <p className="mt-2 text-base font-semibold text-white">
-                {criticalActiveAlerts.length} critical alert{criticalActiveAlerts.length > 1 ? "s are" : " is"} still active.
-              </p>
-              <p className="mt-1 text-sm text-rose-50/80">
-                Review the active breaches, then tighten rules or reduce exposure before they repeat.
-              </p>
-            </div>
-
-            <button type="button" onClick={onReviewRules} className="ui-button-primary">
-              Review rules
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       {isLoading && <div className="panel-low p-4 text-sm text-muted">Loading alerts...</div>}
       {!isLoading && error && <div className="panel-low p-4 text-sm text-danger">{error}</div>}
@@ -181,11 +154,6 @@ export function RiskAlertsSection({
                 </div>
 
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  {alert.severity === "critical" && alert.status === "active" ? (
-                    <button type="button" onClick={onReviewRules} className="ui-button-secondary">
-                      Review rules
-                    </button>
-                  ) : null}
                   {alert.status === "active" && (
                     <button
                       type="button"

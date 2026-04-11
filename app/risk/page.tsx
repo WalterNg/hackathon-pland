@@ -219,10 +219,6 @@ function RiskPageContent() {
                   onStatusChange={(nextStatus) => updateSearchParams({ status: nextStatus, focus: "alerts" })}
                   onAcknowledge={handleAcknowledgeAlert}
                   onResolve={handleResolveAlert}
-                  onReviewRules={() => {
-                    updateSearchParams({ focus: "rules" });
-                    scrollToSection("rules");
-                  }}
                 />
               </div>
             </div>

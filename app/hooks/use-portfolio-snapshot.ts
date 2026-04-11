@@ -70,6 +70,11 @@ function isPerformerCandidate(symbol: string): boolean {
   return !STABLE_ASSET_SYMBOLS.has(baseAssetFromSymbol(symbol));
 }
 
+function isRealtimeTickerSymbol(symbol: string): boolean {
+  const normalized = symbol.trim().toUpperCase();
+  return normalized.endsWith("USDT") && normalized.length > 4;
+}
+
 function applyRealtimeTicker(
   currentSnapshot: PortfolioSnapshot,
   symbol: string,
@@ -238,10 +243,16 @@ export function usePortfolioSnapshot(
   };
 
   const streamSymbols = useMemo(() => {
-    const symbolSet = new Set((snapshot?.assets ?? []).map((asset) => asset.symbol.toUpperCase()));
+    const symbolSet = new Set(
+      (snapshot?.assets ?? [])
+        .map((asset) => asset.symbol.trim().toUpperCase())
+        .filter(isRealtimeTickerSymbol)
+    );
     symbolSet.add(BTC_USDT_SYMBOL);
-    return Array.from(symbolSet);
-  }, [snapshot]);
+    return Array.from(symbolSet).sort();
+  }, [snapshot?.assets]);
+
+  const streamSymbolsKey = useMemo(() => streamSymbols.join("|"), [streamSymbols]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -404,9 +415,10 @@ export function usePortfolioSnapshot(
     let isDisposed = false;
     let socket: WebSocket | null = null;
     let reconnectTimeoutId: number | null = null;
+    const cleanupReason = "Portfolio snapshot cleanup";
 
-    const trackedSymbols = new Set(streamSymbols);
-    const streamNames = streamSymbols.map((symbol) => `${symbol.toLowerCase()}@ticker`).join("/");
+    const trackedSymbols = new Set(streamSymbolsKey ? streamSymbolsKey.split("|") : []);
+    const streamNames = Array.from(trackedSymbols).map((symbol) => `${symbol.toLowerCase()}@ticker`).join("/");
 
     if (!streamNames) {
       return () => undefined;
@@ -419,9 +431,16 @@ export function usePortfolioSnapshot(
         return;
       }
 
-      socket = new WebSocket(streamUrl);
+      const nextSocket = new WebSocket(streamUrl);
+      socket = nextSocket;
 
-      socket.onmessage = (event) => {
+      nextSocket.onopen = () => {
+        if (isDisposed || socket !== nextSocket) {
+          nextSocket.close(1000, cleanupReason);
+        }
+      };
+
+      nextSocket.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data) as BinanceTickerStreamMessage;
           const rawSymbol = message.data?.s?.toUpperCase();
@@ -451,16 +470,24 @@ export function usePortfolioSnapshot(
         }
       };
 
-      socket.onclose = () => {
+      nextSocket.onclose = (event) => {
+        if (socket === nextSocket) {
+          socket = null;
+        }
+
         if (isDisposed) {
+          return;
+        }
+
+        if (event.code === 1000) {
           return;
         }
 
         reconnectTimeoutId = window.setTimeout(connect, REALTIME_RECONNECT_DELAY_MS);
       };
 
-      socket.onerror = () => {
-        socket?.close();
+      nextSocket.onerror = () => {
+        return;
       };
     };
 
@@ -471,9 +498,11 @@ export function usePortfolioSnapshot(
       if (reconnectTimeoutId !== null) {
         window.clearTimeout(reconnectTimeoutId);
       }
-      socket?.close();
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.close(1000, cleanupReason);
+      }
     };
-  }, [streamSymbols]);
+  }, [streamSymbolsKey]);
 
   const reload = useCallback(async () => {
     clearCachedSnapshot();
