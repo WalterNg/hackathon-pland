@@ -1,19 +1,25 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthGuard } from "../components/auth/auth-guard";
+import { AggregatedRiskAlertsSection } from "../components/risk/aggregated-risk-alerts-section";
+import { GlobalRiskRulesDialog } from "../components/risk/global-risk-rules-dialog";
 import { RiskAlertsSection } from "../components/risk/risk-alerts-section";
 import { RiskHeader } from "../components/risk/risk-header";
-import { RiskMonitorPanel } from "../components/risk/risk-monitor-panel";
-import { RiskRulesSection } from "../components/risk/risk-rules-section";
 import { Sidebar } from "../components/ui/sidebar";
-import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
+import { useAggregatedRiskAlerts } from "../hooks/use-aggregated-risk-alerts";
+import { useGlobalRiskRules } from "../hooks/use-global-risk-rules";
 import { usePortfolios } from "../hooks/use-portfolios";
-import { useRiskManagementState } from "../hooks/use-risk-management-state";
+import { useRiskAlerts } from "../hooks/use-risk-alerts";
+import { useRiskEvents } from "../hooks/use-risk-events";
 import type { RiskAlertStatus } from "@/app/lib/risk-types";
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
+const PAGE_ACTION_LABELS = {
+  reviewAlerts: "Review active alerts",
+  setGlobalRules: "Set global rules",
+} as const;
 
 function parseAlertStatus(value: string | null): RiskAlertStatus | "all" {
   if (value === "active" || value === "acknowledged" || value === "resolved") {
@@ -26,11 +32,12 @@ function parseAlertStatus(value: string | null): RiskAlertStatus | "all" {
 function RiskPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const rulesSectionRef = useRef<HTMLDivElement | null>(null);
   const alertsSectionRef = useRef<HTMLDivElement | null>(null);
+  const [isGlobalRulesOpen, setGlobalRulesOpen] = useState(false);
   const portfolioName = searchParams.get("name")?.trim() || DEFAULT_PORTFOLIO_NAME;
   const alertStatus = parseAlertStatus(searchParams.get("status"));
   const focus = searchParams.get("focus");
+  const isMainPortfolio = portfolioName === DEFAULT_PORTFOLIO_NAME;
   const { portfolios } = usePortfolios();
   const currentPortfolio = useMemo(
     () => portfolios.find((portfolio) => portfolio.name === portfolioName) ?? null,
@@ -38,43 +45,70 @@ function RiskPageContent() {
   );
   const portfolioId = currentPortfolio?.id ?? null;
   const {
-    snapshot,
-    isLoading: isSnapshotLoading,
-    error: snapshotError,
-  } = usePortfolioSnapshot(portfolioId, portfolioName);
-  const portfolioHref = `/portfolio?name=${encodeURIComponent(portfolioName)}`;
-  const riskHref = `/risk?name=${encodeURIComponent(portfolioName)}`;
-  const {
-    profile,
     events,
     alerts,
-    isRiskLoading,
-    riskError,
-    editableRiskProfile,
-    riskRuleSource,
-    isRiskRulesLoading,
-    isRiskRulesSaving,
-    riskRulesError,
-    alertCenterAlerts,
-    isAlertCenterLoading,
-    updatingAlertId,
-    alertCenterError,
-    handleSaveRiskRules,
-    handleAcknowledgeAlert,
-    handleResolveAlert,
-  } = useRiskManagementState(portfolioId, portfolioName, alertStatus);
-  const metrics = snapshot?.metrics ?? null;
-  const monitorError = riskError ?? snapshotError;
-  const isMonitorLoading = isRiskLoading || isSnapshotLoading;
+    isLoading: isRiskLoading,
+    error: riskError,
+    reload: reloadRiskEvents,
+  } = useRiskEvents(portfolioId, portfolioName, undefined, !isMainPortfolio);
+  const {
+    alerts: alertCenterAlerts,
+    isLoading: isAlertCenterLoading,
+    isUpdatingId: updatingAlertId,
+    error: alertCenterError,
+    reload: reloadAlertCenter,
+    acknowledge,
+    resolve,
+  } = useRiskAlerts(portfolioName, alertStatus, 15_000, !isMainPortfolio);
+  const {
+    summary: aggregatedSummary,
+    groups: aggregatedGroups,
+    isLoading: isAggregatedLoading,
+    isUpdatingId: aggregatedUpdatingId,
+    error: aggregatedError,
+    acknowledge: acknowledgeAggregatedAlert,
+    resolve: resolveAggregatedAlert,
+  } = useAggregatedRiskAlerts(alertStatus, 15_000, isMainPortfolio);
+  const {
+    profile: globalRiskProfile,
+    source: globalRiskRuleSource,
+    isLoading: isGlobalRulesLoading,
+    isSaving: isGlobalRulesSaving,
+    error: globalRiskRulesError,
+    save: saveGlobalRiskRules,
+  } = useGlobalRiskRules(isMainPortfolio);
+  const portfolioHref = `/portfolio?name=${encodeURIComponent(portfolioName)}`;
+  const riskHref = `/risk?name=${encodeURIComponent(portfolioName)}`;
 
   const criticalActiveAlerts = useMemo(
-    () => alerts.filter((alert) => alert.status === "active" && alert.severity === "critical"),
-    [alerts]
+    () => (isMainPortfolio ? aggregatedSummary.criticalActiveAlerts : alerts.filter((alert) => alert.status === "active" && alert.severity === "critical").length),
+    [aggregatedSummary.criticalActiveAlerts, alerts, isMainPortfolio]
   );
   const warningActiveAlerts = useMemo(
-    () => alerts.filter((alert) => alert.status === "active" && alert.severity !== "critical"),
-    [alerts]
+    () => (isMainPortfolio ? aggregatedSummary.otherActiveAlerts : alerts.filter((alert) => alert.status === "active" && alert.severity !== "critical").length),
+    [aggregatedSummary.otherActiveAlerts, alerts, isMainPortfolio]
   );
+  const recentRiskEventsCount = isMainPortfolio ? aggregatedSummary.recentRiskEvents : events.length;
+
+  const handleAcknowledgeAlert = useCallback(async (alertId: string) => {
+    const ok = await acknowledge(alertId);
+    if (!ok) {
+      return false;
+    }
+
+    await Promise.all([reloadRiskEvents(), reloadAlertCenter()]);
+    return true;
+  }, [acknowledge, reloadAlertCenter, reloadRiskEvents]);
+
+  const handleResolveAlert = useCallback(async (alertId: string) => {
+    const ok = await resolve(alertId);
+    if (!ok) {
+      return false;
+    }
+
+    await Promise.all([reloadRiskEvents(), reloadAlertCenter()]);
+    return true;
+  }, [reloadAlertCenter, reloadRiskEvents, resolve]);
 
   const updateSearchParams = (updates: Record<string, string | null>) => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -96,24 +130,27 @@ function RiskPageContent() {
     router.replace(nextQuery ? `/risk?${nextQuery}` : "/risk");
   };
 
-  const scrollToSection = (section: "rules" | "alerts") => {
-    const target = section === "rules" ? rulesSectionRef.current : alertsSectionRef.current;
-    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const scrollToAlerts = () => {
+    alertsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   useEffect(() => {
-    if (focus !== "rules" && focus !== "alerts") {
-      return;
+    if (focus === "alerts") {
+      const frameId = window.requestAnimationFrame(() => {
+        scrollToAlerts();
+      });
+
+      return () => {
+        window.cancelAnimationFrame(frameId);
+      };
     }
 
-    const frameId = window.requestAnimationFrame(() => {
-      scrollToSection(focus);
-    });
+    if (focus === "rules" && isMainPortfolio) {
+      setGlobalRulesOpen(true);
+    }
 
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [focus]);
+    return undefined;
+  }, [focus, isMainPortfolio]);
 
   return (
     <>
@@ -132,7 +169,9 @@ function RiskPageContent() {
                     <span className="status-pill status-pill-neutral">{portfolioName}</span>
                   </div>
                   <p className="mt-2 max-w-3xl text-sm text-muted">
-                    Manage alert triage and portfolio-specific risk rules from a dedicated workspace without cluttering the main portfolio screen.
+                    {isMainPortfolio
+                      ? "Review alerts across child portfolios and manage one global rule set from the main workspace."
+                      : "Review alerts for this portfolio from a dedicated workspace. Global rules are managed only from Main Portfolio."}
                   </p>
                 </div>
 
@@ -141,75 +180,57 @@ function RiskPageContent() {
                     type="button"
                     onClick={() => {
                       updateSearchParams({ status: "active", focus: "alerts" });
-                      scrollToSection("alerts");
+                      scrollToAlerts();
                     }}
                     className="ui-button-secondary"
                   >
-                    Review active alerts
+                    {PAGE_ACTION_LABELS.reviewAlerts}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateSearchParams({ focus: "rules" });
-                      scrollToSection("rules");
-                    }}
-                    className="ui-button-primary"
-                  >
-                    Adjust rules
-                  </button>
+                  {isMainPortfolio ? (
+                    <button
+                      type="button"
+                      onClick={() => setGlobalRulesOpen(true)}
+                      className="ui-button-primary"
+                    >
+                      {PAGE_ACTION_LABELS.setGlobalRules}
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-3">
                 <article className="rounded-2xl border border-white/6 bg-(--surface-container) p-4">
                   <p className="typo-body-sm font-medium text-muted">Critical active alerts</p>
-                  <p className="mt-2 text-[2rem] font-bold leading-none text-strong">{criticalActiveAlerts.length}</p>
+                  <p className="mt-2 text-[2rem] font-bold leading-none text-strong">{criticalActiveAlerts}</p>
                 </article>
                 <article className="rounded-2xl border border-white/6 bg-(--surface-container) p-4">
                   <p className="typo-body-sm font-medium text-muted">Other active alerts</p>
-                  <p className="mt-2 text-[2rem] font-bold leading-none text-strong">{warningActiveAlerts.length}</p>
+                  <p className="mt-2 text-[2rem] font-bold leading-none text-strong">{warningActiveAlerts}</p>
                 </article>
                 <article className="rounded-2xl border border-white/6 bg-(--surface-container) p-4">
                   <p className="typo-body-sm font-medium text-muted">Recent risk events</p>
-                  <p className="mt-2 text-[2rem] font-bold leading-none text-strong">{events.length}</p>
+                  <p className="mt-2 text-[2rem] font-bold leading-none text-strong">{recentRiskEventsCount}</p>
                 </article>
               </div>
 
-              {riskError && <div className="panel-low mt-5 p-4 text-sm text-danger">{riskError}</div>}
-
-              {!riskError && !isRiskLoading && profile && (
-                <div className="mt-5 rounded-2xl border border-white/6 bg-(--surface-container) p-4 text-sm text-body">
-                  Active profile: <span className="font-semibold text-strong">{profile.name}</span>
-                </div>
-              )}
+              {isMainPortfolio && aggregatedError ? <div className="panel-low mt-5 p-4 text-sm text-danger">{aggregatedError}</div> : null}
+              {!isMainPortfolio && riskError ? <div className="panel-low mt-5 p-4 text-sm text-danger">{riskError}</div> : null}
             </section>
 
-            <RiskMonitorPanel
-              metrics={metrics}
-              events={events}
-              alerts={alerts}
-              isLoading={isMonitorLoading}
-              error={monitorError}
-              onViewAlerts={() => {
-                updateSearchParams({ status: "active", focus: "alerts" });
-                scrollToSection("alerts");
-              }}
-            />
-
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-              <div ref={rulesSectionRef}>
-                <RiskRulesSection
-                  portfolioName={portfolioName}
-                  profile={editableRiskProfile}
-                  source={riskRuleSource}
-                  isLoading={isRiskRulesLoading}
-                  isSaving={isRiskRulesSaving}
-                  error={riskRulesError}
-                  onSave={handleSaveRiskRules}
+            <div ref={alertsSectionRef}>
+              {isMainPortfolio ? (
+                <AggregatedRiskAlertsSection
+                  summary={aggregatedSummary}
+                  groups={aggregatedGroups}
+                  status={alertStatus}
+                  isLoading={isAggregatedLoading}
+                  isUpdatingId={aggregatedUpdatingId}
+                  error={aggregatedError}
+                  onStatusChange={(nextStatus) => updateSearchParams({ status: nextStatus, focus: "alerts" })}
+                  onAcknowledge={acknowledgeAggregatedAlert}
+                  onResolve={resolveAggregatedAlert}
                 />
-              </div>
-
-              <div ref={alertsSectionRef}>
+              ) : (
                 <RiskAlertsSection
                   alerts={alertCenterAlerts}
                   status={alertStatus}
@@ -220,11 +241,22 @@ function RiskPageContent() {
                   onAcknowledge={handleAcknowledgeAlert}
                   onResolve={handleResolveAlert}
                 />
-              </div>
+              )}
             </div>
           </div>
         </main>
       </div>
+
+      <GlobalRiskRulesDialog
+        open={isMainPortfolio && isGlobalRulesOpen}
+        profile={globalRiskProfile}
+        source={globalRiskRuleSource}
+        isLoading={isGlobalRulesLoading}
+        isSaving={isGlobalRulesSaving}
+        error={globalRiskRulesError}
+        onClose={() => setGlobalRulesOpen(false)}
+        onSave={saveGlobalRiskRules}
+      />
     </>
   );
 }

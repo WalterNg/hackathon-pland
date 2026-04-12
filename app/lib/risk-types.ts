@@ -74,6 +74,22 @@ export type RiskAlertRecord = {
   resolvedAt: string | null;
 };
 
+export type RiskAlertGroup = {
+  portfolioId: string;
+  portfolioName: string;
+  activeCriticalCount: number;
+  activeAlertCount: number;
+  alerts: RiskAlertRecord[];
+};
+
+export type AggregatedRiskAlertSummary = {
+  criticalActiveAlerts: number;
+  otherActiveAlerts: number;
+  recentRiskEvents: number;
+  childPortfolioCount: number;
+  portfoliosWithAlerts: number;
+};
+
 export type RiskRulesFormValues = {
   maxDrawdownPct: number | null;
   maxPositionSizePct: number | null;
