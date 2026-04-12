@@ -100,9 +100,9 @@ function buildCostBasisTimeline(transactions: PortfolioTransaction[]): CostBasis
   let running = 0;
   return sorted.map((tx) => {
     if (tx.side === "buy") {
-      running += tx.quantity * tx.priceUsd + (tx.feeUsd ?? 0);
+      running += tx.quantity * tx.priceUsd;
     } else {
-      running -= tx.quantity * tx.priceUsd - (tx.feeUsd ?? 0);
+      running -= tx.quantity * tx.priceUsd;
     }
     return { timeMs: new Date(tx.executedAt).getTime(), costBasisUsd: Math.max(0, running) };
   });
