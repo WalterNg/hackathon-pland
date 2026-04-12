@@ -62,12 +62,12 @@ function sl(step: string) {
 function actionTheme(action: string) {
   if (action === "Accumulate") {
     return {
-      heroBorder: "border-emerald-500/25",
-      heroBg: "bg-emerald-500/[0.03]",
-      actionText: "text-emerald-300",
-      accentText: "text-emerald-400",
-      accentDot: "bg-emerald-500/50",
-      actionLabel: "text-emerald-300/70",
+      heroBorder: "border-success-soft",
+      heroBg: "bg-success-faint",
+      actionText: "text-success-soft",
+      accentText: "text-success",
+      accentDot: "bg-success-indicator",
+      actionLabel: "text-success-muted",
     };
   }
 
@@ -136,7 +136,7 @@ function ThinkingStrip({ trace, activeNodes }: ThinkingStripProps) {
   return (
     <div
       ref={scrollRef}
-      className="mt-2.5 space-y-1.5 max-h-[5.25rem] overflow-y-auto pr-2 custom-scrollbar scroll-smooth [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/20"
+      className="mt-2.5 max-h-21 space-y-1.5 overflow-y-auto pr-2 custom-scrollbar scroll-smooth [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/10 hover:[&::-webkit-scrollbar-thumb]:bg-white/20"
     >
       {/* Completed steps — green ticks */}
       {completedSteps.map((evt, i) => (
@@ -149,7 +149,7 @@ function ThinkingStrip({ trace, activeNodes }: ThinkingStripProps) {
             outlined={false}
             className={[
               "shrink-0 text-[0.85rem]",
-              evt.status === "error" ? "text-rose-400" : "text-emerald-500/70",
+              evt.status === "error" ? "text-rose-400" : "text-success-dim",
             ].join(" ")}
           />
           <span className={[
@@ -206,7 +206,7 @@ function AIInsightPanel({ recommendation, result }: AIInsightPanelProps) {
   const getRiskColor = (score: number) => {
     if (score >= 8) return "bg-rose-500/20 text-rose-400 border-rose-500/30";
     if (score >= 5) return "bg-amber-500/20 text-amber-400 border-amber-500/30";
-    return "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
+    return "status-badge-success-soft";
   };
 
   // Derive granular content from result (the "Expand" data)
@@ -279,8 +279,10 @@ export function PortfolioSummary({
   });
   const totalValueUsdLabel = usdFormatter.format(summary.totalValueUsd);
   const isProfitPositive = metrics.allTimeProfitPercent >= 0;
-  const allTimeProfitUsdLabel = `${isProfitPositive ? "+" : "-"}${usdFormatter.format(Math.abs(metrics.allTimeProfitUsd))}`;
-  const allTimeProfitPercentLabel = `${isProfitPositive ? "+" : ""}${metrics.allTimeProfitPercent.toFixed(2)}%`;
+  const allTimeProfitPercentLabel = `${Math.abs(metrics.allTimeProfitPercent).toFixed(2)}%`;
+  const profitChangeClassName = isProfitPositive ? "text-success" : "text-rose-400";
+  const profitChangeArrowGlyph = isProfitPositive ? "↑" : "↓";
+  const profitChangeArrowLabel = isProfitPositive ? "Increase" : "Decrease";
 
   const hasRecommendation = !!tradingAgentRecommendation && !tradingAgentIsAnalyzing;
 
@@ -303,16 +305,12 @@ export function PortfolioSummary({
                 {totalValueUsdLabel}
               </h2>
               
-              <div className={`flex items-center gap-2 rounded-2xl bg-white/5 px-3 py-1.5 ${isProfitPositive ? "text-emerald-400" : "text-rose-400"}`}>
-                <MaterialIcon
-                  name={isProfitPositive ? "arrow_upward" : "arrow_downward"}
-                  outlined={false}
-                  className="text-[0.8rem]"
-                />
-                <div className="leading-none">
-                  <div className="text-[0.82rem] font-bold">{allTimeProfitUsdLabel}</div>
-                  <div className="mt-1 text-[0.72rem] font-semibold opacity-90">{allTimeProfitPercentLabel}</div>
-                </div>
+              <div className={`inline-flex items-baseline gap-1 leading-none ${profitChangeClassName}`}>
+                <span aria-hidden="true" className="text-[0.7rem] leading-none">
+                  {profitChangeArrowGlyph}
+                </span>
+                <span className="sr-only">{profitChangeArrowLabel}</span>
+                <span className="text-[0.82rem] font-semibold leading-none">{allTimeProfitPercentLabel}</span>
               </div>
             </div>
           </div>
@@ -321,36 +319,24 @@ export function PortfolioSummary({
           {showTradingAgentControls ? (
           <div className="flex shrink-0 items-center gap-2">
             {!hasRecommendation || tradingAgentIsAnalyzing ? (
-              <div className="relative">
-                {tradingAgentIsAnalyzing && (
-                  <span className="pointer-events-none absolute inset-0 rounded-2xl bg-sky-400/20 blur-md animate-pulse" />
-                )}
+                <div>
                 <button
                   type="button"
                   id="analyze-with-ai-btn"
                   onClick={onAnalyzeTradingAgent}
                   disabled={isAnalyzeDisabled || tradingAgentIsAnalyzing}
                   className={[
+                    "ui-button-tonal-info",
                     "group relative inline-flex items-center gap-2.5 overflow-hidden",
                     "rounded-2xl px-5 py-2.5",
-                    "text-[0.85rem] font-bold tracking-wide text-white",
-                    "shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_4px_24px_rgba(14,165,233,0.3)]",
+                    "text-[0.85rem] font-bold tracking-wide",
                     "transition-all duration-300",
-                    "hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_8px_32px_rgba(99,102,241,0.5)]",
                     "hover:scale-[1.02] active:scale-[0.97]",
                     "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100",
-                    "bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-600",
                   ].join(" ")}
                 >
-                   <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 -translate-x-full skew-x-[-15deg] bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-1000 group-hover:translate-x-full"
-                  />
                   {tradingAgentIsAnalyzing ? (
-                    <span className="relative flex h-3 w-3 items-center justify-center">
-                      <span className="absolute h-3 w-3 animate-ping rounded-full bg-white/40" />
-                      <span className="relative h-1.5 w-1.5 rounded-full bg-white" />
-                    </span>
+                      <MaterialIcon name="hourglass_top" outlined={false} className="text-[0.9rem] text-white/90" />
                   ) : (
                     <MaterialIcon name="auto_awesome" outlined={false} className="text-[0.9rem] text-white/90" />
                   )}
@@ -364,7 +350,7 @@ export function PortfolioSummary({
                 type="button"
                 onClick={onAnalyzeTradingAgent}
                 disabled={isAnalyzeDisabled}
-                className="group inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-[0.78rem] font-bold text-slate-300 transition-all hover:bg-white/[0.1] hover:text-white"
+                className="group inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/4 px-4 py-2 text-[0.78rem] font-bold text-slate-300 transition-all hover:bg-white/10 hover:text-white"
               >
                 <MaterialIcon name="refresh" outlined={false} className="text-[0.85rem] transition-transform group-hover:rotate-180 duration-500" />
                 <span>Re-analyze</span>
@@ -374,7 +360,7 @@ export function PortfolioSummary({
             <button
               type="button"
               onClick={() => setTraceOpen(true)}
-              className="rounded-xl border border-white/5 bg-white/[0.02] p-2 text-slate-500 transition hover:bg-white/5 hover:text-slate-300"
+              className="rounded-xl border border-white/5 bg-white/2 p-2 text-slate-500 transition hover:bg-white/5 hover:text-slate-300"
               title="View full trace logs"
             >
               <MaterialIcon name="open_in_full" outlined={false} className="text-[0.85rem]" />
@@ -388,7 +374,7 @@ export function PortfolioSummary({
         <div className="mt-6">
           {/* 1. Thinking — Hide when done */}
           {tradingAgentIsAnalyzing && (
-             <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 animate-[fadeSlideIn_0.3s_ease_both]">
+             <div className="animate-[fadeSlideIn_0.3s_ease_both] rounded-2xl border border-white/5 bg-white/2 p-4">
                <ThinkingStrip
                   trace={tradingAgentTrace}
                   activeNodes={tradingAgentActiveNodes}
@@ -408,11 +394,11 @@ export function PortfolioSummary({
 
           {/* 3. Empty/Getting started */}
           {!tradingAgentIsAnalyzing && !tradingAgentRecommendation && !tradingAgentError && tradingAgentTrace.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.01] py-10">
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/1 py-10">
                <div className="mb-3 rounded-full bg-white/5 p-3 text-slate-500">
                   <MaterialIcon name="auto_awesome" outlined={false} className="text-2xl" />
                </div>
-               <p className="max-w-[280px] text-center text-[0.82rem] leading-relaxed text-slate-500">
+              <p className="max-w-70 text-center text-[0.82rem] leading-relaxed text-slate-500">
                   Take full control of your strategy. Let AI scan your entire portfolio for risks and opportunities.
                </p>
             </div>

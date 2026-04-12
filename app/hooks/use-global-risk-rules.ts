@@ -4,12 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import type { RiskProfile, RiskRulesFormValues, RiskRuleSource } from "@/app/lib/risk-types";
 import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
-type RiskRulesResponse = {
+type GlobalRiskRulesResponse = {
   profile: RiskProfile | null;
   source: RiskRuleSource;
 };
 
-type UseRiskRulesResult = {
+type UseGlobalRiskRulesResult = {
   profile: RiskProfile | null;
   source: RiskRuleSource;
   isLoading: boolean;
@@ -19,7 +19,7 @@ type UseRiskRulesResult = {
   reload: () => Promise<void>;
 };
 
-export function useRiskRules(portfolioName: string): UseRiskRulesResult {
+export function useGlobalRiskRules(enabled = true): UseGlobalRiskRulesResult {
   const [profile, setProfile] = useState<RiskProfile | null>(null);
   const [source, setSource] = useState<RiskRuleSource>("none");
   const [isLoading, setLoading] = useState(true);
@@ -28,6 +28,14 @@ export function useRiskRules(portfolioName: string): UseRiskRulesResult {
   const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
+    if (!enabled) {
+      setProfile(null);
+      setSource("none");
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     let isDisposed = false;
     const abortController = new AbortController();
 
@@ -36,16 +44,16 @@ export function useRiskRules(portfolioName: string): UseRiskRulesResult {
       setError(null);
 
       try {
-        const response = await fetchWithSupabaseAuth(`/api/risk/rules?portfolioName=${encodeURIComponent(portfolioName)}`, {
+        const response = await fetchWithSupabaseAuth("/api/risk/rules?scope=global", {
           cache: "no-store",
           signal: abortController.signal,
         });
 
         if (!response.ok) {
-          throw new Error(`Failed to load risk rules (${response.status})`);
+          throw new Error(`Failed to load global risk rules (${response.status})`);
         }
 
-        const payload = (await response.json()) as RiskRulesResponse;
+        const payload = (await response.json()) as GlobalRiskRulesResponse;
         if (isDisposed) {
           return;
         }
@@ -54,7 +62,7 @@ export function useRiskRules(portfolioName: string): UseRiskRulesResult {
         setSource(payload.source ?? "none");
       } catch (loadError) {
         if (!isDisposed) {
-          setError(loadError instanceof Error ? loadError.message : "Unable to load risk rules");
+          setError(loadError instanceof Error ? loadError.message : "Unable to load global risk rules");
         }
       } finally {
         if (!isDisposed) {
@@ -69,7 +77,7 @@ export function useRiskRules(portfolioName: string): UseRiskRulesResult {
       isDisposed = true;
       abortController.abort();
     };
-  }, [portfolioName, refreshNonce]);
+  }, [enabled, refreshNonce]);
 
   const reload = useCallback(async () => {
     setRefreshNonce((value) => value + 1);
@@ -80,7 +88,7 @@ export function useRiskRules(portfolioName: string): UseRiskRulesResult {
     setError(null);
 
     try {
-      const response = await fetchWithSupabaseAuth(`/api/risk/rules?portfolioName=${encodeURIComponent(portfolioName)}`, {
+      const response = await fetchWithSupabaseAuth("/api/risk/rules?scope=global", {
         method: "PUT",
         headers: {
           "content-type": "application/json",
@@ -90,20 +98,20 @@ export function useRiskRules(portfolioName: string): UseRiskRulesResult {
 
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(payload?.error ?? `Failed to save risk rules (${response.status})`);
+        throw new Error(payload?.error ?? `Failed to save global risk rules (${response.status})`);
       }
 
-      const payload = (await response.json()) as RiskRulesResponse;
+      const payload = (await response.json()) as GlobalRiskRulesResponse;
       setProfile(payload.profile ?? null);
-      setSource(payload.source ?? "portfolio");
+      setSource(payload.source ?? "global");
       return true;
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to save risk rules");
+      setError(saveError instanceof Error ? saveError.message : "Unable to save global risk rules");
       return false;
     } finally {
       setSaving(false);
     }
-  }, [portfolioName]);
+  }, []);
 
   return {
     profile,

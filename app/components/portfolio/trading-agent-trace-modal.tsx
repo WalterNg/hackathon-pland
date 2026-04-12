@@ -78,17 +78,15 @@ function stepVisualState(
 function actionTheme(action: string | undefined) {
   if (action === "Accumulate")
     return {
-      heroBorder: "border-emerald-500/30",
-      heroBg: "bg-emerald-500/[0.04]",
-      heroBgGlow: "shadow-[0_0_40px_rgba(16,185,129,0.07)]",
-      actionText: "text-emerald-300",
-      actionLabel: "text-emerald-400/60",
+      heroBorder: "border-success-strong",
+      heroBg: "bg-success-faint",
+      actionText: "text-success-soft",
+      actionLabel: "text-success-muted",
     };
   if (action === "Reduce Risk" || action === "Stop Loss")
     return {
       heroBorder: "border-rose-500/30",
       heroBg: "bg-rose-500/[0.04]",
-      heroBgGlow: "shadow-[0_0_40px_rgba(239,68,68,0.07)]",
       actionText: "text-rose-300",
       actionLabel: "text-rose-400/60",
     };
@@ -96,14 +94,12 @@ function actionTheme(action: string | undefined) {
     return {
       heroBorder: "border-amber-500/30",
       heroBg: "bg-amber-500/[0.04]",
-      heroBgGlow: "shadow-[0_0_40px_rgba(245,158,11,0.07)]",
       actionText: "text-amber-300",
       actionLabel: "text-amber-400/60",
     };
   return {
     heroBorder: "border-sky-500/25",
     heroBg: "bg-sky-500/[0.04]",
-    heroBgGlow: "shadow-[0_0_40px_rgba(14,165,233,0.07)]",
     actionText: "text-sky-200",
     actionLabel: "text-sky-400/60",
   };
@@ -226,7 +222,7 @@ function buildStepDetail(
           label: r.portfolio_trend,
           color:
             r.portfolio_trend === "Bullish"
-              ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+              ? "status-badge-success-soft"
               : r.portfolio_trend === "Bearish"
               ? "border-rose-400/30 bg-rose-400/10 text-rose-300"
               : "border-sky-400/30 bg-sky-400/10 text-sky-300",
@@ -250,7 +246,7 @@ function buildStepDetail(
           label: r.market_bias,
           color:
             r.market_bias === "Bullish"
-              ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+              ? "status-badge-success-soft"
               : r.market_bias === "Bearish"
               ? "border-rose-400/30 bg-rose-400/10 text-rose-300"
               : "border-sky-400/30 bg-sky-400/10 text-sky-300",
@@ -273,7 +269,7 @@ function buildStepDetail(
           label: r.sentiment_bias,
           color:
             r.sentiment_bias === "Bullish"
-              ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+              ? "status-badge-success-soft"
               : r.sentiment_bias === "Bearish"
               ? "border-rose-400/30 bg-rose-400/10 text-rose-300"
               : "border-sky-400/30 bg-sky-400/10 text-sky-300",
@@ -295,7 +291,7 @@ function buildStepDetail(
           label: r.diversification_view,
           color:
             r.diversification_view === "Healthy"
-              ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+              ? "status-badge-success-soft"
               : r.diversification_view === "Concentrated"
               ? "border-amber-400/30 bg-amber-400/10 text-amber-300"
               : "border-rose-400/30 bg-rose-400/10 text-rose-300",
@@ -418,7 +414,7 @@ function buildStepDetail(
           label: `Risk: ${r.final_risk_level}`,
           color:
             r.final_risk_level === "Low"
-              ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+              ? "status-badge-success-soft"
               : r.final_risk_level === "Moderate"
               ? "border-amber-400/30 bg-amber-400/10 text-amber-300"
               : "border-rose-400/30 bg-rose-400/10 text-rose-300",
@@ -438,7 +434,7 @@ function buildStepDetail(
         ...base,
         badge: {
           label: r.action,
-          color: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
+          color: "status-badge-success-soft",
         },
         metrics: [
           { label: "Confidence", value: `${r.confidence}/10` },
@@ -460,7 +456,7 @@ function buildStepDetail(
 function getSentimentInfo(item: string | import("@/app/lib/trading-agent-types").TradingAgentSentimentText) {
   if (typeof item === "object" && item.sentiment) {
     const s = item.sentiment;
-    if (s === "Bullish") return { border: "border-emerald-500/40", bg: "bg-emerald-500/5", dot: "bg-emerald-400" };
+    if (s === "Bullish") return { border: "border-success-strong", bg: "bg-success-faint", dot: "bg-success-indicator" };
     if (s === "Bearish") return { border: "border-rose-500/40", bg: "bg-rose-500/5", dot: "bg-rose-400" };
     if (s === "Neutral") return { border: "border-slate-500/20", bg: "bg-transparent", dot: "bg-slate-500" };
   }
@@ -469,9 +465,9 @@ function getSentimentInfo(item: string | import("@/app/lib/trading-agent-types")
   
   if (t.includes("bullish") || t.includes("up") || t.includes("above") || t.includes("healthy") || t.includes("strongest")) {
     return { 
-      border: "border-emerald-500/40", 
-      bg: "bg-emerald-500/5", 
-      dot: "bg-emerald-400" 
+      border: "border-success-strong", 
+      bg: "bg-success-faint", 
+      dot: "bg-success-indicator" 
     };
   }
   if (t.includes("bearish") || t.includes("down") || t.includes("below") || t.includes("weakest") || t.includes("risk-off") || t.includes("headwind")) {
@@ -822,10 +818,10 @@ function StepDetailPanel({
                     className={`relative overflow-hidden flex items-center gap-2.5 rounded-xl border border-white/8 bg-[#0d1117] px-3.5 py-2.5 text-[0.83rem] leading-relaxed text-slate-300 ${sentiment?.bg || ""}`}
                   >
                     {!sec.isChecklist && sentiment && (
-                      <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${sentiment.dot} opacity-70`} />
+                      <div className={`absolute left-0 top-0 bottom-0 w-0.75 ${sentiment.dot} opacity-70`} />
                     )}
                     {sec.isChecklist && (
-                      <MaterialIcon name="check_circle" outlined={false} className="flex h-5 w-5 shrink-0 items-center justify-center text-[0.9rem] leading-none text-emerald-500/80" />
+                      <MaterialIcon name="check_circle" outlined={false} className="text-success-dim flex h-5 w-5 shrink-0 items-center justify-center text-[0.9rem] leading-none" />
                     )}
                     <span className="flex-1 whitespace-pre-wrap">{typeof item === "string" ? item : item.text}</span>
                   </div>
@@ -880,7 +876,7 @@ function DecisionHeroPanel({
       )}
 
       {/* Decision Hero */}
-      <div className={`rounded-2xl border p-5 ${theme.heroBorder} ${theme.heroBg} ${theme.heroBgGlow}`}>
+      <div className={`rounded-2xl border p-5 ${theme.heroBorder} ${theme.heroBg}`}>
         <p className={`text-[0.68rem] font-bold uppercase tracking-[0.22em] ${theme.actionLabel}`}>
           Recommended Action
         </p>
@@ -923,7 +919,7 @@ function DecisionHeroPanel({
               const sentiment = getSentimentInfo(item);
               return (
                 <div key={i} className={`relative overflow-hidden flex items-start gap-2.5 rounded-xl border border-white/8 px-4 py-2.5 ${sentiment.bg}`}>
-                  <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${sentiment.dot} opacity-70`} />
+                  <div className={`absolute left-0 top-0 bottom-0 w-0.75 ${sentiment.dot} opacity-70`} />
                   <p className="text-[0.82rem] leading-relaxed text-slate-300">
                     {typeof item === "string" ? item : item.text}
                   </p>
@@ -1054,7 +1050,7 @@ function Sidebar({
                       <span className="relative h-2 w-2 rounded-full bg-sky-400" />
                     </span>
                   ) : isDone ? (
-                    <MaterialIcon name="check_circle" outlined={false} className="text-[1rem] text-emerald-500/70" />
+                    <MaterialIcon name="check_circle" outlined={false} className="text-success-dim text-[1rem]" />
                   ) : isError ? (
                     <MaterialIcon name="error" outlined={false} className="text-[1rem] text-rose-400" />
                   ) : (
@@ -1121,7 +1117,7 @@ export function TradingAgentTraceModal({
     ? { label: "Streaming", cls: "border-sky-400/35 bg-sky-400/10 text-sky-100" }
     : error
     ? { label: "Error", cls: "border-rose-500/35 bg-rose-500/10 text-rose-100" }
-    : { label: "Completed", cls: "border-emerald-400/35 bg-emerald-400/10 text-emerald-100" };
+    : { label: "Completed", cls: "status-badge-success" };
 
   return (
     <div className="modal-backdrop z-95 items-start overflow-y-auto py-6">

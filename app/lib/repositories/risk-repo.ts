@@ -171,6 +171,20 @@ function toProfileInsert(input: RiskRulesFormValues, name: string, userId: strin
   };
 }
 
+function toGlobalProfileInsert(input: RiskRulesFormValues, name: string, userId: string) {
+  return {
+    user_id: userId,
+    portfolio_id: null,
+    name,
+    max_daily_loss_usd: input.maxDailyLossUsd,
+    max_position_size_pct: input.maxPositionSizePct,
+    max_leverage: null,
+    max_drawdown_pct: input.maxDrawdownPct,
+    risk_per_trade_pct: null,
+    is_active: true,
+  };
+}
+
 function isAlertStatus(value: string | null): value is RiskAlertStatus {
   return value === "active" || value === "acknowledged" || value === "resolved";
 }
@@ -204,23 +218,8 @@ function escalatedMessage(
 export async function getActiveRiskProfileByPortfolio(
   supabase: SupabaseClient,
   userId: string,
-  portfolioId: string
+  _portfolioId: string
 ): Promise<RiskProfile | null> {
-  const exactProfileResponse = await supabase
-    .from("risk_profiles")
-    .select(
-      "id, user_id, portfolio_id, name, max_daily_loss_usd, max_position_size_pct, max_leverage, max_drawdown_pct, risk_per_trade_pct, is_active, updated_at"
-    )
-    .eq("user_id", userId)
-    .eq("portfolio_id", portfolioId)
-    .eq("is_active", true)
-    .order("updated_at", { ascending: false })
-    .limit(1);
-
-  if (!exactProfileResponse.error && exactProfileResponse.data && exactProfileResponse.data.length > 0) {
-    return toRiskProfile(exactProfileResponse.data[0] as RiskProfileRow);
-  }
-
   const globalProfileResponse = await supabase
     .from("risk_profiles")
     .select(
@@ -237,6 +236,13 @@ export async function getActiveRiskProfileByPortfolio(
   }
 
   return toRiskProfile(globalProfileResponse.data[0] as RiskProfileRow);
+}
+
+export async function getGlobalRiskProfile(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<RiskProfile | null> {
+  return getActiveRiskProfileByPortfolio(supabase, userId, "global");
 }
 
 export async function getExactRiskProfileByPortfolio(
@@ -298,6 +304,53 @@ export async function upsertPortfolioRiskProfile(
   const { data, error } = await supabase
     .from("risk_profiles")
     .insert(toProfileInsert(input, name, userId, portfolioId))
+    .select(
+      "id, user_id, portfolio_id, name, max_daily_loss_usd, max_position_size_pct, max_leverage, max_drawdown_pct, risk_per_trade_pct, is_active, updated_at"
+    )
+    .limit(1);
+
+  if (error || !data || data.length === 0) {
+    return null;
+  }
+
+  return toRiskProfile(data[0] as RiskProfileRow);
+}
+
+export async function upsertGlobalRiskProfile(
+  supabase: SupabaseClient,
+  userId: string,
+  input: RiskRulesFormValues,
+  name = "Global Spot Risk Rules"
+): Promise<RiskProfile | null> {
+  const existing = await getGlobalRiskProfile(supabase, userId);
+
+  if (existing?.id) {
+    const { data, error } = await supabase
+      .from("risk_profiles")
+      .update({
+        name,
+        max_daily_loss_usd: input.maxDailyLossUsd,
+        max_position_size_pct: input.maxPositionSizePct,
+        max_drawdown_pct: input.maxDrawdownPct,
+        is_active: true,
+      })
+      .eq("id", existing.id)
+      .eq("user_id", userId)
+      .select(
+        "id, user_id, portfolio_id, name, max_daily_loss_usd, max_position_size_pct, max_leverage, max_drawdown_pct, risk_per_trade_pct, is_active, updated_at"
+      )
+      .limit(1);
+
+    if (error || !data || data.length === 0) {
+      return null;
+    }
+
+    return toRiskProfile(data[0] as RiskProfileRow);
+  }
+
+  const { data, error } = await supabase
+    .from("risk_profiles")
+    .insert(toGlobalProfileInsert(input, name, userId))
     .select(
       "id, user_id, portfolio_id, name, max_daily_loss_usd, max_position_size_pct, max_leverage, max_drawdown_pct, risk_per_trade_pct, is_active, updated_at"
     )
@@ -518,6 +571,40 @@ export async function listRiskAlerts(
   return (data as RiskAlertRow[]).map(toRiskAlert);
 }
 
+export async function listRiskAlertsByPortfolioIds(
+  supabase: SupabaseClient,
+  userId: string,
+  portfolioIds: string[],
+  status: RiskAlertStatus | "all" = "active",
+  limit = 200
+): Promise<RiskAlertRecord[]> {
+  if (portfolioIds.length === 0) {
+    return [];
+  }
+
+  const boundedLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 500) : 200;
+  let query = supabase
+    .from("risk_alerts")
+    .select(
+      "id, portfolio_id, risk_profile_id, event_type, severity, status, title, message, observed_value, threshold_value, symbol, signature, trigger_count, first_triggered_at, last_triggered_at, acknowledged_at, resolved_at"
+    )
+    .eq("user_id", userId)
+    .in("portfolio_id", portfolioIds)
+    .order("last_triggered_at", { ascending: false })
+    .limit(boundedLimit);
+
+  if (status !== "all") {
+    query = query.eq("status", status);
+  }
+
+  const { data, error } = await query;
+  if (error || !data) {
+    return [];
+  }
+
+  return (data as RiskAlertRow[]).map(toRiskAlert);
+}
+
 export async function updateRiskAlertStatus(
   supabase: SupabaseClient,
   userId: string,
@@ -651,6 +738,38 @@ export async function listRecentRiskEvents(
     .select("id, event_type, severity, details, occurred_at")
     .eq("user_id", userId)
     .eq("portfolio_id", portfolioId)
+    .order("occurred_at", { ascending: false })
+    .limit(boundedLimit);
+
+  if (error || !data) {
+    return [];
+  }
+
+  return (data as RiskEventRow[]).map((row) => ({
+    id: row.id,
+    eventType: row.event_type,
+    severity: row.severity,
+    details: parseEventDetails(row.details),
+    occurredAt: row.occurred_at,
+  }));
+}
+
+export async function listRecentRiskEventsByPortfolioIds(
+  supabase: SupabaseClient,
+  userId: string,
+  portfolioIds: string[],
+  limit = 20
+): Promise<RiskEventRecord[]> {
+  if (portfolioIds.length === 0) {
+    return [];
+  }
+
+  const boundedLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 100) : 20;
+  const { data, error } = await supabase
+    .from("risk_events")
+    .select("id, event_type, severity, details, occurred_at")
+    .eq("user_id", userId)
+    .in("portfolio_id", portfolioIds)
     .order("occurred_at", { ascending: false })
     .limit(boundedLimit);
 

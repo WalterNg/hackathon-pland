@@ -33,7 +33,7 @@ export function RightColumn({ assets, portfolioName }: RightColumnProps) {
         title: `Bought ${token}`,
         detail: `+${item.quantity.toFixed(6)} ${token} on ${dateLabel}`,
         icon: "add_shopping_cart",
-        iconBg: "bg-teal-100",
+        iconBg: "bg-success-soft",
         iconText: "text-accent"
       };
     }

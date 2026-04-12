@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MaterialIcon } from "../components/dashboard/material-icon";
-import { RiskAlertCenterDialog } from "../components/portfolio/risk-alert-center-dialog";
 import { AppTopNavigation } from "../components/ui/app-top-navigation";
 import { AddTransactionDialog } from "../components/portfolio/add-transaction-dialog";
 import { CreatePortfolioDialog } from "../components/portfolio/create-portfolio-dialog";
@@ -12,21 +11,15 @@ import { PortfolioAssetsTable } from "../components/portfolio/portfolio-assets-t
 import { PortfolioCharts } from "@/app/components/portfolio/portfolio-charts";
 import { PortfolioHeader } from "../components/portfolio/portfolio-header";
 import { PortfolioMetrics } from "../components/portfolio/portfolio-metrics";
-import { RiskRulesDialog } from "../components/portfolio/risk-rules-dialog";
-import { RiskMonitorPanel } from "../components/portfolio/risk-monitor-panel";
 import { PortfolioSummary } from "../components/portfolio/portfolio-summary";
 import { SelectCoinModal } from "../components/portfolio/select-coin-modal";
 import { Sidebar } from "../components/ui/sidebar";
-import { useRiskAlerts } from "../hooks/use-risk-alerts";
 import { AuthGuard } from "../components/auth/auth-guard";
 import { useTradingAgentAnalysis } from "../hooks/use-trading-agent-analysis";
 import { usePortfolios } from "../hooks/use-portfolios";
-import { useRiskEvents } from "../hooks/use-risk-events";
-import { useRiskRules } from "../hooks/use-risk-rules";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
 import { RefreshIntervals } from "@/app/lib/refresh-intervals";
 import type { PortfolioMode, PortfolioSnapshot } from "@/app/lib/portfolio-types";
-import type { RiskAlertStatus, RiskRulesFormValues } from "@/app/lib/risk-types";
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
 const SUMMARY_RENDER_INTERVAL_MS = RefreshIntervals.PORTFOLIO_SUMMARY_RENDER_MS;
@@ -90,9 +83,6 @@ function PortfolioContent() {
   const [isAddDialogOpen, setAddDialogOpen] = useState(false);
   const [isCreatePortfolioOpen, setCreatePortfolioOpen] = useState(false);
   const [isSyncDialogOpen, setSyncDialogOpen] = useState(false);
-  const [isRiskRulesOpen, setRiskRulesOpen] = useState(false);
-  const [isAlertCenterOpen, setAlertCenterOpen] = useState(false);
-  const [alertStatus, setAlertStatus] = useState<RiskAlertStatus | "all">("all");
   const [isRemovingPortfolio, setRemovingPortfolio] = useState(false);
   const [isSyncingPortfolio, setSyncingPortfolio] = useState(false);
   const [showCharts, setShowCharts] = useState(true);
@@ -132,32 +122,6 @@ function PortfolioContent() {
     isServerSnapshotStale,
     reload
   } = usePortfolioSnapshot(portfolioId, portfolioName);
-  const {
-    profile: riskProfile,
-    events: riskEvents,
-    alerts: riskAlerts,
-    isLoading: isRiskLoading,
-    error: riskError,
-    reload: reloadRisk,
-  } = useRiskEvents(portfolioId, portfolioName);
-  const {
-    profile: editableRiskProfile,
-    source: riskRuleSource,
-    isLoading: isRiskRulesLoading,
-    isSaving: isRiskRulesSaving,
-    error: riskRulesError,
-    save: saveRiskRules,
-    reload: reloadRiskRules,
-  } = useRiskRules(portfolioName);
-  const {
-    alerts: alertCenterAlerts,
-    isLoading: isAlertCenterLoading,
-    isUpdatingId: updatingAlertId,
-    error: alertCenterError,
-    reload: reloadAlertCenter,
-    acknowledge,
-    resolve,
-  } = useRiskAlerts(portfolioName, alertStatus, 15_000, isAlertCenterOpen);
   const scopedSnapshot = snapshot?.summary.name === portfolioName ? snapshot : null;
 
   useEffect(() => {
@@ -186,6 +150,7 @@ function PortfolioContent() {
 
   const isConnectedPortfolio = currentPortfolio?.mode === "binance_connected";
   const primaryActionLabel = isMainPortfolio ? "Create portfolio" : isConnectedPortfolio ? "Read-only" : "Add transaction";
+  const riskManagementHref = `/risk?name=${encodeURIComponent(portfolioName)}`;
   const connectedPortfolioTimestamp = lastServerSyncAt ?? effectiveSnapshot?.summary.timestamp ?? null;
   const connectedStatusDescription =
     isConnectedPortfolio && connectedPortfolioTimestamp
@@ -194,22 +159,10 @@ function PortfolioContent() {
         ? "This portfolio syncs automatically from Binance and manual edits are disabled."
         : undefined;
   const defaultPortfolioName = useMemo(() => `Portfolio ${portfolios.length + 1}`, [portfolios.length]);
-  const criticalActiveAlerts = useMemo(
-    () => riskAlerts.filter((alert) => alert.status === "active" && alert.severity === "critical"),
-    [riskAlerts]
-  );
-  const warningActiveAlerts = useMemo(
-    () => riskAlerts.filter((alert) => alert.status === "active" && alert.severity !== "critical"),
-    [riskAlerts]
-  );
   const scopedSummary = effectiveSnapshot?.summary ?? null;
   const scopedMetrics = effectiveSnapshot?.metrics ?? null;
   const scopedAssets = effectiveSnapshot?.assets ?? [];
   const scopedChart = effectiveSnapshot?.chart ?? [];
-  const pinnedCriticalAlert = useMemo(
-    () => criticalActiveAlerts.find((alert) => alert.triggerCount >= 3) ?? criticalActiveAlerts[0] ?? null,
-    [criticalActiveAlerts]
-  );
   const throttledSummary = useThrottledValue(scopedSummary, SUMMARY_RENDER_INTERVAL_MS, portfolioName);
   const throttledMetrics = useThrottledValue(scopedMetrics, SUMMARY_RENDER_INTERVAL_MS, portfolioName);
   const throttledAssets = useThrottledValue(scopedAssets, ASSETS_RENDER_INTERVAL_MS, portfolioName);
@@ -230,11 +183,6 @@ function PortfolioContent() {
       setCreatePortfolioOpen(true);
     }
   }, [shouldOpenCreatePortfolio]);
-
-  const openAlertCenterForActiveAlerts = () => {
-    setAlertStatus("active");
-    setAlertCenterOpen(true);
-  };
 
   const closeAddDialog = () => {
     setAddDialogOpen(false);
@@ -303,40 +251,6 @@ function PortfolioContent() {
 
   const handleTransactionCreated = async () => {
     await reload();
-    await reloadRisk();
-    await reloadAlertCenter();
-  };
-
-  const handleSaveRiskRules = async (values: RiskRulesFormValues) => {
-    const saved = await saveRiskRules(values);
-    if (!saved) {
-      return;
-    }
-
-    await reloadRiskRules();
-    await reload();
-    await reloadRisk();
-    setRiskRulesOpen(false);
-  };
-
-  const handleAcknowledgeAlert = async (alertId: string) => {
-    const ok = await acknowledge(alertId);
-    if (!ok) {
-      return;
-    }
-
-    await reloadRisk();
-    await reloadAlertCenter();
-  };
-
-  const handleResolveAlert = async (alertId: string) => {
-    const ok = await resolve(alertId);
-    if (!ok) {
-      return;
-    }
-
-    await reloadRisk();
-    await reloadAlertCenter();
   };
 
   const handleRemovePortfolio = async () => {
@@ -376,7 +290,10 @@ function PortfolioContent() {
     <>
       <header className="page-header shrink-0 px-4 sm:px-6 lg:px-8">
         <div className="w-full">
-          <AppTopNavigation portfolioHref={`/portfolio?name=${encodeURIComponent(portfolioName)}`} />
+          <AppTopNavigation
+            portfolioHref={`/portfolio?name=${encodeURIComponent(portfolioName)}`}
+            riskHref={riskManagementHref}
+          />
         </div>
       </header>
 
@@ -392,9 +309,6 @@ function PortfolioContent() {
               portfolioName={portfolioName}
               statusLabel={isConnectedPortfolio ? "Connected to Binance" : undefined}
               statusDescription={connectedStatusDescription}
-              criticalAlertCount={criticalActiveAlerts.length}
-              warningAlertCount={warningActiveAlerts.length}
-              onOpenAlertCenter={openAlertCenterForActiveAlerts}
               primaryActionLabel={primaryActionLabel}
               onPrimaryAction={openTransactionFlow}
               isPrimaryActionDisabled={isConnectedPortfolio}
@@ -407,35 +321,6 @@ function PortfolioContent() {
               onSync={() => setSyncDialogOpen(true)}
               isSyncing={isSyncingPortfolio}
             />
-
-            {pinnedCriticalAlert ? (
-              <section className="mb-6 overflow-hidden rounded-3xl border border-rose-500/20 bg-[linear-gradient(90deg,rgba(127,29,29,0.18),rgba(58,12,25,0.1),rgba(8,13,22,0.96))] px-4 py-4 shadow-[0_20px_60px_rgba(0,0,0,0.24)] sm:px-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-rose-200/88">
-                      <span className="inline-flex h-2.5 w-2.5 rounded-full bg-rose-300 animate-pulse" />
-                      Critical alert requires action
-                      {pinnedCriticalAlert.triggerCount >= 3 ? (
-                        <span className="rounded-full border border-rose-300/20 bg-rose-500/12 px-2 py-0.5 text-[0.64rem] text-rose-100/90">
-                          Repeated {pinnedCriticalAlert.triggerCount} times
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-2 text-base font-semibold text-white sm:text-lg">{pinnedCriticalAlert.title}</p>
-                    <p className="mt-1 max-w-3xl text-sm text-rose-50/78">{pinnedCriticalAlert.message}</p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" onClick={openAlertCenterForActiveAlerts} className="ui-button-secondary">
-                      Review alerts
-                    </button>
-                    <button type="button" onClick={() => setRiskRulesOpen(true)} className="ui-button-primary">
-                      Tighten rules
-                    </button>
-                  </div>
-                </div>
-              </section>
-            ) : null}
 
             {isLoading && !effectiveSnapshot && (
               <div className="panel-low mb-6 p-5 text-sm text-muted">Loading portfolio snapshot…</div>
@@ -468,16 +353,6 @@ function PortfolioContent() {
                     isAnalyzeDisabled={isMainPortfolio || !effectiveSnapshot || isLoading}
                   />
                 ) : null}
-                <RiskMonitorPanel
-                  metrics={scopedMetrics}
-                  profile={riskProfile}
-                  events={riskEvents}
-                  alerts={riskAlerts}
-                  isLoading={isRiskLoading}
-                  error={riskError}
-                  onManageRules={() => setRiskRulesOpen(true)}
-                  onViewAlerts={openAlertCenterForActiveAlerts}
-                />
                 <PortfolioMetrics metrics={throttledMetrics ?? scopedMetrics} />
                 {showCharts && (
                   <PortfolioCharts
@@ -539,35 +414,6 @@ function PortfolioContent() {
         portfolioName={portfolioName}
         onClose={() => setSyncDialogOpen(false)}
         onSync={handleSyncPortfolio}
-      />
-
-      <RiskRulesDialog
-        open={isRiskRulesOpen}
-        portfolioName={portfolioName}
-        profile={editableRiskProfile}
-        source={riskRuleSource}
-        isLoading={isRiskRulesLoading}
-        isSaving={isRiskRulesSaving}
-        error={riskRulesError}
-        onClose={() => setRiskRulesOpen(false)}
-        onSave={handleSaveRiskRules}
-      />
-
-      <RiskAlertCenterDialog
-        open={isAlertCenterOpen}
-        alerts={alertCenterAlerts}
-        status={alertStatus}
-        isLoading={isAlertCenterLoading}
-        isUpdatingId={updatingAlertId}
-        error={alertCenterError}
-        onClose={() => setAlertCenterOpen(false)}
-        onStatusChange={setAlertStatus}
-        onAcknowledge={handleAcknowledgeAlert}
-        onResolve={handleResolveAlert}
-        onReviewRules={() => {
-          setAlertCenterOpen(false);
-          setRiskRulesOpen(true);
-        }}
       />
     </>
   );

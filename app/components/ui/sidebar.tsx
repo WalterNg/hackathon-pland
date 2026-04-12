@@ -36,36 +36,39 @@ function normalizePath(path: string): string {
 type SidebarProps = {
   portfolios?: PortfolioItem[];
   livePortfolioValuesByName?: Record<string, number>;
+  sectionPath?: "/portfolio" | "/risk";
 };
 
-export function Sidebar({ portfolios, livePortfolioValuesByName = {} }: SidebarProps) {
+export function Sidebar({ portfolios, livePortfolioValuesByName = {}, sectionPath = "/portfolio" }: SidebarProps) {
   return (
     <Suspense
       fallback={<aside className="sidebar-container text-inverse z-20 mb-4 hidden w-64 shrink-0 md:flex" />}
     >
       {portfolios ? (
-        <SidebarContent portfolios={portfolios} livePortfolioValuesByName={livePortfolioValuesByName} />
+        <SidebarContent portfolios={portfolios} livePortfolioValuesByName={livePortfolioValuesByName} sectionPath={sectionPath} />
       ) : (
-        <SidebarContentWithAutoLoad />
+        <SidebarContentWithAutoLoad sectionPath={sectionPath} />
       )}
     </Suspense>
   );
 }
 
-function SidebarContentWithAutoLoad() {
+function SidebarContentWithAutoLoad({ sectionPath }: { sectionPath: "/portfolio" | "/risk" }) {
   const { portfolios } = usePortfolios({
     refreshIntervalMs: RefreshIntervals.SIDEBAR_PORTFOLIOS_REFRESH_MS,
   });
 
-  return <SidebarContent portfolios={portfolios} livePortfolioValuesByName={{}} />;
+  return <SidebarContent portfolios={portfolios} livePortfolioValuesByName={{}} sectionPath={sectionPath} />;
 }
 
 function SidebarContent({
   portfolios,
   livePortfolioValuesByName,
+  sectionPath,
 }: {
   portfolios: PortfolioItem[];
   livePortfolioValuesByName: Record<string, number>;
+  sectionPath: "/portfolio" | "/risk";
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -78,7 +81,7 @@ function SidebarContent({
     name: DEFAULT_PORTFOLIOS[0],
     isDefault: true
   };
-  const mainPortfolioHref = `/portfolio?name=${encodeURIComponent(mainPortfolio.name)}`;
+  const mainPortfolioHref = `${sectionPath}?name=${encodeURIComponent(mainPortfolio.name)}`;
   const createPortfolioHref = `/portfolio?name=${encodeURIComponent(mainPortfolio.name)}&createPortfolio=1`;
   const secondaryPortfolios = portfolios.filter((portfolio) => portfolio.id !== mainPortfolio.id);
 
@@ -87,7 +90,7 @@ function SidebarContent({
     return currentPath === normalizedHref || currentPath.startsWith(`${normalizedHref}/`);
   };
 
-  const portfolioActive = isActive("/portfolio");
+  const portfolioActive = isActive(sectionPath);
   const isMainPortfolioActive = portfolioActive && selectedPortfolio === mainPortfolio.name;
 
   const handleLogout = async () => {
@@ -113,7 +116,7 @@ function SidebarContent({
             href={mainPortfolioHref}
             className={
               isMainPortfolioActive
-                ? "flex items-center gap-3 rounded-3xl bg-linear-to-r from-[#3f66ff] to-[#3352d9] px-4 py-4 text-white shadow-[0_18px_40px_rgba(52,87,255,0.28)] transition-transform hover:-translate-y-0.5"
+                ? "ui-nav-link-active flex items-center gap-3 rounded-3xl px-4 py-4 text-white transition-transform hover:-translate-y-0.5"
                 : "flex items-center gap-3 rounded-3xl bg-(--surface-container-low) px-4 py-4 text-inverse transition-colors hover:bg-(--surface-container)"
             }
           >
@@ -132,7 +135,7 @@ function SidebarContent({
             <div className="space-y-1.5">
               {secondaryPortfolios.map((portfolio) => {
                 const portfolioName = portfolio.name;
-                const portfolioHref = `/portfolio?name=${encodeURIComponent(portfolioName)}`;
+                const portfolioHref = `${sectionPath}?name=${encodeURIComponent(portfolioName)}`;
                 const isSelected = portfolioActive && selectedPortfolio === portfolioName;
                 const displayTotalValueUsd =
                   typeof livePortfolioValuesByName[portfolioName] === "number"

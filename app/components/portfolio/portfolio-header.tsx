@@ -4,9 +4,6 @@ type PortfolioHeaderProps = {
   portfolioName: string;
   statusLabel?: string;
   statusDescription?: string;
-  criticalAlertCount?: number;
-  warningAlertCount?: number;
-  onOpenAlertCenter?: () => void;
   primaryActionLabel: string;
   onPrimaryAction: () => void;
   isPrimaryActionDisabled?: boolean;
@@ -24,9 +21,6 @@ export function PortfolioHeader({
   portfolioName,
   statusLabel,
   statusDescription,
-  criticalAlertCount = 0,
-  warningAlertCount = 0,
-  onOpenAlertCenter,
   primaryActionLabel,
   onPrimaryAction,
   isPrimaryActionDisabled = false,
@@ -50,25 +44,6 @@ export function PortfolioHeader({
             <span className="inline-flex items-center rounded-full border border-(--surface-outline) bg-(--surface-container-low) px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">
               {statusLabel}
             </span>
-          ) : null}
-          {criticalAlertCount > 0 ? (
-            <button
-              type="button"
-              onClick={onOpenAlertCenter}
-              className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/22 bg-rose-500/12 px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-rose-200 transition-colors hover:border-rose-300/30 hover:bg-rose-500/18"
-            >
-              <span className="inline-flex h-2 w-2 rounded-full bg-rose-300" />
-              {criticalAlertCount} critical alert{criticalAlertCount === 1 ? "" : "s"}
-            </button>
-          ) : warningAlertCount > 0 ? (
-            <button
-              type="button"
-              onClick={onOpenAlertCenter}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-(--surface-container-low) px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted transition-colors hover:text-strong"
-            >
-              <span className="inline-flex h-2 w-2 rounded-full bg-amber-300" />
-              {warningAlertCount} active alert{warningAlertCount === 1 ? "" : "s"}
-            </button>
           ) : null}
         </div>
         {statusDescription ? <p className="mt-2 max-w-xl text-sm italic text-muted">{statusDescription}</p> : null}
@@ -115,7 +90,7 @@ export function PortfolioHeader({
             type="button"
             onClick={onSync}
             disabled={isSyncing}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-[0.72rem] font-semibold text-primary transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/18 hover:shadow-[0_8px_20px_rgba(60,227,106,0.14)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-[0.72rem] font-semibold text-primary transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/18 hover:shadow-success-soft disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
             aria-label="Sync with Binance"
           >
             <MaterialIcon name={isSyncing ? "hourglass_top" : "sync"} outlined={false} className="text-[0.9rem]" />

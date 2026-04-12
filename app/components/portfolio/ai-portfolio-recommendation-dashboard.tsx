@@ -98,19 +98,19 @@ const PROCESSING_AGENTS = [
     id: "ta",
     label: "Quant / TA Agent",
     icon: "query_stats",
-    aura: "from-emerald-400/25 via-emerald-400/6 to-transparent",
+    accentClass: "bg-success-ghost",
   },
   {
     id: "news",
     label: "Macro / News Agent",
     icon: "public",
-    aura: "from-sky-400/25 via-sky-400/6 to-transparent",
+    accentClass: "bg-sky-400/8",
   },
   {
     id: "risk",
     label: "Risk Agent",
     icon: "shield",
-    aura: "from-rose-500/25 via-rose-500/8 to-transparent",
+    accentClass: "bg-rose-500/8",
   },
 ] as const;
 
@@ -137,7 +137,7 @@ function factAccentClasses(accent: MarketFact["accent"], highlighted: boolean, d
     accent === "danger"
       ? "border-rose-500/20 shadow-[0_0_0_1px_rgba(244,63,94,0.08)]"
       : accent === "success"
-        ? "border-emerald-400/15 shadow-[0_0_0_1px_rgba(52,211,153,0.06)]"
+        ? "border-success-subtle shadow-success-hairline"
         : "border-sky-400/15 shadow-[0_0_0_1px_rgba(56,189,248,0.06)]";
 
   if (highlighted) {
@@ -153,7 +153,7 @@ function factAccentClasses(accent: MarketFact["accent"], highlighted: boolean, d
 
 function accordionToneClasses(tone: AgentAccordion["tone"]): string {
   if (tone === "success") {
-    return "border-emerald-400/25 bg-emerald-500/10 text-emerald-200";
+    return "border-success-soft bg-success-strong text-success-strong";
   }
 
   if (tone === "danger") {
@@ -201,8 +201,8 @@ function ActionCard({
         : "bg-sky-400/14 text-sky-100";
 
   return (
-    <article className="relative overflow-hidden rounded-[1.5rem] border border-white/8 bg-[#0d131d] p-5 shadow-[0_20px_45px_rgba(0,0,0,0.28)]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(244,63,94,0.14),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(96,165,250,0.12),transparent_25%)]" />
+    <article className="ui-surface-card relative overflow-hidden rounded-3xl p-5">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/8" />
       <div className="relative">
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
@@ -216,7 +216,7 @@ function ActionCard({
           </span>
         </div>
 
-        <div className="mb-5 rounded-2xl border border-white/6 bg-white/[0.04] px-3 py-3">
+        <div className="mb-5 rounded-2xl border border-white/6 bg-white/4 px-3 py-3">
           <p className="text-sm text-slate-300">{card.rationale}</p>
           {card.linkedAlertLabel ? <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Linked: {card.linkedAlertLabel}</p> : null}
         </div>
@@ -225,7 +225,7 @@ function ActionCard({
           type="button"
           onClick={() => void onAction(card.payload)}
           disabled={isPending}
-          className="inline-flex w-full items-center justify-center rounded-xl bg-[linear-gradient(135deg,rgba(244,63,94,0.92),rgba(225,29,72,0.88))] px-4 py-3 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(244,63,94,0.22)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+          className="ui-button-tonal-danger inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
         >
           {isPending ? "Applying..." : card.buttonLabel}
         </button>
@@ -236,10 +236,9 @@ function ActionCard({
 
 function EmptyRecommendationHero({ onAnalyze, isDisabled }: { onAnalyze: () => void; isDisabled: boolean }) {
   return (
-    <div className="relative overflow-hidden rounded-[2rem] border border-white/14 bg-[linear-gradient(180deg,#6A38E7_0%,#AE4EF9_100%)] px-5 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.24),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.12),transparent_30%)]" />
+    <div className="ui-surface-hero relative overflow-hidden rounded-4xl px-5 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
 
-      <div className="relative flex flex-col gap-8 lg:min-h-[19rem] lg:justify-center lg:pr-[18rem] xl:pr-[22rem]">
+      <div className="relative flex flex-col gap-8 lg:min-h-76 lg:justify-center lg:pr-72 xl:pr-88">
         <div className="max-w-3xl">
           <div className="inline-flex items-center gap-3">
             <Image
@@ -266,25 +265,24 @@ function EmptyRecommendationHero({ onAnalyze, isDisabled }: { onAnalyze: () => v
             type="button"
             onClick={onAnalyze}
             disabled={isDisabled}
-            className="group relative mt-8 inline-flex min-h-14 items-center gap-3 overflow-hidden rounded-full border border-white/32 bg-[linear-gradient(180deg,rgba(255,255,255,0.28),rgba(255,255,255,0.12))] px-7 text-base font-semibold text-white backdrop-blur-[22px] transition hover:-translate-y-0.5 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.34),rgba(255,255,255,0.14))] disabled:cursor-not-allowed disabled:opacity-60"
+            className="ui-button-hero group relative mt-8 inline-flex min-h-14 items-center gap-3 overflow-hidden rounded-full px-7 text-base font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <span className="pointer-events-none absolute inset-0 rounded-full bg-[linear-gradient(135deg,rgba(255,255,255,0.22),rgba(255,255,255,0.06)_42%,rgba(255,255,255,0.14)_78%,rgba(255,255,255,0.1))]" />
-            <span className="pointer-events-none absolute inset-x-4 top-1 h-1/2 rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.46),rgba(255,255,255,0.08))] opacity-90 blur-md" />
-            <span className="pointer-events-none absolute inset-[1px] rounded-full border border-white/18" />
+            <span className="pointer-events-none absolute inset-0 rounded-full bg-white/6 opacity-0 transition group-hover:opacity-100" />
+            <span className="pointer-events-none absolute inset-px rounded-full border border-white/18" />
             <span className="relative">Analyze with AI</span>
             <MaterialIcon name="arrow_forward" outlined={false} className="relative text-lg transition group-hover:translate-x-0.5" />
           </button>
         </div>
 
         <div className="relative mx-auto flex w-full max-w-[20rem] justify-center lg:absolute lg:-right-4 lg:top-[51%] lg:w-auto lg:max-w-none lg:-translate-y-1/2 lg:justify-end xl:-right-8 xl:top-[53%]">
-          <div className="pointer-events-none absolute inset-x-[12%] bottom-2 h-8 rounded-full bg-[radial-gradient(circle,rgba(61,18,136,0.38),transparent_70%)] blur-xl" />
+          <div className="pointer-events-none absolute inset-x-[12%] bottom-2 h-8 rounded-full bg-black/25 blur-xl" />
           <Image
             src="/coin.svg"
             alt="Bitcoin and Ethereum coin illustration"
             width={380}
             height={280}
             priority={false}
-            className="relative h-auto w-full max-w-[18rem] drop-shadow-[0_18px_40px_rgba(67,23,156,0.24)] sm:max-w-[20rem] lg:max-w-[28rem] xl:max-w-[31rem]"
+            className="relative h-auto w-full max-w-[18rem] drop-shadow-[0_18px_40px_rgba(67,23,156,0.24)] sm:max-w-[20rem] lg:max-w-md xl:max-w-124"
           />
         </div>
       </div>
@@ -379,20 +377,19 @@ export function AIPortfolioRecommendationDashboard({
   }
 
   return (
-    <section className="relative mb-6 overflow-hidden rounded-[2rem] border border-white/8 bg-[#080d16] text-white shadow-[0_30px_90px_rgba(0,0,0,0.42)] lg:mb-8">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_25%),radial-gradient(circle_at_top_right,rgba(244,63,94,0.13),transparent_28%),linear-gradient(180deg,rgba(10,15,24,0.98),rgba(7,11,18,0.98))]" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.38),transparent)]" />
+    <section className="ui-surface-deep relative mb-6 overflow-hidden rounded-4xl text-white shadow-[0_30px_90px_rgba(0,0,0,0.42)] lg:mb-8">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/12" />
 
       <div className="relative px-5 py-5 sm:px-6 sm:py-6 lg:px-8">
         <div className="flex flex-col gap-5">
-          <header className="rounded-[1.6rem] border border-white/8 bg-[linear-gradient(180deg,rgba(14,20,31,0.96),rgba(9,14,22,0.98))] p-5 sm:p-6">
+          <header className="ui-surface-panel rounded-[1.6rem] p-5 sm:p-6">
             {showEmptyHero ? (
               <EmptyRecommendationHero onAnalyze={onAnalyze} isDisabled={isDisabled || isAnalyzing} />
             ) : (
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div className="max-w-3xl">
                   <div className="flex items-center gap-3">
-                    <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-sky-400/25 bg-sky-400/10 text-sky-200 shadow-[0_0_24px_rgba(56,189,248,0.18)]">
+                    <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-sky-400/25 bg-sky-400/10 text-sky-200">
                       <MaterialIcon name="psychology" outlined={false} className="text-xl" />
                     </span>
                     <div>
@@ -422,7 +419,7 @@ export function AIPortfolioRecommendationDashboard({
                   type="button"
                   onClick={onAnalyze}
                   disabled={isDisabled || isAnalyzing}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-sky-400/20 bg-[linear-gradient(135deg,rgba(59,130,246,0.22),rgba(37,99,235,0.08))] px-5 py-3 text-sm font-semibold text-sky-100 shadow-[0_14px_36px_rgba(37,99,235,0.18)] transition hover:border-sky-300/35 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="ui-button-tonal-info inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
                 >
                   <MaterialIcon name={isAnalyzing ? "hourglass_top" : "flash_on"} outlined={false} className="text-lg" />
                   Analyze with AI
@@ -431,14 +428,14 @@ export function AIPortfolioRecommendationDashboard({
             )}
 
             {isCouncilProcessing ? (
-              <div className="mt-5 rounded-[1.5rem] border border-white/8 bg-[#0a0f18] px-4 py-5 sm:px-5">
+              <div className="mt-5 rounded-3xl border border-white/8 bg-[#0a0f18] px-4 py-5 sm:px-5">
                 <div className="grid gap-4 lg:grid-cols-3">
                   {PROCESSING_AGENTS.map((agent) => (
                     <article
                       key={agent.id}
-                      className={`relative overflow-hidden rounded-[1.35rem] border border-white/8 bg-[#0d141f] p-4`}
+                      className="ui-surface-card relative overflow-hidden rounded-[1.35rem] p-4"
                     >
-                      <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${agent.aura}`} />
+                      <div className={`pointer-events-none absolute inset-0 ${agent.accentClass}`} />
                       <div className="relative">
                         <div className="flex items-center gap-3">
                           <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white">
@@ -474,7 +471,7 @@ export function AIPortfolioRecommendationDashboard({
                   </svg>
                 </div>
 
-                <div className="mx-auto mt-3 flex max-w-sm items-center justify-center gap-3 rounded-full border border-sky-400/25 bg-[radial-gradient(circle,rgba(59,130,246,0.26),rgba(15,23,42,0.94))] px-5 py-3 text-center shadow-[0_0_28px_rgba(59,130,246,0.18)]">
+                <div className="ui-surface-info mx-auto mt-3 flex max-w-sm items-center justify-center gap-3 rounded-full px-5 py-3 text-center">
                   <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-sky-300" />
                   <p className="text-sm font-semibold text-sky-100">Synthesizing Final Call...</p>
                 </div>
@@ -482,14 +479,14 @@ export function AIPortfolioRecommendationDashboard({
                 <p className="mt-4 text-center text-sm text-slate-400">{activeStepLabel}</p>
               </div>
             ) : recommendation ? (
-              <div className="mt-5 rounded-[1.3rem] border border-rose-500/20 bg-[linear-gradient(90deg,rgba(127,29,29,0.34),rgba(62,9,18,0.12),rgba(10,15,24,0.94))] px-4 py-4 shadow-[0_0_0_1px_rgba(244,63,94,0.08),0_18px_40px_rgba(0,0,0,0.18)]">
+              <div className="ui-surface-danger-soft mt-5 rounded-[1.3rem] px-4 py-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-center gap-4">
                     <div className="flex items-center -space-x-2">
                       {[
-                        { icon: "query_stats", className: "bg-sky-400/12 text-sky-100 shadow-[0_0_20px_rgba(59,130,246,0.18)]" },
-                        { icon: "public", className: "bg-sky-400/12 text-sky-100 shadow-[0_0_20px_rgba(59,130,246,0.18)]" },
-                        { icon: "shield", className: "bg-rose-500/18 text-rose-100 shadow-[0_0_20px_rgba(244,63,94,0.22)]" },
+                        { icon: "query_stats", className: "bg-sky-400/12 text-sky-100" },
+                        { icon: "public", className: "bg-sky-400/12 text-sky-100" },
+                        { icon: "shield", className: "bg-rose-500/18 text-rose-100" },
                       ].map((item, index) => (
                         <span
                           key={item.icon}
@@ -515,7 +512,7 @@ export function AIPortfolioRecommendationDashboard({
                           onClick={onOpenAlertCenter}
                           className="mt-2 inline-flex items-center gap-2 rounded-full border border-rose-400/30 bg-rose-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-rose-100 transition hover:bg-rose-500/16"
                         >
-                          <span className="h-2 w-2 rounded-full bg-rose-300 animate-pulse" />
+                          <span className="h-2 w-2 rounded-full bg-rose-300" />
                           {criticalAlertCount} critical alert{criticalAlertCount > 1 ? "s" : ""}
                         </button>
                       ) : null}
@@ -546,7 +543,7 @@ export function AIPortfolioRecommendationDashboard({
               <div
                 className={`mt-4 flex items-start justify-between gap-3 rounded-2xl px-4 py-3 text-sm ${
                   actionFeedback.tone === "success"
-                    ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
+                    ? "status-badge-success"
                     : actionFeedback.tone === "error"
                       ? "border border-rose-500/20 bg-rose-500/10 text-rose-100"
                       : "border border-sky-400/20 bg-sky-500/10 text-sky-100"
@@ -563,7 +560,7 @@ export function AIPortfolioRecommendationDashboard({
           {showDecisionSections ? (
             <>
               {topCriticalAlert ? (
-                <section className="rounded-[1.6rem] border border-rose-500/24 bg-[linear-gradient(90deg,rgba(127,29,29,0.28),rgba(29,10,18,0.4),rgba(10,15,24,0.96))] px-5 py-4">
+                <section className="ui-surface-danger-soft rounded-[1.6rem] px-5 py-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                       <p className="text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-rose-300/80">Critical risk pressure</p>
@@ -605,9 +602,9 @@ export function AIPortfolioRecommendationDashboard({
 
               <section
                 ref={reasoningRef}
-                className="grid scroll-mt-6 grid-cols-1 gap-4 rounded-[1.8rem] border border-white/8 bg-[linear-gradient(180deg,rgba(10,15,24,0.98),rgba(8,12,20,0.98))] p-5 lg:grid-cols-[1.15fr_0.85fr] lg:p-6"
+                className="ui-surface-deep grid scroll-mt-6 grid-cols-1 gap-4 rounded-[1.8rem] p-5 lg:grid-cols-[1.15fr_0.85fr] lg:p-6"
               >
-                <article className="rounded-[1.4rem] border border-white/8 bg-[#0c121b] p-5">
+                <article className="ui-surface-panel rounded-[1.4rem] p-5">
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div>
                       <h4 className="text-lg font-semibold text-white">Detailed reasoning</h4>
@@ -650,7 +647,7 @@ export function AIPortfolioRecommendationDashboard({
                   </p>
                 </article>
 
-                <article className="rounded-[1.4rem] border border-white/8 bg-[#0c121b] p-4">
+                <article className="ui-surface-panel rounded-[1.4rem] p-4">
                   <div className="mb-3">
                     <h4 className="text-lg font-semibold text-white">Agent views</h4>
                     <p className="mt-1 text-sm text-slate-400">Open each agent pane to inspect its contribution to the final call.</p>
@@ -688,7 +685,7 @@ export function AIPortfolioRecommendationDashboard({
                             <div className="border-t border-white/8 px-4 py-4">
                               <div className="space-y-2 text-sm text-slate-300">
                                 {accordion.bullets.map((bullet) => (
-                                  <p key={bullet} className="rounded-xl border border-white/6 bg-white/[0.04] px-3 py-2">
+                                  <p key={bullet} className="rounded-xl border border-white/6 bg-white/4 px-3 py-2">
                                     {bullet}
                                   </p>
                                 ))}
@@ -702,7 +699,7 @@ export function AIPortfolioRecommendationDashboard({
                 </article>
               </section>
 
-              <section className="rounded-[1.8rem] border border-white/8 bg-[linear-gradient(180deg,rgba(11,17,27,0.98),rgba(8,12,20,0.98))] p-5 lg:p-6">
+              <section className="ui-surface-panel rounded-[1.8rem] p-5 lg:p-6">
                 <div className="mb-5">
                   <p className="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">Decision Support &amp; Future Simulation</p>
                   <h4 className="mt-2 text-2xl font-semibold tracking-tight text-white">Actionable spot-trading simulation</h4>
