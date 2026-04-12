@@ -133,15 +133,17 @@ function applyRealtimeTicker(
   const chart = [...currentSnapshot.chart];
   const latestPoint = chart[chart.length - 1];
 
+  const livePoint = { time: nowIso, totalValueUsd, btcPriceUsd: btcPrice ?? null, costBasisUsd: latestPoint?.costBasisUsd ?? null };
+
   if (!latestPoint) {
-    chart.push({ time: nowIso, totalValueUsd });
+    chart.push(livePoint);
   } else {
     const latestTime = new Date(latestPoint.time).getTime();
     const nowTime = Date.now();
     if (!Number.isFinite(latestTime) || nowTime - latestTime > 60_000) {
-      chart.push({ time: nowIso, totalValueUsd });
+      chart.push(livePoint);
     } else {
-      chart[chart.length - 1] = { time: nowIso, totalValueUsd };
+      chart[chart.length - 1] = livePoint;
     }
   }
 
