@@ -9,6 +9,7 @@ import { AddTransactionDialog } from "../components/portfolio/add-transaction-di
 import { CreatePortfolioDialog } from "../components/portfolio/create-portfolio-dialog";
 import { SyncBinanceDialog } from "../components/portfolio/sync-binance-dialog";
 import { PortfolioAssetsTable } from "../components/portfolio/portfolio-assets-table";
+import { PortfolioTransactionsList } from "../components/portfolio/portfolio-transactions-list";
 import { PortfolioCharts } from "@/app/components/portfolio/portfolio-charts";
 import { PortfolioHeader } from "../components/portfolio/portfolio-header";
 import { PortfolioMetrics } from "../components/portfolio/portfolio-metrics";
@@ -96,6 +97,7 @@ function PortfolioContent() {
   const [isRemovingPortfolio, setRemovingPortfolio] = useState(false);
   const [isSyncingPortfolio, setSyncingPortfolio] = useState(false);
   const [showCharts, setShowCharts] = useState(true);
+  const [holdingsTab, setHoldingsTab] = useState<"assets" | "transactions">("assets");
   const [snapshotCacheByPortfolio, setSnapshotCacheByPortfolio] = useState<Record<string, PortfolioSnapshot>>({});
   const [selectedCoin, setSelectedCoin] = useState<{ symbol: string; name: string | null; baseAsset: string; quoteAsset: string } | null>(null);
   const [transactionIntent, setTransactionIntent] = useState<{ action: "buy" | "sell" | "transfer"; note: string }>({
@@ -485,10 +487,41 @@ function PortfolioContent() {
                     chart={throttledChart}
                     assets={throttledAssets}
                     allTimeProfitPercent={(throttledMetrics ?? scopedMetrics).allTimeProfitPercent}
+                    totalCostBasisUsd={(throttledMetrics ?? scopedMetrics).totalCostBasisUsd}
                     isLoading={isLoading || isRefreshing || throttledChart.length === 0}
                   />
                 )}
-                <PortfolioAssetsTable assets={throttledAssets} />
+                {/* Assets / Transactions tab switcher */}
+                <div className="mb-4 flex items-center gap-1 rounded-xl bg-(--surface-container-highest) p-1 w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setHoldingsTab("assets")}
+                    className={holdingsTab === "assets"
+                      ? "rounded-lg bg-(--surface-bright) px-4 py-1.5 text-xs font-semibold text-strong"
+                      : "px-4 py-1.5 text-xs font-medium text-muted hover:text-strong transition-colors"}
+                  >
+                    Assets
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHoldingsTab("transactions")}
+                    className={holdingsTab === "transactions"
+                      ? "rounded-lg bg-(--surface-bright) px-4 py-1.5 text-xs font-semibold text-strong"
+                      : "px-4 py-1.5 text-xs font-medium text-muted hover:text-strong transition-colors"}
+                  >
+                    Transactions
+                  </button>
+                </div>
+
+                {holdingsTab === "assets" ? (
+                  <PortfolioAssetsTable assets={throttledAssets} />
+                ) : (
+                  <PortfolioTransactionsList
+                    portfolioName={portfolioName}
+                    isConnected={isConnectedPortfolio}
+                    onTransactionChanged={handleTransactionCreated}
+                  />
+                )}
               </>
             )}
           </div>

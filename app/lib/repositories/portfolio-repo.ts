@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { PortfolioPosition, PortfolioSymbol } from "../portfolio-types";
+import type { PortfolioPosition, PortfolioSymbol, PortfolioTransaction } from "../portfolio-types";
 import { MAIN_PORTFOLIO_NAME } from "./portfolios-repo";
 
 type TransactionRow = {
@@ -8,6 +8,8 @@ type TransactionRow = {
   quantity: number;
   price_usd: number;
 };
+
+type FullTransactionRow = TransactionRow & { executed_at: string };
 
 function toPortfolioSymbol(symbol: string): PortfolioSymbol | null {
   const normalized = symbol.toUpperCase().trim();
@@ -18,51 +20,43 @@ function toPortfolioSymbol(symbol: string): PortfolioSymbol | null {
   return normalized;
 }
 
+async function resolvePortfolioIds(
+  supabase: SupabaseClient,
+  userId: string,
+  portfolioName: string
+): Promise<string[] | null> {
+  const normalizedName = portfolioName.trim() || MAIN_PORTFOLIO_NAME;
+
+  if (normalizedName === MAIN_PORTFOLIO_NAME) {
+    const { data: portfolios, error } = await supabase
+      .from("portfolios")
+      .select("id, name")
+      .eq("user_id", userId);
+    if (error || !portfolios) return null;
+    return (portfolios as Array<{ id: string; name: string }>)
+      .filter((p) => p.name !== MAIN_PORTFOLIO_NAME)
+      .map((p) => p.id);
+  }
+
+  const { data: portfolio, error } = await supabase
+    .from("portfolios")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("name", normalizedName)
+    .maybeSingle();
+  if (error) return null;
+  if (!portfolio?.id) return [];
+  return [portfolio.id];
+}
+
 export async function getUserPortfolioPositions(
   supabase: SupabaseClient,
   userId: string,
   portfolioName: string
 ): Promise<PortfolioPosition[] | null> {
-  const normalizedName = portfolioName.trim() || MAIN_PORTFOLIO_NAME;
-  let targetPortfolioIds: string[] = [];
-
-  if (normalizedName === MAIN_PORTFOLIO_NAME) {
-    // "Main Portfolio" is intentionally treated as the aggregate view across
-    // all user-created portfolios, excluding the synthetic/default row itself.
-    const { data: portfolios, error: portfoliosError } = await supabase
-      .from("portfolios")
-      .select("id, name")
-      .eq("user_id", userId);
-
-    if (portfoliosError || !portfolios) {
-      return null;
-    }
-
-    targetPortfolioIds = (portfolios as Array<{ id: string; name: string }>)
-      .filter((portfolio) => portfolio.name !== MAIN_PORTFOLIO_NAME)
-      .map((portfolio) => portfolio.id);
-  } else {
-    const { data: portfolio, error: portfolioError } = await supabase
-      .from("portfolios")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("name", normalizedName)
-      .maybeSingle();
-
-    if (portfolioError) {
-      return null;
-    }
-
-    if (!portfolio?.id) {
-      return [];
-    }
-
-    targetPortfolioIds = [portfolio.id];
-  }
-
-  if (targetPortfolioIds.length === 0) {
-    return [];
-  }
+  const targetPortfolioIds = await resolvePortfolioIds(supabase, userId, portfolioName);
+  if (targetPortfolioIds === null) return null;
+  if (targetPortfolioIds.length === 0) return [];
 
   const { data: transactions, error: transactionError } = await supabase
     .from("portfolio_transactions")
@@ -114,6 +108,39 @@ export async function getUserPortfolioPositions(
   }
 
   return positions;
+}
+
+/**
+ * Fetch all raw transactions for a portfolio, ordered by execution time ascending.
+ * Used to reconstruct holdings state at any point in history for chart building.
+ */
+export async function getUserPortfolioTransactions(
+  supabase: SupabaseClient,
+  userId: string,
+  portfolioName: string
+): Promise<PortfolioTransaction[] | null> {
+  const targetPortfolioIds = await resolvePortfolioIds(supabase, userId, portfolioName);
+  if (targetPortfolioIds === null) return null;
+  if (targetPortfolioIds.length === 0) return [];
+
+  const { data: rows, error } = await supabase
+    .from("portfolio_transactions")
+    .select("symbol, side, quantity, price_usd, executed_at")
+    .eq("user_id", userId)
+    .in("portfolio_id", targetPortfolioIds)
+    .order("executed_at", { ascending: true });
+
+  if (error || !rows) return null;
+
+  return (rows as FullTransactionRow[])
+    .filter((row) => Number(row.quantity) > 0)
+    .map((row) => ({
+      symbol: row.symbol.toUpperCase().trim(),
+      side: row.side,
+      quantity: Number(row.quantity),
+      priceUsd: Number(row.price_usd) || 0,
+      executedAt: row.executed_at,
+    }));
 }
 
 export async function upsertPortfolioAssetPriceCache(
