@@ -6,7 +6,7 @@ import {
   type PortfolioSnapshot,
   type PortfolioTransaction,
 } from "./portfolio-types";
-import { calculateRiskMetricsFromPortfolio } from "./risk-calculator";
+import { calculateMaxDrawdownDetail, calculateRiskMetricsFromPortfolio } from "./risk-calculator";
 
 const BINANCE_BASE_URL = "https://api.binance.com";
 const KLINE_HISTORY_DAYS = 35;   // fallback depth when no transaction history exists
@@ -593,6 +593,7 @@ export async function buildBinancePortfolioSnapshot(
   const navSeriesUsd = chart.map((point) => point.totalValueUsd);
   const allocationsPercent = assets.map((asset) => asset.allocationPercent);
   const riskMetrics = calculateRiskMetricsFromPortfolio(navSeriesUsd, allocationsPercent);
+  const maxDrawdownDetail = calculateMaxDrawdownDetail(chart) ?? undefined;
   const riskUpdatedAt = new Date().toISOString();
 
   return {
@@ -617,6 +618,7 @@ export async function buildBinancePortfolioSnapshot(
         ? { symbol: worst.symbol, change24hPercent: worst.change24hPercent }
         : null,
       maxDrawdownPercent: riskMetrics.maxDrawdownPercent,
+      maxDrawdownDetail,
       volatilityPercent: riskMetrics.volatilityPercent,
       concentrationIndex: riskMetrics.concentrationIndex,
       sharpeRatio30d: riskMetrics.sharpeRatio30d,

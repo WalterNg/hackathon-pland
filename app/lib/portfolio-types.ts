@@ -36,6 +36,16 @@ export type PortfolioSummary = {
   btcPriceUsd: number | null;
 };
 
+export type MaxDrawdownDetail = {
+  peakValueUsd: number;
+  troughValueUsd: number;
+  peakAt: string;       // ISO 8601
+  troughAt: string;     // ISO 8601
+  durationDays: number; // peak → trough
+  recovered: boolean;
+  recoveryDays: number | null; // trough → recovery, null if not yet recovered
+};
+
 export type PortfolioMetrics = {
   totalVolume24hUsd: number;
   activeAssets: number;
@@ -45,6 +55,7 @@ export type PortfolioMetrics = {
   bestPerformer24h: PortfolioPerformer | null;
   worstPerformer24h: PortfolioPerformer | null;
   maxDrawdownPercent?: number;
+  maxDrawdownDetail?: MaxDrawdownDetail;
   volatilityPercent?: number;
   concentrationIndex?: number;
   sharpeRatio30d?: number | null;

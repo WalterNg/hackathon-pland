@@ -1,3 +1,4 @@
+import type { MaxDrawdownDetail } from "./portfolio-types";
 import type { RiskMetricsSnapshot } from "./risk-types";
 
 const DAYS_PER_YEAR = 365;
@@ -64,6 +65,62 @@ export function calculateMaxDrawdownFromSeries(values: number[]): number {
   }
 
   return round(maxDrawdown, 2);
+}
+
+export function calculateMaxDrawdownDetail(
+  chartPoints: { time: string; totalValueUsd: number }[]
+): MaxDrawdownDetail | null {
+  if (chartPoints.length < 2) return null;
+
+  let peakIdx = 0;
+  let peakValue = chartPoints[0]?.totalValueUsd ?? 0;
+  let maxDrawdown = 0;
+  let mddPeakIdx = 0;
+  let mddTroughIdx = 0;
+
+  for (let i = 1; i < chartPoints.length; i++) {
+    const value = chartPoints[i]?.totalValueUsd ?? 0;
+    if (value >= peakValue) {
+      peakValue = value;
+      peakIdx = i;
+    } else if (peakValue > 0) {
+      const drawdown = ((peakValue - value) / peakValue) * 100;
+      if (drawdown > maxDrawdown) {
+        maxDrawdown = drawdown;
+        mddPeakIdx = peakIdx;
+        mddTroughIdx = i;
+      }
+    }
+  }
+
+  if (maxDrawdown === 0) return null;
+
+  const peakPoint = chartPoints[mddPeakIdx]!;
+  const troughPoint = chartPoints[mddTroughIdx]!;
+  const peakMs = new Date(peakPoint.time).getTime();
+  const troughMs = new Date(troughPoint.time).getTime();
+  const durationDays = Math.max(1, Math.round((troughMs - peakMs) / 86_400_000));
+
+  let recovered = false;
+  let recoveryDays: number | null = null;
+  for (let i = mddTroughIdx + 1; i < chartPoints.length; i++) {
+    if ((chartPoints[i]?.totalValueUsd ?? 0) >= peakPoint.totalValueUsd) {
+      const recoveryMs = new Date(chartPoints[i]!.time).getTime();
+      recoveryDays = Math.max(1, Math.round((recoveryMs - troughMs) / 86_400_000));
+      recovered = true;
+      break;
+    }
+  }
+
+  return {
+    peakValueUsd: round(peakPoint.totalValueUsd, 2),
+    troughValueUsd: round(troughPoint.totalValueUsd, 2),
+    peakAt: peakPoint.time,
+    troughAt: troughPoint.time,
+    durationDays,
+    recovered,
+    recoveryDays,
+  };
 }
 
 export function calculateVolatilityFromSeries(values: number[]): number {
