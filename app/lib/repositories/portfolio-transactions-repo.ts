@@ -220,6 +220,75 @@ export async function listPortfolioTransactionsSince(
   return data as PortfolioTransactionRecord[];
 }
 
+export async function listAllPortfolioTransactions(
+  supabase: SupabaseClient,
+  userId: string,
+  portfolioName: string,
+  limit = 100,
+  offset = 0
+): Promise<PortfolioTransactionRecord[] | null> {
+  const targetPortfolioIds = await resolveTargetPortfolioIds(supabase, userId, portfolioName);
+  if (!targetPortfolioIds) return null;
+  if (targetPortfolioIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("portfolio_transactions")
+    .select("id, portfolio_id, symbol, side, quantity, price_usd, fee_usd, note, executed_at, portfolios(name)")
+    .eq("user_id", userId)
+    .in("portfolio_id", targetPortfolioIds)
+    .order("executed_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error || !data) return null;
+  return data as PortfolioTransactionRecord[];
+}
+
+export async function deletePortfolioTransaction(
+  supabase: SupabaseClient,
+  userId: string,
+  transactionId: string
+): Promise<boolean> {
+  const { error } = await supabase
+    .from("portfolio_transactions")
+    .delete()
+    .eq("id", transactionId)
+    .eq("user_id", userId);
+
+  return !error;
+}
+
+export type UpdatePortfolioTransactionInput = {
+  quantity?: number;
+  priceUsd?: number;
+  feeUsd?: number;
+  note?: string | null;
+  executedAt?: string;
+};
+
+export async function updatePortfolioTransaction(
+  supabase: SupabaseClient,
+  userId: string,
+  transactionId: string,
+  input: UpdatePortfolioTransactionInput
+): Promise<boolean> {
+  const patch: Record<string, unknown> = {};
+  if (input.quantity != null)   patch.quantity    = input.quantity;
+  if (input.priceUsd != null)   patch.price_usd   = input.priceUsd;
+  if (input.feeUsd != null)     patch.fee_usd     = input.feeUsd;
+  if ("note" in input)          patch.note        = input.note ?? null;
+  if (input.executedAt != null) patch.executed_at = input.executedAt;
+
+  if (Object.keys(patch).length === 0) return true;
+
+  const { error } = await supabase
+    .from("portfolio_transactions")
+    .update(patch)
+    .eq("id", transactionId)
+    .eq("user_id", userId);
+
+  return !error;
+}
+
 export async function listRealizedSellEventsSince(
   supabase: SupabaseClient,
   userId: string,

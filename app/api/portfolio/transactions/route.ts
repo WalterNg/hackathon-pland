@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import {
   createPortfolioTransaction,
-  listRecentTransactions
+  listRecentTransactions,
+  listAllPortfolioTransactions,
 } from "@/app/lib/repositories/portfolio-transactions-repo";
 import {
   MAIN_PORTFOLIO_NAME,
@@ -65,8 +66,22 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const portfolioName = searchParams.get("portfolioName")?.trim() || MAIN_PORTFOLIO_NAME;
   const limitParam = Number(searchParams.get("limit") ?? 6);
-  const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 20) : 6;
+  const offsetParam = Number(searchParams.get("offset") ?? 0);
+  const full = searchParams.get("full") === "1";
 
+  if (full) {
+    // Full paginated list with all fields (fee, note, etc.) for the transactions tab
+    const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 500) : 100;
+    const offset = Number.isFinite(offsetParam) && offsetParam >= 0 ? offsetParam : 0;
+    const items = await listAllPortfolioTransactions(supabase, user.id, portfolioName, limit, offset);
+    if (!items) {
+      return NextResponse.json({ error: "Unable to load transactions." }, { status: 500 });
+    }
+    return NextResponse.json({ transactions: items });
+  }
+
+  // Legacy: small recent list for dashboard widgets
+  const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 20) : 6;
   const items = await listRecentTransactions(supabase, user.id, portfolioName, limit);
   if (!items) {
     return NextResponse.json({ error: "Unable to load transactions." }, { status: 500 });

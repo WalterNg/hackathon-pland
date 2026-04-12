@@ -67,6 +67,16 @@ export type PortfolioRiskViolation = {
 export type PortfolioChartPoint = {
   time: string;
   totalValueUsd: number;
+  btcPriceUsd: number | null;
+  costBasisUsd: number | null; // running invested capital at this point in time
+};
+
+export type PortfolioTransaction = {
+  symbol: string;
+  side: "buy" | "sell" | "deposit" | "withdrawal" | "airdrop" | "fee";
+  quantity: number;
+  priceUsd: number;
+  executedAt: string; // ISO 8601
 };
 
 export type PortfolioAssetRow = {

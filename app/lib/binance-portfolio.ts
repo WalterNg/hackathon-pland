@@ -4,11 +4,15 @@ import {
   type PortfolioChartPoint,
   type PortfolioPosition,
   type PortfolioSnapshot,
+  type PortfolioTransaction,
 } from "./portfolio-types";
 import { calculateRiskMetricsFromPortfolio } from "./risk-calculator";
 
 const BINANCE_BASE_URL = "https://api.binance.com";
-const KLINE_HISTORY_DAYS = 35;
+const KLINE_HISTORY_DAYS = 35;   // fallback depth when no transaction history exists
+const KLINE_INTRADAY_HOURS = 24;
+const KLINE_MAX_LIMIT = 1000;    // Binance API max — covers ~2.7 years of daily candles
+const BACKFILL_WINDOW_MS = 24 * 60 * 60 * 1000; // 1-day pre-inception context window
 
 type Kline = {
   openTime: number;
@@ -19,6 +23,99 @@ type PriceMap = Record<string, number>;
 type Change24hMap = Record<string, number>;
 type VolumeMap = Record<string, number>;
 type KlinesMap = Record<string, Kline[]>;
+
+// ── Holdings timeline ─────────────────────────────────────────────────────────
+// Each snapshot captures the exact portfolio state immediately AFTER a transaction.
+// The timeline is sorted ascending by timeMs.
+
+type HoldingsEntry = { symbol: string; quantity: number };
+type HoldingsSnapshot = { timeMs: number; entries: HoldingsEntry[] };
+
+/**
+ * Build a holdings timeline from raw transactions.
+ * Result: one snapshot per transaction, each representing the portfolio state
+ * immediately after that transaction was applied.
+ */
+function buildHoldingsTimeline(transactions: PortfolioTransaction[]): HoldingsSnapshot[] {
+  const relevant = transactions.filter((tx) => tx.side !== "fee");
+  const sorted = [...relevant].sort(
+    (a, b) => new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime()
+  );
+
+  const positions = new Map<string, number>();
+  const timeline: HoldingsSnapshot[] = [];
+
+  for (const tx of sorted) {
+    const symbol = tx.symbol.toUpperCase();
+    const qty = tx.quantity;
+    const current = positions.get(symbol) ?? 0;
+
+    if (tx.side === "buy" || tx.side === "deposit" || tx.side === "airdrop") {
+      positions.set(symbol, current + qty);
+    } else if (tx.side === "sell" || tx.side === "withdrawal") {
+      const next = Math.max(0, current - qty);
+      if (next <= 0) positions.delete(symbol);
+      else positions.set(symbol, next);
+    }
+
+    timeline.push({
+      timeMs: new Date(tx.executedAt).getTime(),
+      entries: Array.from(positions.entries())
+        .filter(([, q]) => q > 0)
+        .map(([s, q]) => ({ symbol: s, quantity: q })),
+    });
+  }
+
+  return timeline;
+}
+
+/**
+ * Return the holdings state at a given point in time.
+ * Returns the last snapshot whose timeMs <= timeMs argument.
+ * Returns [] if queried before the first transaction.
+ */
+function getHoldingsAt(timeline: HoldingsSnapshot[], timeMs: number): HoldingsEntry[] {
+  let result: HoldingsEntry[] = [];
+  for (const snapshot of timeline) {
+    if (snapshot.timeMs <= timeMs) result = snapshot.entries;
+    else break;
+  }
+  return result;
+}
+
+type CostBasisSnapshot = { timeMs: number; costBasisUsd: number };
+
+/**
+ * Build a running cost-basis timeline from transactions.
+ * costBasisUsd at time t = total capital invested minus realized proceeds up to t.
+ *   buy  → +qty * priceUsd + feeUsd
+ *   sell → -qty * priceUsd + feeUsd  (reduces basis by realized proceeds)
+ *   deposit/withdrawal/airdrop → no cost impact
+ */
+function buildCostBasisTimeline(transactions: PortfolioTransaction[]): CostBasisSnapshot[] {
+  const sorted = [...transactions]
+    .filter((tx) => tx.side === "buy" || tx.side === "sell")
+    .sort((a, b) => new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime());
+
+  let running = 0;
+  return sorted.map((tx) => {
+    if (tx.side === "buy") {
+      running += tx.quantity * tx.priceUsd + (tx.feeUsd ?? 0);
+    } else {
+      running -= tx.quantity * tx.priceUsd - (tx.feeUsd ?? 0);
+    }
+    return { timeMs: new Date(tx.executedAt).getTime(), costBasisUsd: Math.max(0, running) };
+  });
+}
+
+function getCostBasisAt(timeline: CostBasisSnapshot[], timeMs: number): number | null {
+  let result: number | null = null;
+  for (const snap of timeline) {
+    if (snap.timeMs <= timeMs) result = snap.costBasisUsd;
+    else break;
+  }
+  return result;
+}
 
 const round = (value: number, digits = 2): number => {
   const factor = 10 ** digits;
@@ -121,12 +218,11 @@ async function fetch24hTickers(
   }
 }
 
-async function fetchSymbolKlines(symbol: string): Promise<Kline[]> {
+async function fetchSymbolKlines(symbol: string, startTimeMs?: number): Promise<Kline[]> {
   try {
-    const response = await fetch(
-      `${BINANCE_BASE_URL}/api/v3/klines?symbol=${symbol}&interval=1d&limit=${KLINE_HISTORY_DAYS}`,
-      { cache: "no-store" }
-    );
+    const base = `${BINANCE_BASE_URL}/api/v3/klines?symbol=${symbol}&interval=1d&limit=${KLINE_MAX_LIMIT}`;
+    const url = startTimeMs != null ? `${base}&startTime=${startTimeMs}` : `${base}`;
+    const response = await fetch(url, { cache: "no-store" });
 
     if (!response.ok) {
       return [];
@@ -156,13 +252,13 @@ async function fetchSymbolKlines(symbol: string): Promise<Kline[]> {
   }
 }
 
-async function fetchKlinesAll(symbols: string[]): Promise<KlinesMap> {
+async function fetchKlinesAll(symbols: string[], startTimeMs?: number): Promise<KlinesMap> {
   if (symbols.length === 0) {
     return {};
   }
 
   const entries = await Promise.all(
-    symbols.map(async (symbol) => [symbol, await fetchSymbolKlines(symbol)] as const)
+    symbols.map(async (symbol) => [symbol, await fetchSymbolKlines(symbol, startTimeMs)] as const)
   );
 
   const out = {} as KlinesMap;
@@ -170,6 +266,61 @@ async function fetchKlinesAll(symbols: string[]): Promise<KlinesMap> {
     out[symbol] = klines;
   }
   return out;
+}
+
+async function fetchSymbolHourlyKlines(symbol: string): Promise<Kline[]> {
+  try {
+    const response = await fetch(
+      `${BINANCE_BASE_URL}/api/v3/klines?symbol=${symbol}&interval=1h&limit=${KLINE_INTRADAY_HOURS}`,
+      { cache: "no-store" }
+    );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const rows = (await response.json()) as Array<[
+      number, string, string, string, string, string,
+      number, string, number, string, string, string,
+    ]>;
+
+    return rows.map((row) => ({
+      openTime: row[0],
+      closePrice: safeNumber(row[4], 0),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function fetchHourlyKlinesAll(symbols: string[]): Promise<KlinesMap> {
+  if (symbols.length === 0) {
+    return {};
+  }
+
+  const entries = await Promise.all(
+    symbols.map(async (symbol) => [symbol, await fetchSymbolHourlyKlines(symbol)] as const)
+  );
+
+  const out = {} as KlinesMap;
+  for (const [symbol, klines] of entries) {
+    out[symbol] = klines;
+  }
+  return out;
+}
+
+/**
+ * Merge daily and hourly klines for a symbol into a single chronological array.
+ *
+ * Strategy: keep daily klines whose openTime predates the oldest hourly kline,
+ * then append all hourly klines. This eliminates any temporal overlap so the
+ * chart transitions smoothly from daily history into intraday resolution.
+ */
+function mergeKlines(daily: Kline[], hourly: Kline[]): Kline[] {
+  if (hourly.length === 0) return daily;
+  const oldestHourlyTime = hourly[0].openTime;
+  const historicalDaily = daily.filter((k) => k.openTime < oldestHourlyTime);
+  return [...historicalDaily, ...hourly];
 }
 
 function get7dChangePercent(klines: Kline[]): number {
@@ -187,41 +338,107 @@ function get7dChangePercent(klines: Kline[]): number {
   return ((last - first) / first) * 100;
 }
 
-function buildChart(
+/** Legacy chart builder: projects current positions backward across all klines. */
+function buildChartLegacy(
   symbols: string[],
   klinesMap: KlinesMap,
   prices: PriceMap,
   positions: ReadonlyArray<PortfolioPosition>
 ): PortfolioChartPoint[] {
-  if (symbols.length === 0 || positions.length === 0) {
-    return [];
+  if (symbols.length === 0 || positions.length === 0) return [];
+  const maxLen = Math.max(...symbols.map((s) => klinesMap[s]?.length ?? 0), 0);
+  if (maxLen === 0) return [];
+
+  // Build BTC price lookup by index position (aligned to its own kline array)
+  const btcKlines = klinesMap[BTC_USDT_SYMBOL] ?? [];
+  const btcByTime = new Map<number, number>();
+  for (const k of btcKlines) btcByTime.set(k.openTime, k.closePrice);
+
+  const points: PortfolioChartPoint[] = [];
+  for (let i = 0; i < maxLen; i++) {
+    let total = 0;
+    let pointTime = new Date().toISOString();
+    let pointTimeMs = 0;
+    for (const pos of positions) {
+      const kline = klinesMap[pos.symbol]?.[i];
+      const price = kline?.closePrice ?? prices[pos.symbol] ?? 0;
+      total += pos.quantity * price;
+      if (kline) { pointTime = new Date(kline.openTime).toISOString(); pointTimeMs = kline.openTime; }
+    }
+    const btcPriceUsd = btcByTime.get(pointTimeMs) ?? prices[BTC_USDT_SYMBOL] ?? null;
+    points.push({ time: pointTime, totalValueUsd: round(total), btcPriceUsd: btcPriceUsd ? round(btcPriceUsd, 2) : null, costBasisUsd: null });
+  }
+  return points;
+}
+
+/**
+ * Transaction-aware chart builder.
+ *
+ * Rules:
+ * - Points from [effectiveStartMs, firstTransactionMs): backfill region.
+ *   Holdings = first transaction's resulting state (contextual market data only).
+ * - Points from [firstTransactionMs, now]: reconstructed history.
+ *   Holdings change exactly at each transaction timestamp.
+ */
+function buildChartFromTimeline(
+  klinesMap: KlinesMap,
+  prices: PriceMap,
+  holdingsTimeline: HoldingsSnapshot[],
+  effectiveStartMs: number,
+  firstTransactionMs: number,
+  costBasisTimeline: CostBasisSnapshot[]
+): PortfolioChartPoint[] {
+  if (holdingsTimeline.length === 0) return [];
+
+  // All symbols that ever appear in any holdings snapshot
+  const allSymbols = [...new Set(
+    holdingsTimeline.flatMap((s) => s.entries.map((e) => e.symbol))
+  )];
+
+  // Pre-build price lookup: symbol → (openTime → closePrice)
+  const priceLookup = new Map<string, Map<number, number>>();
+  for (const symbol of allSymbols) {
+    const m = new Map<number, number>();
+    for (const k of klinesMap[symbol] ?? []) m.set(k.openTime, k.closePrice);
+    priceLookup.set(symbol, m);
   }
 
-  const maxLen = Math.max(...symbols.map((symbol) => klinesMap[symbol]?.length ?? 0), 0);
-
-  if (maxLen === 0) {
-    return [];
+  // Collect all kline timestamps >= effectiveStartMs across every symbol
+  const tsSet = new Set<number>();
+  for (const symbol of allSymbols) {
+    for (const k of klinesMap[symbol] ?? []) {
+      if (k.openTime >= effectiveStartMs) tsSet.add(k.openTime);
+    }
   }
+
+  const firstHoldings = holdingsTimeline[0].entries; // used for backfill region
+  const btcKlines = klinesMap[BTC_USDT_SYMBOL] ?? [];
+  const btcByTime = new Map<number, number>();
+  for (const k of btcKlines) btcByTime.set(k.openTime, k.closePrice);
 
   const points: PortfolioChartPoint[] = [];
 
-  for (let i = 0; i < maxLen; i += 1) {
-    let total = 0;
-    let pointTime = new Date().toISOString();
+  for (const ts of [...tsSet].sort((a, b) => a - b)) {
+    const isBackfill = ts < firstTransactionMs;
+    const holdings = isBackfill ? firstHoldings : getHoldingsAt(holdingsTimeline, ts);
+    if (holdings.length === 0) continue;
 
-    for (const position of positions) {
-      const kline = klinesMap[position.symbol]?.[i];
-      const closePrice = kline?.closePrice ?? prices[position.symbol] ?? 0;
-      total += position.quantity * closePrice;
-      if (kline) {
-        pointTime = new Date(kline.openTime).toISOString();
-      }
+    let total = 0;
+    for (const { symbol, quantity } of holdings) {
+      const price = priceLookup.get(symbol)?.get(ts) ?? prices[symbol] ?? 0;
+      total += quantity * price;
     }
 
-    points.push({
-      time: pointTime,
-      totalValueUsd: round(total),
-    });
+    if (total > 0) {
+      const btcPriceUsd = btcByTime.get(ts) ?? prices[BTC_USDT_SYMBOL] ?? null;
+      const costBasisUsd = isBackfill ? null : getCostBasisAt(costBasisTimeline, ts);
+      points.push({
+        time: new Date(ts).toISOString(),
+        totalValueUsd: round(total),
+        btcPriceUsd: btcPriceUsd ? round(btcPriceUsd, 2) : null,
+        costBasisUsd: costBasisUsd !== null ? round(costBasisUsd) : null,
+      });
+    }
   }
 
   return points;
@@ -229,7 +446,8 @@ function buildChart(
 
 export async function buildBinancePortfolioSnapshot(
   name = "Main Portfolio",
-  positionsInput?: ReadonlyArray<PortfolioPosition>
+  positionsInput?: ReadonlyArray<PortfolioPosition>,
+  transactionsInput?: PortfolioTransaction[]
 ): Promise<PortfolioSnapshot> {
   const positions = normalizePositions(positionsInput);
 
@@ -264,13 +482,41 @@ export async function buildBinancePortfolioSnapshot(
     };
   }
 
-  const heldSymbols = Array.from(new Set(positions.map((position) => position.symbol.toUpperCase())));
+  // Build transaction-based holdings timeline
+  const transactions = transactionsInput ?? [];
+  const holdingsTimeline = buildHoldingsTimeline(transactions);
+
+  // Compute effective time boundaries for the chart
+  const firstTransactionMs = holdingsTimeline.length > 0
+    ? holdingsTimeline[0].timeMs
+    : Date.now() - KLINE_HISTORY_DAYS * 86_400_000;
+  const effectiveStartMs = firstTransactionMs - BACKFILL_WINDOW_MS;
+
+  const heldSymbols = Array.from(new Set(positions.map((p) => p.symbol.toUpperCase())));
   const tickerSymbols = Array.from(new Set([...heldSymbols, BTC_USDT_SYMBOL]));
 
-  const [tickerMap, klinesMap] = await Promise.all([
+  // Include symbols from ALL past transactions (needed for historical reconstruction).
+  // Always include BTCUSDT so the BTC benchmark line has real historical price data.
+  const allHistoricalSymbols = [...new Set(
+    holdingsTimeline.flatMap((s) => s.entries.map((e) => e.symbol))
+  )];
+  const klineSymbols = [...new Set([...heldSymbols, ...allHistoricalSymbols, BTC_USDT_SYMBOL])];
+  // BTC hourly klines needed for the recent intraday portion of the benchmark line
+  const hourlySymbols = [...new Set([...heldSymbols, BTC_USDT_SYMBOL])];
+
+  const [tickerMap, dailyKlinesMap, hourlyKlinesMap] = await Promise.all([
     fetch24hTickers(tickerSymbols, positions),
-    fetchKlinesAll(heldSymbols)
+    fetchKlinesAll(klineSymbols, effectiveStartMs),
+    fetchHourlyKlinesAll(hourlySymbols),
   ]);
+
+  // Merge: daily history + intraday hourly
+  const klinesMap: KlinesMap = {};
+  for (const symbol of klineSymbols) {
+    const daily = dailyKlinesMap[symbol] ?? [];
+    const hourly = hourlySymbols.includes(symbol) ? (hourlyKlinesMap[symbol] ?? []) : [];
+    klinesMap[symbol] = mergeKlines(daily, hourly);
+  }
 
   const prices = {} as PriceMap;
   const changes24h = {} as Change24hMap;
@@ -321,7 +567,7 @@ export async function buildBinancePortfolioSnapshot(
       priceUsd: round(priceUsd),
       valueUsd: round(valueUsd),
       change24hPercent: round(changes24h[symbol] ?? 0),
-      change7dPercent: round(get7dChangePercent(klinesMap[symbol] ?? [])),
+      change7dPercent: round(get7dChangePercent(dailyKlinesMap[symbol] ?? [])),
       pnlUsd: round(pnlUsd),
       pnlPercent: round(pnlPercent),
       volume24hUsd: round(volumes24h[symbol]),
@@ -340,7 +586,10 @@ export async function buildBinancePortfolioSnapshot(
     .sort((a, b) => b.change24hPercent - a.change24hPercent);
   const best = sortedBy24h[0] ?? null;
   const worst = sortedBy24h[sortedBy24h.length - 1] ?? null;
-  const chart = buildChart(heldSymbols, klinesMap, prices, positions);
+  const costBasisTimeline = buildCostBasisTimeline(transactions);
+  const chart = holdingsTimeline.length > 0
+    ? buildChartFromTimeline(klinesMap, prices, holdingsTimeline, effectiveStartMs, firstTransactionMs, costBasisTimeline)
+    : buildChartLegacy(heldSymbols, klinesMap, prices, positions);
   const navSeriesUsd = chart.map((point) => point.totalValueUsd);
   const allocationsPercent = assets.map((asset) => asset.allocationPercent);
   const riskMetrics = calculateRiskMetricsFromPortfolio(navSeriesUsd, allocationsPercent);

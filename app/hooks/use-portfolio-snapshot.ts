@@ -14,6 +14,7 @@ import { RefreshIntervals } from "@/app/lib/refresh-intervals";
 type UsePortfolioSnapshotResult = {
   snapshot: PortfolioSnapshot | null;
   isLoading: boolean;
+  isRefreshing: boolean;
   error: string | null;
   snapshotSource: "live" | "cache" | "cache-fallback";
   lastServerSyncAt: string | null;
@@ -144,7 +145,9 @@ function applyRealtimeTicker(
     }
   }
 
-  const chartWindow = chart.slice(-90);
+  // Keep enough history: 35 daily klines + ~8 hours of per-minute realtime ticks.
+  // The old limit of 90 would start dropping daily klines after just ~55 min of live ticks.
+  const chartWindow = chart.slice(-500);
   const navSeriesUsd = chartWindow.map((point) => point.totalValueUsd);
   const concentrationIndex = calculateConcentrationHerfindahl(assetsWithAllocation.map((asset) => asset.allocationPercent));
   const maxDrawdownPercent = calculateMaxDrawdownFromSeries(navSeriesUsd);
@@ -196,6 +199,7 @@ export function usePortfolioSnapshot(
 ): UsePortfolioSnapshotResult {
   const [snapshot, setSnapshot] = useState<PortfolioSnapshot | null>(null);
   const [isLoading, setLoading] = useState(true);
+  const [isRefreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [snapshotSource, setSnapshotSource] = useState<"live" | "cache" | "cache-fallback">("cache");
   const [lastServerSyncAt, setLastServerSyncAt] = useState<string | null>(null);
@@ -323,6 +327,9 @@ export function usePortfolioSnapshot(
       if (!isBackgroundRefresh && !cachedSnapshot) {
         setLoading(true);
       }
+      if (isBackgroundRefresh) {
+        setRefreshing(true);
+      }
 
       setError(null);
 
@@ -382,6 +389,7 @@ export function usePortfolioSnapshot(
 
       if (!isCancelled) {
         setLoading(false);
+        setRefreshing(false);
       }
 
       isFetchingRef.current = false;
@@ -512,6 +520,7 @@ export function usePortfolioSnapshot(
   return {
     snapshot,
     isLoading,
+    isRefreshing,
     error,
     snapshotSource,
     lastServerSyncAt,

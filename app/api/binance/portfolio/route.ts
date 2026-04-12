@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 import { buildBinancePortfolioSnapshot } from "@/app/lib/binance-portfolio";
-import type { PortfolioPosition, PortfolioRiskViolation } from "@/app/lib/portfolio-types";
+import type { PortfolioPosition, PortfolioRiskViolation, PortfolioTransaction } from "@/app/lib/portfolio-types";
 import {
   getUserPortfolioPositions,
+  getUserPortfolioTransactions,
   upsertPortfolioAssetPriceCache,
 } from "@/app/lib/repositories/portfolio-repo";
 import {
@@ -92,9 +93,10 @@ async function buildAndCachePortfolioSnapshot(
   portfolio: { id: string; mode: "manual" | "binance_connected" },
   portfolioName: string,
   positionsOverride: PortfolioPosition[],
-  cachedSnapshot: Awaited<ReturnType<typeof getLatestPortfolioSnapshotCache>>
+  cachedSnapshot: Awaited<ReturnType<typeof getLatestPortfolioSnapshotCache>>,
+  transactionsOverride?: PortfolioTransaction[]
 ) {
-  const snapshot = await buildBinancePortfolioSnapshot(portfolioName, positionsOverride);
+  const snapshot = await buildBinancePortfolioSnapshot(portfolioName, positionsOverride, transactionsOverride);
 
   if (cachedSnapshot && isTransientEmptySnapshot(snapshot, positionsOverride, cachedSnapshot)) {
     console.warn("[portfolio-snapshot] Prevented transient zero snapshot fallback", {
@@ -227,7 +229,11 @@ async function getRequestContext(request: Request) {
     return { error: NextResponse.json({ error: "Portfolio not found." }, { status: 404 }) };
   }
 
-  const positionsOverride = await getUserPortfolioPositions(supabase, user.id, name);
+  const [positionsOverride, transactionsOverride] = await Promise.all([
+    getUserPortfolioPositions(supabase, user.id, name),
+    getUserPortfolioTransactions(supabase, user.id, name),
+  ]);
+
   if (positionsOverride === null) {
     return { error: NextResponse.json({ error: "Unable to resolve portfolio positions." }, { status: 500 }) };
   }
@@ -238,6 +244,7 @@ async function getRequestContext(request: Request) {
     name,
     portfolio,
     positionsOverride,
+    transactionsOverride: transactionsOverride ?? [],
   };
 }
 
@@ -248,15 +255,17 @@ export async function GET(request: Request) {
   }
 
   const cached = await getLatestPortfolioSnapshotCache(context.supabase, context.userId, context.portfolio.id);
-  if (cached) {
-    const freshnessWindowMs =
-      context.portfolio.mode === "binance_connected"
-        ? RefreshIntervals.PORTFOLIO_CONNECTED_SNAPSHOT_FRESH_MS
-        : RefreshIntervals.PORTFOLIO_MANUAL_SNAPSHOT_FRESH_MS;
-    const isFresh = isSnapshotFresh(cached, freshnessWindowMs);
+  const freshnessWindowMs =
+    context.portfolio.mode === "binance_connected"
+      ? RefreshIntervals.PORTFOLIO_CONNECTED_SNAPSHOT_FRESH_MS
+      : RefreshIntervals.PORTFOLIO_MANUAL_SNAPSHOT_FRESH_MS;
+  const isFresh = isSnapshotFresh(cached, freshnessWindowMs);
+
+  // Return cached snapshot only if it is still fresh — otherwise rebuild live.
+  if (cached && isFresh) {
     return NextResponse.json(cached, {
       status: 200,
-      headers: snapshotHeaders(context.portfolio.mode, "cache", !isFresh),
+      headers: snapshotHeaders(context.portfolio.mode, "cache", false),
     });
   }
 
@@ -267,7 +276,8 @@ export async function GET(request: Request) {
       context.portfolio,
       context.name,
       context.positionsOverride,
-      cached
+      cached,
+      context.transactionsOverride
     );
 
     return NextResponse.json(liveResult.snapshot, {
@@ -305,7 +315,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Portfolio not found." }, { status: 404 });
   }
 
-  const positionsOverride = await getUserPortfolioPositions(supabase, user.id, name);
+  const [positionsOverride, transactionsOverride] = await Promise.all([
+    getUserPortfolioPositions(supabase, user.id, name),
+    getUserPortfolioTransactions(supabase, user.id, name),
+  ]);
   if (positionsOverride === null) {
     return NextResponse.json({ error: "Unable to resolve portfolio positions." }, { status: 500 });
   }
@@ -318,7 +331,8 @@ export async function POST(request: Request) {
       portfolio,
       name,
       positionsOverride,
-      cached
+      cached,
+      transactionsOverride ?? []
     );
 
     return NextResponse.json(liveResult.snapshot, {
