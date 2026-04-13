@@ -7,7 +7,13 @@ import {
   type PortfolioTransaction,
 } from "./portfolio-types";
 import { calculateMaxDrawdownDetail, calculateRiskMetricsFromPortfolio } from "./risk-calculator";
-const BINANCE_BASE_URL = "https://demo-api.binance.com";
+import { backendBaseUrl } from "./backend-base-url";
+
+// demo-api.binance.com returns HTTP 451 (geo-blocked) from Vercel/AWS IPs.
+// All market data is proxied through the GCP backend to avoid the block.
+function marketUrl(path: string): string {
+  return `${backendBaseUrl()}/api/binance/market/${path}`;
+}
 const KLINE_HISTORY_DAYS = 35;   // fallback depth when no transaction history exists
 const KLINE_INTRADAY_HOURS = 24;
 const KLINE_MAX_LIMIT = 1000;    // Binance API max — covers ~2.7 years of daily candles
@@ -189,7 +195,7 @@ async function fetch24hTickers(
     return fallback;
   }
 
-  const url = `${BINANCE_BASE_URL}/api/v3/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(symbols))}`;
+  const url = `${marketUrl("tickers")}?symbols=${encodeURIComponent(symbols.join(","))}`;
   try {
     const response = await fetch(url, { cache: "no-store" });
 
@@ -198,13 +204,8 @@ async function fetch24hTickers(
       return fallback;
     }
 
-    const data = (await response.json()) as Binance24hrTicker[];
-    const map = { ...fallback };
-    const symbolSet = new Set(symbols);
-    for (const ticker of data) {
-      if (symbolSet.has(ticker.symbol)) map[ticker.symbol] = ticker;
-    }
-    return map;
+    const data = (await response.json()) as { tickers: Record<string, Binance24hrTicker> };
+    return { ...fallback, ...data.tickers };
   } catch (err) {
     console.error("[binance] ticker fetch threw", { url, error: String(err) });
     return fallback;
@@ -212,8 +213,9 @@ async function fetch24hTickers(
 }
 
 async function fetchSymbolKlines(symbol: string, startTimeMs?: number): Promise<Kline[]> {
-  const base = `${BINANCE_BASE_URL}/api/v3/klines?symbol=${symbol}&interval=1d&limit=${KLINE_MAX_LIMIT}`;
-  const url = startTimeMs != null ? `${base}&startTime=${startTimeMs}` : base;
+  const params = new URLSearchParams({ symbol, interval: "1d", limit: String(KLINE_MAX_LIMIT) });
+  if (startTimeMs != null) params.set("startTime", String(startTimeMs));
+  const url = `${marketUrl("klines")}?${params}`;
   try {
     const response = await fetch(url, { cache: "no-store" });
 
@@ -222,8 +224,8 @@ async function fetchSymbolKlines(symbol: string, startTimeMs?: number): Promise<
       return [];
     }
 
-    const rows = (await response.json()) as Array<[number, string, string, string, string, ...unknown[]]>;
-    return rows.map((row) => ({ openTime: row[0], closePrice: safeNumber(row[4], 0) }));
+    const data = (await response.json()) as { klines: Kline[] };
+    return data.klines ?? [];
   } catch (err) {
     console.error("[binance] klines fetch threw", { symbol, url, error: String(err) });
     return [];
@@ -243,7 +245,8 @@ async function fetchKlinesAll(symbols: string[], startTimeMs?: number): Promise<
 }
 
 async function fetchSymbolHourlyKlines(symbol: string): Promise<Kline[]> {
-  const url = `${BINANCE_BASE_URL}/api/v3/klines?symbol=${symbol}&interval=1h&limit=${KLINE_INTRADAY_HOURS}`;
+  const params = new URLSearchParams({ symbol, interval: "1h", limit: String(KLINE_INTRADAY_HOURS) });
+  const url = `${marketUrl("klines")}?${params}`;
   try {
     const response = await fetch(url, { cache: "no-store" });
 
@@ -252,8 +255,8 @@ async function fetchSymbolHourlyKlines(symbol: string): Promise<Kline[]> {
       return [];
     }
 
-    const rows = (await response.json()) as Array<[number, string, string, string, string, ...unknown[]]>;
-    return rows.map((row) => ({ openTime: row[0], closePrice: safeNumber(row[4], 0) }));
+    const data = (await response.json()) as { klines: Kline[] };
+    return data.klines ?? [];
   } catch (err) {
     console.error("[binance] hourly klines fetch threw", { symbol, url, error: String(err) });
     return [];
