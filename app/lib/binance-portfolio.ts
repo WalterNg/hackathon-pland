@@ -7,8 +7,7 @@ import {
   type PortfolioTransaction,
 } from "./portfolio-types";
 import { calculateMaxDrawdownDetail, calculateRiskMetricsFromPortfolio } from "./risk-calculator";
-
-const BINANCE_BASE_URL = "https://api.binance.com";
+const BINANCE_BASE_URL = "https://demo-api.binance.com";
 const KLINE_HISTORY_DAYS = 35;   // fallback depth when no transaction history exists
 const KLINE_INTRADAY_HOURS = 24;
 const KLINE_MAX_LIMIT = 1000;    // Binance API max — covers ~2.7 years of daily candles
@@ -190,105 +189,73 @@ async function fetch24hTickers(
     return fallback;
   }
 
-  const tickerSymbolsQuery = JSON.stringify(symbols);
-
+  const url = `${BINANCE_BASE_URL}/api/v3/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(symbols))}`;
   try {
-    const response = await fetch(
-      `${BINANCE_BASE_URL}/api/v3/ticker/24hr?symbols=${encodeURIComponent(tickerSymbolsQuery)}`,
-      { cache: "no-store" }
-    );
+    const response = await fetch(url, { cache: "no-store" });
 
     if (!response.ok) {
+      console.error("[binance] ticker fetch failed", { status: response.status, url });
       return fallback;
     }
 
     const data = (await response.json()) as Binance24hrTicker[];
     const map = { ...fallback };
     const symbolSet = new Set(symbols);
-
     for (const ticker of data) {
-      if (symbolSet.has(ticker.symbol)) {
-        map[ticker.symbol] = ticker;
-      }
+      if (symbolSet.has(ticker.symbol)) map[ticker.symbol] = ticker;
     }
-
     return map;
-  } catch {
+  } catch (err) {
+    console.error("[binance] ticker fetch threw", { url, error: String(err) });
     return fallback;
   }
 }
 
 async function fetchSymbolKlines(symbol: string, startTimeMs?: number): Promise<Kline[]> {
+  const base = `${BINANCE_BASE_URL}/api/v3/klines?symbol=${symbol}&interval=1d&limit=${KLINE_MAX_LIMIT}`;
+  const url = startTimeMs != null ? `${base}&startTime=${startTimeMs}` : base;
   try {
-    const base = `${BINANCE_BASE_URL}/api/v3/klines?symbol=${symbol}&interval=1d&limit=${KLINE_MAX_LIMIT}`;
-    const url = startTimeMs != null ? `${base}&startTime=${startTimeMs}` : `${base}`;
     const response = await fetch(url, { cache: "no-store" });
 
     if (!response.ok) {
+      console.error("[binance] klines fetch failed", { status: response.status, symbol, url });
       return [];
     }
 
-    const rows = (await response.json()) as Array<[
-      number,
-      string,
-      string,
-      string,
-      string,
-      string,
-      number,
-      string,
-      number,
-      string,
-      string,
-      string,
-    ]>;
-
-    return rows.map((row) => ({
-      openTime: row[0],
-      closePrice: safeNumber(row[4], 0),
-    }));
-  } catch {
+    const rows = (await response.json()) as Array<[number, string, string, string, string, ...unknown[]]>;
+    return rows.map((row) => ({ openTime: row[0], closePrice: safeNumber(row[4], 0) }));
+  } catch (err) {
+    console.error("[binance] klines fetch threw", { symbol, url, error: String(err) });
     return [];
   }
 }
 
 async function fetchKlinesAll(symbols: string[], startTimeMs?: number): Promise<KlinesMap> {
-  if (symbols.length === 0) {
-    return {};
-  }
+  if (symbols.length === 0) return {};
 
   const entries = await Promise.all(
     symbols.map(async (symbol) => [symbol, await fetchSymbolKlines(symbol, startTimeMs)] as const)
   );
 
   const out = {} as KlinesMap;
-  for (const [symbol, klines] of entries) {
-    out[symbol] = klines;
-  }
+  for (const [symbol, klines] of entries) out[symbol] = klines;
   return out;
 }
 
 async function fetchSymbolHourlyKlines(symbol: string): Promise<Kline[]> {
+  const url = `${BINANCE_BASE_URL}/api/v3/klines?symbol=${symbol}&interval=1h&limit=${KLINE_INTRADAY_HOURS}`;
   try {
-    const response = await fetch(
-      `${BINANCE_BASE_URL}/api/v3/klines?symbol=${symbol}&interval=1h&limit=${KLINE_INTRADAY_HOURS}`,
-      { cache: "no-store" }
-    );
+    const response = await fetch(url, { cache: "no-store" });
 
     if (!response.ok) {
+      console.error("[binance] hourly klines fetch failed", { status: response.status, symbol, url });
       return [];
     }
 
-    const rows = (await response.json()) as Array<[
-      number, string, string, string, string, string,
-      number, string, number, string, string, string,
-    ]>;
-
-    return rows.map((row) => ({
-      openTime: row[0],
-      closePrice: safeNumber(row[4], 0),
-    }));
-  } catch {
+    const rows = (await response.json()) as Array<[number, string, string, string, string, ...unknown[]]>;
+    return rows.map((row) => ({ openTime: row[0], closePrice: safeNumber(row[4], 0) }));
+  } catch (err) {
+    console.error("[binance] hourly klines fetch threw", { symbol, url, error: String(err) });
     return [];
   }
 }
@@ -590,6 +557,7 @@ export async function buildBinancePortfolioSnapshot(
   const chart = holdingsTimeline.length > 0
     ? buildChartFromTimeline(klinesMap, prices, holdingsTimeline, effectiveStartMs, firstTransactionMs, costBasisTimeline)
     : buildChartLegacy(heldSymbols, klinesMap, prices, positions);
+
   const navSeriesUsd = chart.map((point) => point.totalValueUsd);
   const allocationsPercent = assets.map((asset) => asset.allocationPercent);
   const riskMetrics = calculateRiskMetricsFromPortfolio(navSeriesUsd, allocationsPercent);
