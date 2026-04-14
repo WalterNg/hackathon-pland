@@ -361,8 +361,6 @@ function PortfolioContent() {
                   <PortfolioCharts
                     chart={throttledChart}
                     assets={throttledAssets}
-                    allTimeProfitPercent={(throttledMetrics ?? scopedMetrics).allTimeProfitPercent}
-                    totalCostBasisUsd={(throttledMetrics ?? scopedMetrics).totalCostBasisUsd}
                     isLoading={isLoading || isRefreshing || throttledChart.length === 0}
                   />
                 )}
