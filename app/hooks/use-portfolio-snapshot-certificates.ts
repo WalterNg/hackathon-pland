@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { backendBaseUrl } from "@/app/lib/backend-base-url";
 import type {
   PortfolioSnapshotCertificate,
   PortfolioSnapshotCertificateDetail,
@@ -24,7 +23,7 @@ async function fetchBackendWithSupabaseAuth(path: string, init: RequestInit = {}
     headers.set("Authorization", `Bearer ${session.access_token}`);
   }
 
-  return fetch(`${backendBaseUrl()}${path}`, {
+  return fetch(path, {
     ...init,
     headers,
     cache: "no-store",
@@ -179,28 +178,3 @@ export function usePortfolioSnapshotCertificates(
 
       const updatedDetail = await getCertificate(certificateId);
       if (updatedDetail) {
-        setSelectedCertificate(updatedDetail);
-      }
-      await reload();
-      return payload;
-    } catch (verifyError) {
-      setError(verifyError instanceof Error ? verifyError.message : "Unable to verify certificate.");
-      return null;
-    } finally {
-      setIsVerifying(false);
-    }
-  }, [getCertificate, reload]);
-
-  return {
-    certificates,
-    selectedCertificate,
-    isLoading,
-    isCreating,
-    isVerifying,
-    error,
-    createCertificate,
-    getCertificate,
-    verifyCertificate,
-    reload,
-  };
-}
