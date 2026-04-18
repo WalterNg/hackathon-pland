@@ -16,6 +16,7 @@ import { PortfolioHeader } from "../components/portfolio/portfolio-header";
 import { PortfolioMetrics } from "../components/portfolio/portfolio-metrics";
 import { PortfolioSummary } from "../components/portfolio/portfolio-summary";
 import { SelectCoinModal } from "../components/portfolio/select-coin-modal";
+import { CertifySnapshotDialog } from "../components/portfolio/certify-snapshot-dialog";
 import { Sidebar } from "../components/ui/sidebar";
 import { AuthGuard } from "../components/auth/auth-guard";
 import { useTradingAgentAnalysis } from "../hooks/use-trading-agent-analysis";
@@ -23,7 +24,6 @@ import { usePortfolios } from "../hooks/use-portfolios";
 import { usePortfolioSnapshotCertificates } from "../hooks/use-portfolio-snapshot-certificates";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
 import { RefreshIntervals } from "@/app/lib/refresh-intervals";
-import type { PortfolioSnapshotCertificateVerificationResult } from "@/app/lib/portfolio-certificate-types";
 import type { PortfolioMode, PortfolioSnapshot } from "@/app/lib/portfolio-types";
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
@@ -88,6 +88,7 @@ function PortfolioContent() {
   const [isAddDialogOpen, setAddDialogOpen] = useState(false);
   const [isCreatePortfolioOpen, setCreatePortfolioOpen] = useState(false);
   const [isSyncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [isCertifyDialogOpen, setCertifyDialogOpen] = useState(false);
   const [isRemovingPortfolio, setRemovingPortfolio] = useState(false);
   const [isSyncingPortfolio, setSyncingPortfolio] = useState(false);
   const [showCharts, setShowCharts] = useState(true);
@@ -95,8 +96,6 @@ function PortfolioContent() {
   const [isCertificateDialogOpen, setCertificateDialogOpen] = useState(false);
   const [snapshotCacheByPortfolio, setSnapshotCacheByPortfolio] = useState<Record<string, PortfolioSnapshot>>({});
   const [selectedCoin, setSelectedCoin] = useState<{ symbol: string; name: string | null; baseAsset: string; quoteAsset: string } | null>(null);
-  const [certificateVerificationResult, setCertificateVerificationResult] =
-    useState<PortfolioSnapshotCertificateVerificationResult | null>(null);
   const [transactionIntent, setTransactionIntent] = useState<{ action: "buy" | "sell" | "transfer"; note: string }>({
     action: "buy",
     note: "",
@@ -137,11 +136,9 @@ function PortfolioContent() {
     selectedCertificate,
     isLoading: isCertificatesLoading,
     isCreating: isCreatingCertificate,
-    isVerifying: isVerifyingCertificate,
     error: certificatesError,
     createCertificate,
     getCertificate,
-    verifyCertificate,
   } = usePortfolioSnapshotCertificates(portfolioId, portfolioName);
   const scopedSnapshot = snapshot?.summary.name === portfolioName ? snapshot : null;
 
@@ -275,29 +272,28 @@ function PortfolioContent() {
   };
 
   const handleCreateCertificate = async () => {
-    setCertificateVerificationResult(null);
+    setCertifyDialogOpen(true);
+  };
+
+  const handleSubmitCertificate = async (manualTitle: string, manualNote: string) => {
     const detail = await createCertificate({
       portfolioId,
       portfolioName,
       snapshotPayload: effectiveSnapshot,
+      certifyMode: "manual",
+      title: manualTitle,
+      note: manualNote,
     });
     if (detail) {
+      setCertifyDialogOpen(false);
       setCertificateDialogOpen(true);
     }
   };
 
   const handleOpenCertificate = async (certificateId: string) => {
-    setCertificateVerificationResult(null);
     const detail = await getCertificate(certificateId);
     if (detail) {
       setCertificateDialogOpen(true);
-    }
-  };
-
-  const handleVerifyCertificate = async (certificateId: string) => {
-    const result = await verifyCertificate(certificateId);
-    if (result) {
-      setCertificateVerificationResult(result);
     }
   };
 
@@ -375,7 +371,7 @@ function PortfolioContent() {
             />
 
             {isLoading && !effectiveSnapshot && (
-              <div className="panel-low mb-6 p-5 text-sm text-muted">Loading portfolio snapshot…</div>
+              <div className="panel-low mb-6 p-5 text-sm text-muted">Loading portfolio snapshot...</div>
             )}
 
             {error && (
@@ -498,15 +494,20 @@ function PortfolioContent() {
         onSync={handleSyncPortfolio}
       />
 
-      <MilestoneDetailModal
-        open={isCertificateDialogOpen}
-        certificate={selectedCertificate}
-        portfolioName={portfolioName}
-        verificationResult={certificateVerificationResult}
-        isVerifying={isVerifyingCertificate}
-        onClose={() => setCertificateDialogOpen(false)}
-        onVerify={handleVerifyCertificate}
+      <CertifySnapshotDialog
+        open={isCertifyDialogOpen}
+        isSubmitting={isCreatingCertificate}
+        error={certificatesError}
+        onClose={() => setCertifyDialogOpen(false)}
+        onSubmit={handleSubmitCertificate}
       />
+
+      <MilestoneDetailModal
+              open={isCertificateDialogOpen}
+              certificate={selectedCertificate}
+              portfolioName={portfolioName}
+              onClose={() => setCertificateDialogOpen(false)}
+            />
     </>
   );
 }

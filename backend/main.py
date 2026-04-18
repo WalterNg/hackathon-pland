@@ -24,6 +24,7 @@ from api.routes import (
     binance_market,
     debug_market,
     evaluate,
+    portfolio_achievements,
     portfolio_snapshot_certificates,
     risk_agent,
     sentiment_agent,
@@ -74,7 +75,9 @@ app.include_router(binance_connection.router, prefix="/api", tags=["Binance Conn
 app.include_router(binance_market.router, prefix="/api", tags=["Binance Market"])
 app.include_router(trading_agent.router, prefix="/api", tags=["Trading Agent"])
 app.include_router(portfolio_snapshot_certificates.router, prefix="/api", tags=["Portfolio Snapshot Certificates"])
+app.include_router(portfolio_achievements.router, prefix="/api", tags=["Portfolio Achievements"])
 
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+

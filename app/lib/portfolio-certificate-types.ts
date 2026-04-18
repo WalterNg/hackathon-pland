@@ -1,5 +1,6 @@
 export type PortfolioSnapshotCertificateStatus = "pending_anchor" | "anchored" | "failed";
 export type PortfolioSnapshotCertificateVerificationStatus = "unverified" | "verified" | "mismatch";
+export type PortfolioSnapshotCertificateCertifyMode = "manual" | "auto_achievement";
 
 export type PortfolioSnapshotCertificate = {
   id: string;
@@ -16,6 +17,10 @@ export type PortfolioSnapshotCertificate = {
   anchorExplorerUrl: string | null;
   anchorStatus: PortfolioSnapshotCertificateStatus;
   anchorError: string | null;
+  certifyMode: PortfolioSnapshotCertificateCertifyMode;
+  achievementKey: string | null;
+  title: string;
+  note: string | null;
   verificationStatus: PortfolioSnapshotCertificateVerificationStatus;
   verifiedAt: string | null;
   createdAt: string;

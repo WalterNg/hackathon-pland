@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
 
 from schemas.portfolio_snapshot_certificate import (
     PortfolioSnapshotCertificateDetail,
@@ -21,6 +22,8 @@ from services.portfolio_snapshot_certificate_store import (
     resolve_portfolio,
 )
 from services.portfolio_snapshot_hasher import hash_portfolio_snapshot
+
+logger = logging.getLogger("hackathon-pland")
 
 
 class PortfolioSnapshotCertificateService:
@@ -43,6 +46,10 @@ class PortfolioSnapshotCertificateService:
             anchorExplorerUrl=record.anchor_explorer_url,
             anchorStatus=record.anchor_status,
             anchorError=record.anchor_error,
+            certifyMode=record.certify_mode,
+            achievementKey=record.achievement_key,
+            title=record.title,
+            note=record.note,
             verificationStatus=record.verification_status,
             verifiedAt=record.verified_at,
             createdAt=record.created_at,
@@ -71,6 +78,11 @@ class PortfolioSnapshotCertificateService:
         user_id: str,
         portfolio_id: str,
         snapshot_payload: dict | None,
+        *,
+        certify_mode: str = "manual",
+        title: str | None = None,
+        note: str | None = None,
+        achievement_key: str | None = None,
         portfolio_snapshot_id: str | None = None,
     ) -> PortfolioSnapshotCertificateDetail:
         latest_snapshot_row = None
@@ -91,6 +103,9 @@ class PortfolioSnapshotCertificateService:
         canonical_payload = canonicalize_portfolio_snapshot(payload)
         snapshot_hash = hash_portfolio_snapshot(canonical_payload)
 
+        safe_title = (title or "Certified Snapshot").strip() or "Certified Snapshot"
+        safe_note = note.strip() if isinstance(note, str) and note.strip() else None
+
         snapshot_timestamp = snapshot_at or canonical_payload.summary.get("timestamp")
         if not snapshot_timestamp:
             snapshot_timestamp = datetime.now(timezone.utc).isoformat()
@@ -109,6 +124,10 @@ class PortfolioSnapshotCertificateService:
                 "anchor_chain": "ethereum",
                 "anchor_network": "sepolia",
                 "anchor_status": "pending_anchor",
+                "certify_mode": certify_mode,
+                "achievement_key": achievement_key,
+                "title": safe_title,
+                "note": safe_note,
                 "verification_status": "unverified",
             }
         )
@@ -172,3 +191,4 @@ class PortfolioSnapshotCertificateService:
             anchorExplorerUrl=record.anchor_explorer_url,
             verifiedAt=verified_at,
         )
+

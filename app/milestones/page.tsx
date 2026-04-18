@@ -1,15 +1,14 @@
-"use client";
+﻿"use client";
 
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppTopNavigation } from "@/app/components/ui/app-top-navigation";
 import { Sidebar } from "@/app/components/ui/sidebar";
 import { AuthGuard } from "@/app/components/auth/auth-guard";
-import { MilestoneBadge } from "@/app/components/milestones/milestone-badge";
-import { MilestoneDetailModal } from "@/app/components/milestones/milestone-detail-modal";
+import { MilestoneAchievementBadge } from "@/app/components/milestones/milestone-achievement-badge";
+import { MilestoneDetailPanel } from "@/app/components/milestones/milestone-detail-panel";
 import { usePortfolios } from "@/app/hooks/use-portfolios";
 import { usePortfolioSnapshotCertificates } from "@/app/hooks/use-portfolio-snapshot-certificates";
-import type { PortfolioSnapshotCertificateVerificationResult } from "@/app/lib/portfolio-certificate-types";
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
 
@@ -23,9 +22,8 @@ function MilestonesPageContent() {
     [portfolios, portfolioName]
   );
 
-  const [certificateVerificationResult, setCertificateVerificationResult] =
-    useState<PortfolioSnapshotCertificateVerificationResult | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [isPanelLoading, setIsPanelLoading] = useState(false);
   const [showFailed, setShowFailed] = useState(false);
 
   const {
@@ -33,20 +31,15 @@ function MilestonesPageContent() {
     selectedCertificate,
     isLoading,
     error,
-    isVerifying,
     getCertificate,
-    verifyCertificate,
   } = usePortfolioSnapshotCertificates(portfolioId, portfolioName);
 
-  const handleOpen = async (certificateId: string) => {
-    setCertificateVerificationResult(null);
-    const detail = await getCertificate(certificateId);
-    if (detail) setIsModalOpen(true);
-  };
-
-  const handleVerify = async (certificateId: string) => {
-    const result = await verifyCertificate(certificateId);
-    if (result) setCertificateVerificationResult(result);
+  const handleSelect = async (id: string) => {
+    if (id === selectedId) return;
+    setSelectedId(id);
+    setIsPanelLoading(true);
+    await getCertificate(id);
+    setIsPanelLoading(false);
   };
 
   const portfolioHref = `/portfolio?name=${encodeURIComponent(portfolioName)}`;
@@ -54,8 +47,12 @@ function MilestonesPageContent() {
   const milestonesHref = `/milestones?name=${encodeURIComponent(portfolioName)}`;
 
   const anchored = certificates.filter((c) => c.anchorStatus === "anchored");
+  const pending = certificates.filter((c) => c.anchorStatus === "pending_anchor");
   const failed = certificates.filter((c) => c.anchorStatus === "failed");
-  const visible = showFailed ? certificates : anchored;
+  const achievements = certificates.filter((c) => c.certifyMode === "auto_achievement");
+  const visible = showFailed ? certificates : certificates.filter((c) => c.anchorStatus !== "failed");
+
+  const ordered = [...visible].sort((a, b) => new Date(b.snapshotAt).getTime() - new Date(a.snapshotAt).getTime());
 
   return (
     <>
@@ -74,8 +71,6 @@ function MilestonesPageContent() {
 
         <main className="app-main overflow-y-auto px-4 pb-6 pt-5 sm:px-6 sm:pb-8 lg:px-8">
           <div className="content-shell max-w-7xl pb-6">
-
-            {/* Page header */}
             <section className="mb-6 rounded-3xl border border-white/6 bg-(--surface-container-low) p-5 sm:p-6">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -84,7 +79,7 @@ function MilestonesPageContent() {
                     <span className="status-pill status-pill-neutral">{portfolioName}</span>
                   </div>
                   <p className="mt-2 text-sm text-muted">
-                    Certified snapshots permanently anchored on Ethereum — a tamper-proof record of this portfolio's history.
+                    Certified snapshots and achievement certifications in one timeline.
                   </p>
                 </div>
                 {failed.length > 0 && (
@@ -99,9 +94,8 @@ function MilestonesPageContent() {
               </div>
             </section>
 
-            {/* Stats row */}
             {!isLoading && certificates.length > 0 && (
-              <div className="mb-6 grid grid-cols-3 gap-3">
+              <div className="mb-6 grid grid-cols-4 gap-3">
                 <div className="rounded-2xl border border-white/6 bg-(--surface-container-low) px-4 py-3 text-center">
                   <p className="text-xl font-bold text-strong">{certificates.length}</p>
                   <p className="mt-0.5 text-xs text-muted">Total snapshots</p>
@@ -110,37 +104,33 @@ function MilestonesPageContent() {
                   <p className="text-xl font-bold text-violet-300">{anchored.length}</p>
                   <p className="mt-0.5 text-xs text-muted">Anchored on-chain</p>
                 </div>
-                <div className="rounded-2xl border border-emerald-500/20 bg-[#042f2e]/60 px-4 py-3 text-center">
-                  <p className="text-xl font-bold text-emerald-300">
-                    {certificates.filter((c) => c.verificationStatus === "verified").length}
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted">Verified</p>
+                <div className="rounded-2xl border border-amber-500/20 bg-[#3b2502]/40 px-4 py-3 text-center">
+                  <p className="text-xl font-bold text-amber-300">{pending.length}</p>
+                  <p className="mt-0.5 text-xs text-muted">Pending anchor</p>
+                </div>
+                <div className="rounded-2xl border border-emerald-500/20 bg-[#042f2e]/40 px-4 py-3 text-center">
+                  <p className="text-xl font-bold text-emerald-300">{achievements.length}</p>
+                  <p className="mt-0.5 text-xs text-muted">Achievements</p>
                 </div>
               </div>
             )}
 
-            {/* Loading */}
             {isLoading && (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="h-24 animate-pulse rounded-2xl border border-white/6 bg-white/3" />
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-16 animate-pulse rounded-2xl border border-white/6 bg-white/3" />
                 ))}
               </div>
             )}
 
-            {/* Error */}
             {!isLoading && error && (
-              <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-danger">{error}</div>
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-danger">
+                {error}
+              </div>
             )}
 
-            {/* Empty */}
-            {!isLoading && !error && visible.length === 0 && (
+            {!isLoading && !error && ordered.length === 0 && (
               <div className="rounded-2xl border border-dashed border-white/10 px-6 py-16 text-center">
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10">
-                  <svg className="h-7 w-7 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 002.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 012.916.52 6.003 6.003 0 01-5.395 4.972m0 0a6.726 6.726 0 01-2.749 1.35m0 0a6.772 6.772 0 01-3.044 0" />
-                  </svg>
-                </div>
                 <p className="font-semibold text-strong">No milestones yet</p>
                 <p className="mt-1 text-sm text-muted">
                   Go to the Portfolio page and certify a snapshot to create the first milestone.
@@ -148,31 +138,58 @@ function MilestonesPageContent() {
               </div>
             )}
 
-            {/* Badge grid */}
-            {!isLoading && !error && visible.length > 0 && (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {visible.map((cert) => (
-                  <MilestoneBadge
-                    key={cert.id}
-                    milestone={{ ...cert, portfolioName }}
-                    onOpen={handleOpen}
+            {!isLoading && !error && ordered.length > 0 && (
+              <div className="flex gap-6 items-start">
+                <div className="w-[340px] shrink-0">
+                  <div className="relative">
+                    <div className="absolute left-[9px] top-4 bottom-4 w-px bg-white/8" />
+
+                    <div className="space-y-2">
+                      {ordered.map((cert) => {
+                        const dateLabel = new Intl.DateTimeFormat("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        }).format(new Date(cert.snapshotAt));
+
+                        const dotColor = cert.anchorStatus === "anchored"
+                          ? "bg-violet-400"
+                          : cert.anchorStatus === "pending_anchor"
+                          ? "bg-amber-400"
+                          : "bg-neutral-700";
+
+                        return (
+                          <div key={cert.id} className="flex gap-4 items-start">
+                            <div className="shrink-0 pt-[18px]">
+                              <div className={`h-[10px] w-[10px] rounded-full border border-black/30 z-10 ${dotColor}`} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="mb-1 text-[0.65rem] font-medium text-neutral-600">{dateLabel}</p>
+                              <MilestoneAchievementBadge
+                                cert={cert}
+                                isSelected={selectedId === cert.id}
+                                onSelect={handleSelect}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1 min-w-0 sticky top-5">
+                  <MilestoneDetailPanel
+                    certificate={selectedCertificate}
+                    isLoading={isPanelLoading}
+                    portfolioName={portfolioName}
                   />
-                ))}
+                </div>
               </div>
             )}
           </div>
         </main>
       </div>
-
-      <MilestoneDetailModal
-        open={isModalOpen}
-        certificate={selectedCertificate}
-        portfolioName={portfolioName}
-        verificationResult={certificateVerificationResult}
-        isVerifying={isVerifying}
-        onClose={() => setIsModalOpen(false)}
-        onVerify={handleVerify}
-      />
     </>
   );
 }

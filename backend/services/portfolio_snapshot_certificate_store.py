@@ -20,7 +20,7 @@ CERTIFICATE_SELECT_COLUMNS = (
     "id,user_id,portfolio_id,portfolio_snapshot_id,certificate_version,snapshot_at,"
     "snapshot_payload,snapshot_hash,hash_algorithm,canonicalization_version,"
     "anchor_chain,anchor_network,anchor_tx_hash,anchor_block_number,anchor_block_hash,"
-    "anchor_wallet_address,anchor_explorer_url,anchor_status,anchor_error,"
+    "anchor_wallet_address,anchor_explorer_url,anchor_status,anchor_error,certify_mode,achievement_key,title,note,"
     "verification_status,verified_at,created_at"
 )
 

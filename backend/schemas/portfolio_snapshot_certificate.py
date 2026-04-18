@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 AnchorStatus = Literal["pending_anchor", "anchored", "failed"]
 VerificationStatus = Literal["unverified", "verified", "mismatch"]
+CertifyMode = Literal["manual", "auto_achievement"]
 
 
 class PortfolioSnapshotCertificateCreateRequest(BaseModel):
@@ -16,11 +17,20 @@ class PortfolioSnapshotCertificateCreateRequest(BaseModel):
     portfolio_id: str | None = Field(default=None, alias="portfolioId")
     portfolio_name: str | None = Field(default=None, alias="portfolioName")
     snapshot_payload: dict[str, Any] | None = Field(default=None, alias="snapshotPayload")
+    certify_mode: CertifyMode = Field(default="manual", alias="certifyMode")
+    title: str | None = None
+    note: str | None = None
+    achievement_key: str | None = Field(default=None, alias="achievementKey")
 
     @model_validator(mode="after")
     def validate_portfolio_reference(self) -> "PortfolioSnapshotCertificateCreateRequest":
         if not self.portfolio_id and not self.portfolio_name:
             raise ValueError("Either portfolioId or portfolioName is required.")
+        if self.certify_mode == "manual":
+            if not (self.title or "").strip():
+                raise ValueError("title is required when certifyMode is manual.")
+            if not (self.note or "").strip():
+                raise ValueError("note is required when certifyMode is manual.")
         return self
 
 
@@ -55,6 +65,10 @@ class PortfolioSnapshotCertificateListItem(BaseModel):
     anchor_explorer_url: str | None = Field(default=None, alias="anchorExplorerUrl")
     anchor_status: AnchorStatus = Field(alias="anchorStatus")
     anchor_error: str | None = Field(default=None, alias="anchorError")
+    certify_mode: CertifyMode = Field(alias="certifyMode")
+    achievement_key: str | None = Field(default=None, alias="achievementKey")
+    title: str
+    note: str | None = None
     verification_status: VerificationStatus = Field(alias="verificationStatus")
     verified_at: datetime | None = Field(default=None, alias="verifiedAt")
     created_at: datetime = Field(alias="createdAt")
@@ -98,6 +112,10 @@ class PortfolioSnapshotCertificateRecord(BaseModel):
     anchor_explorer_url: str | None = None
     anchor_status: AnchorStatus
     anchor_error: str | None = None
+    certify_mode: CertifyMode = "manual"
+    achievement_key: str | None = None
+    title: str = "Certified Snapshot"
+    note: str | None = None
     verification_status: VerificationStatus
     verified_at: datetime | None = None
     created_at: datetime

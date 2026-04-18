@@ -8,8 +8,10 @@ import {
   calculateMaxDrawdownFromSeries,
   calculateVolatilityFromSeries,
 } from "@/app/lib/risk-calculator";
-import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
+import { backendBaseUrl } from "@/app/lib/backend-base-url";
 import { RefreshIntervals } from "@/app/lib/refresh-intervals";
+import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
+import { createSupabaseBrowserClient } from "@/app/lib/supabase/client";
 
 type UsePortfolioSnapshotResult = {
   snapshot: PortfolioSnapshot | null;
@@ -74,6 +76,26 @@ function isPerformerCandidate(symbol: string): boolean {
 function isRealtimeTickerSymbol(symbol: string): boolean {
   const normalized = symbol.trim().toUpperCase();
   return normalized.endsWith("USDT") && normalized.length > 4;
+}
+
+async function fetchBackendWithSupabaseAuth(path: string, init: RequestInit = {}) {
+  const supabase = await createSupabaseBrowserClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const headers = new Headers(init.headers);
+  headers.set("Content-Type", headers.get("Content-Type") ?? "application/json");
+
+  if (session?.access_token) {
+    headers.set("Authorization", `Bearer ${session.access_token}`);
+  }
+
+  return fetch(`${backendBaseUrl()}${path}`, {
+    ...init,
+    headers,
+    cache: "no-store",
+  });
 }
 
 function applyRealtimeTicker(
@@ -212,6 +234,7 @@ export function usePortfolioSnapshot(
   const isBackgroundSyncingRef = useRef(false);
   const lastBackgroundSyncAtRef = useRef(0);
   const snapshotCacheRef = useRef<Record<string, PortfolioSnapshot>>({});
+  const lastAutoCertifyKeyRef = useRef<string | null>(null);
 
   const cacheKeys = useMemo(() => {
     const keys = [
@@ -241,6 +264,27 @@ export function usePortfolioSnapshot(
       snapshotCacheRef.current[key] = data;
     }
   };
+
+  const triggerAutoCertify = useCallback(async (payload: PortfolioSnapshot) => {
+    const snapshotKey = `${portfolioName}:${payload.summary.timestamp}`;
+    if (lastAutoCertifyKeyRef.current === snapshotKey) {
+      return;
+    }
+    lastAutoCertifyKeyRef.current = snapshotKey;
+
+    try {
+      await fetchBackendWithSupabaseAuth("/api/portfolio_achievements/auto_certify", {
+        method: "POST",
+        body: JSON.stringify({
+          portfolioId: portfolioId ?? undefined,
+          portfolioName,
+          snapshotPayload: payload,
+        }),
+      });
+    } catch {
+      // best-effort background trigger
+    }
+  }, [portfolioId, portfolioName]);
 
   const clearCachedSnapshot = () => {
     for (const key of cacheKeys) {
@@ -368,6 +412,7 @@ export function usePortfolioSnapshot(
             setSnapshotSource(sourceHeader);
             setLastServerSyncAt(data.summary.timestamp ?? new Date().toISOString());
             setIsServerSnapshotStale(snapshotStale);
+            void triggerAutoCertify(data);
           }
 
           if (snapshotStale) {
@@ -419,7 +464,7 @@ export function usePortfolioSnapshot(
       isFetchingRef.current = false;
       isBackgroundSyncingRef.current = false;
     };
-  }, [portfolioName, refreshIntervalMs, refreshNonce]);
+  }, [portfolioName, refreshIntervalMs, refreshNonce, triggerAutoCertify]);
 
   useEffect(() => {
     let isDisposed = false;
@@ -516,6 +561,7 @@ export function usePortfolioSnapshot(
 
   const reload = useCallback(async () => {
     clearCachedSnapshot();
+    lastAutoCertifyKeyRef.current = null;
     setRefreshNonce((value) => value + 1);
   }, [cacheKeys]);
 

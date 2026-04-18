@@ -38,7 +38,15 @@ type UsePortfolioSnapshotCertificatesResult = {
   isCreating: boolean;
   isVerifying: boolean;
   error: string | null;
-  createCertificate: (input: { portfolioId?: string | null; portfolioName?: string; snapshotPayload?: PortfolioSnapshot | null }) => Promise<PortfolioSnapshotCertificateDetail | null>;
+  createCertificate: (input: {
+    portfolioId?: string | null;
+    portfolioName?: string;
+    snapshotPayload?: PortfolioSnapshot | null;
+    certifyMode?: "manual" | "auto_achievement";
+    title?: string;
+    note?: string;
+    achievementKey?: string;
+  }) => Promise<PortfolioSnapshotCertificateDetail | null>;
   getCertificate: (certificateId: string) => Promise<PortfolioSnapshotCertificateDetail | null>;
   verifyCertificate: (certificateId: string) => Promise<PortfolioSnapshotCertificateVerificationResult | null>;
   reload: () => Promise<void>;
@@ -93,10 +101,18 @@ export function usePortfolioSnapshotCertificates(
       portfolioId: nextPortfolioId,
       portfolioName: nextPortfolioName,
       snapshotPayload,
+      certifyMode,
+      title,
+      note,
+      achievementKey,
     }: {
       portfolioId?: string | null;
       portfolioName?: string;
       snapshotPayload?: PortfolioSnapshot | null;
+      certifyMode?: "manual" | "auto_achievement";
+      title?: string;
+      note?: string;
+      achievementKey?: string;
     }) => {
       setIsCreating(true);
       setError(null);
@@ -108,6 +124,10 @@ export function usePortfolioSnapshotCertificates(
             portfolioId: nextPortfolioId?.trim() || undefined,
             portfolioName: nextPortfolioName?.trim() || undefined,
             snapshotPayload: snapshotPayload ?? undefined,
+            certifyMode: certifyMode ?? "manual",
+            title: title?.trim() || undefined,
+            note: note?.trim() || undefined,
+            achievementKey: achievementKey?.trim() || undefined,
           }),
         });
         const payload = (await response.json().catch(() => null)) as PortfolioSnapshotCertificateDetail & { detail?: string };

@@ -56,6 +56,10 @@ async def create_portfolio_snapshot_certificate(
             user_id=user_id,
             portfolio_id=str(portfolio["id"]),
             snapshot_payload=payload.snapshot_payload,
+            certify_mode=payload.certify_mode,
+            title=payload.title,
+            note=payload.note,
+            achievement_key=payload.achievement_key,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
