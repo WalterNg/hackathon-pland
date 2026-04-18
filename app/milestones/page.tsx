@@ -196,10 +196,10 @@ function MilestonesPageContent() {
 
 export default function MilestonesPage() {
   return (
-    <AuthGuard>
-      <Suspense>
+    <Suspense>
+      <AuthGuard>
         <MilestonesPageContent />
-      </Suspense>
-    </AuthGuard>
+      </AuthGuard>
+    </Suspense>
   );
 }
