@@ -1,4 +1,5 @@
 import { MaterialIcon } from "../dashboard/material-icon";
+import { CertifySnapshotButton } from "./certify-snapshot-button";
 
 type PortfolioHeaderProps = {
   portfolioName: string;
@@ -15,6 +16,9 @@ type PortfolioHeaderProps = {
   isConnectedPortfolio?: boolean;
   onSync?: () => void;
   isSyncing?: boolean;
+  onCertifySnapshot?: () => void;
+  isCertifyingSnapshot?: boolean;
+  isCertifySnapshotDisabled?: boolean;
 };
 
 export function PortfolioHeader({
@@ -32,6 +36,9 @@ export function PortfolioHeader({
   isConnectedPortfolio = false,
   onSync,
   isSyncing = false,
+  onCertifySnapshot,
+  isCertifyingSnapshot = false,
+  isCertifySnapshotDisabled = false,
 }: PortfolioHeaderProps) {
   const isReadOnlyStatus = isPrimaryActionDisabled && primaryActionLabel === "Read-only";
 
@@ -96,6 +103,14 @@ export function PortfolioHeader({
             <MaterialIcon name={isSyncing ? "hourglass_top" : "sync"} outlined={false} className="text-[0.9rem]" />
             {isSyncing ? "Syncing…" : "Sync"}
           </button>
+        ) : null}
+
+        {onCertifySnapshot ? (
+          <CertifySnapshotButton
+            onClick={onCertifySnapshot}
+            isLoading={isCertifyingSnapshot}
+            disabled={isCertifySnapshotDisabled}
+          />
         ) : null}
 
         {showRemovePortfolio && onRemovePortfolio ? (

@@ -6,7 +6,8 @@ import { usePathname } from "next/navigation";
 const navItems = [
   { label: "Portfolio", href: "/portfolio" },
   { label: "Risk Management", href: "/risk" },
-  { label: "Journal", href: "/journal" }
+  { label: "Journal", href: "/journal" },
+  { label: "Milestones", href: "/milestones" },
 ] as const;
 
 function normalizePath(path: string): string {
@@ -20,9 +21,10 @@ function normalizePath(path: string): string {
 type AppTopNavigationProps = {
   portfolioHref?: string;
   riskHref?: string;
+  milestonesHref?: string | null;
 };
 
-export function AppTopNavigation({ portfolioHref = "/portfolio", riskHref = "/risk" }: AppTopNavigationProps) {
+export function AppTopNavigation({ portfolioHref = "/portfolio", riskHref = "/risk", milestonesHref = "/milestones" }: AppTopNavigationProps) {
   const pathname = usePathname();
   const currentPath = normalizePath(pathname);
 
@@ -39,7 +41,13 @@ export function AppTopNavigation({ portfolioHref = "/portfolio", riskHref = "/ri
             ? portfolioHref
             : item.href === "/risk"
               ? riskHref
-              : item.href;
+              : item.href === "/milestones"
+                ? milestonesHref
+                : item.href;
+
+          // Hide nav item if href is explicitly null
+          if (href === null) return null;
+
           const normalizedHref = normalizePath(item.href);
           const isActive = currentPath === normalizedHref || currentPath.startsWith(`${normalizedHref}/`);
 

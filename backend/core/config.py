@@ -12,7 +12,14 @@ class Settings(BaseSettings):
 
     # Supabase Configuration
     supabase_url: str = Field(default="", alias="NEXT_PUBLIC_SUPABASE_URL")
+    supabase_anon_key: str = Field(default="", alias="NEXT_PUBLIC_SUPABASE_ANON_KEY")
     supabase_service_role_key: str = Field(default="", alias="SUPABASE_SERVICE_ROLE_KEY")
+
+    # Ethereum Sepolia anchor configuration
+    eth_sepolia_rpc_url: str = Field(default="", alias="ETH_SEPOLIA_RPC_URL")
+    eth_sepolia_private_key: str = Field(default="", alias="ETH_SEPOLIA_PRIVATE_KEY")
+    eth_sepolia_anchor_wallet_address: str = Field(default="", alias="ETH_SEPOLIA_ANCHOR_WALLET_ADDRESS")
+    eth_sepolia_explorer_base_url: str = Field(default="https://sepolia.etherscan.io/tx/", alias="ETH_SEPOLIA_EXPLORER_BASE_URL")
 
     model_config = SettingsConfigDict(
         env_file=(

@@ -1,0 +1,1 @@
+drop index if exists public.portfolio_snapshot_certificates_hash_idx;
