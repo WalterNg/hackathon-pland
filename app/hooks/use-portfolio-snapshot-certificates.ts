@@ -178,3 +178,28 @@ export function usePortfolioSnapshotCertificates(
 
       const updatedDetail = await getCertificate(certificateId);
       if (updatedDetail) {
+        setSelectedCertificate(updatedDetail);
+      }
+      await reload();
+      return payload;
+    } catch (verifyError) {
+      setError(verifyError instanceof Error ? verifyError.message : "Unable to verify certificate.");
+      return null;
+    } finally {
+      setIsVerifying(false);
+    }
+  }, [getCertificate, reload]);
+
+  return {
+    certificates,
+    selectedCertificate,
+    isLoading,
+    isCreating,
+    isVerifying,
+    error,
+    createCertificate,
+    getCertificate,
+    verifyCertificate,
+    reload,
+  };
+}
