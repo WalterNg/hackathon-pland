@@ -6,6 +6,8 @@ import { MaterialIcon } from "../components/dashboard/material-icon";
 import { AppTopNavigation } from "../components/ui/app-top-navigation";
 import { AddTransactionDialog } from "../components/portfolio/add-transaction-dialog";
 import { CreatePortfolioDialog } from "../components/portfolio/create-portfolio-dialog";
+import { MilestoneBadge } from "../components/milestones/milestone-badge";
+import { MilestoneDetailModal } from "../components/milestones/milestone-detail-modal";
 import { SyncBinanceDialog } from "../components/portfolio/sync-binance-dialog";
 import { PortfolioAssetsTable } from "../components/portfolio/portfolio-assets-table";
 import { PortfolioTransactionsList } from "../components/portfolio/portfolio-transactions-list";
@@ -18,8 +20,10 @@ import { Sidebar } from "../components/ui/sidebar";
 import { AuthGuard } from "../components/auth/auth-guard";
 import { useTradingAgentAnalysis } from "../hooks/use-trading-agent-analysis";
 import { usePortfolios } from "../hooks/use-portfolios";
+import { usePortfolioSnapshotCertificates } from "../hooks/use-portfolio-snapshot-certificates";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
 import { RefreshIntervals } from "@/app/lib/refresh-intervals";
+import type { PortfolioSnapshotCertificateVerificationResult } from "@/app/lib/portfolio-certificate-types";
 import type { PortfolioMode, PortfolioSnapshot } from "@/app/lib/portfolio-types";
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
@@ -88,8 +92,11 @@ function PortfolioContent() {
   const [isSyncingPortfolio, setSyncingPortfolio] = useState(false);
   const [showCharts, setShowCharts] = useState(true);
   const [holdingsTab, setHoldingsTab] = useState<"assets" | "transactions">("assets");
+  const [isCertificateDialogOpen, setCertificateDialogOpen] = useState(false);
   const [snapshotCacheByPortfolio, setSnapshotCacheByPortfolio] = useState<Record<string, PortfolioSnapshot>>({});
   const [selectedCoin, setSelectedCoin] = useState<{ symbol: string; name: string | null; baseAsset: string; quoteAsset: string } | null>(null);
+  const [certificateVerificationResult, setCertificateVerificationResult] =
+    useState<PortfolioSnapshotCertificateVerificationResult | null>(null);
   const [transactionIntent, setTransactionIntent] = useState<{ action: "buy" | "sell" | "transfer"; note: string }>({
     action: "buy",
     note: "",
@@ -125,6 +132,17 @@ function PortfolioContent() {
     isServerSnapshotStale,
     reload
   } = usePortfolioSnapshot(portfolioId, portfolioName);
+  const {
+    certificates,
+    selectedCertificate,
+    isLoading: isCertificatesLoading,
+    isCreating: isCreatingCertificate,
+    isVerifying: isVerifyingCertificate,
+    error: certificatesError,
+    createCertificate,
+    getCertificate,
+    verifyCertificate,
+  } = usePortfolioSnapshotCertificates(portfolioId, portfolioName);
   const scopedSnapshot = snapshot?.summary.name === portfolioName ? snapshot : null;
 
   useEffect(() => {
@@ -256,6 +274,33 @@ function PortfolioContent() {
     await reload();
   };
 
+  const handleCreateCertificate = async () => {
+    setCertificateVerificationResult(null);
+    const detail = await createCertificate({
+      portfolioId,
+      portfolioName,
+      snapshotPayload: effectiveSnapshot,
+    });
+    if (detail) {
+      setCertificateDialogOpen(true);
+    }
+  };
+
+  const handleOpenCertificate = async (certificateId: string) => {
+    setCertificateVerificationResult(null);
+    const detail = await getCertificate(certificateId);
+    if (detail) {
+      setCertificateDialogOpen(true);
+    }
+  };
+
+  const handleVerifyCertificate = async (certificateId: string) => {
+    const result = await verifyCertificate(certificateId);
+    if (result) {
+      setCertificateVerificationResult(result);
+    }
+  };
+
   const handleRemovePortfolio = async () => {
     if (isMainPortfolio || isRemovingPortfolio) {
       return;
@@ -296,6 +341,7 @@ function PortfolioContent() {
           <AppTopNavigation
             portfolioHref={`/portfolio?name=${encodeURIComponent(portfolioName)}`}
             riskHref={riskManagementHref}
+            milestonesHref={isMainPortfolio ? null : `/milestones?name=${encodeURIComponent(portfolioName)}`}
           />
         </div>
       </header>
@@ -323,6 +369,9 @@ function PortfolioContent() {
               isConnectedPortfolio={isConnectedPortfolio}
               onSync={() => setSyncDialogOpen(true)}
               isSyncing={isSyncingPortfolio}
+              onCertifySnapshot={handleCreateCertificate}
+              isCertifyingSnapshot={isCreatingCertificate}
+              isCertifySnapshotDisabled={!effectiveSnapshot || isLoading}
             />
 
             {isLoading && !effectiveSnapshot && (
@@ -447,6 +496,16 @@ function PortfolioContent() {
         portfolioName={portfolioName}
         onClose={() => setSyncDialogOpen(false)}
         onSync={handleSyncPortfolio}
+      />
+
+      <MilestoneDetailModal
+        open={isCertificateDialogOpen}
+        certificate={selectedCertificate}
+        portfolioName={portfolioName}
+        verificationResult={certificateVerificationResult}
+        isVerifying={isVerifyingCertificate}
+        onClose={() => setCertificateDialogOpen(false)}
+        onVerify={handleVerifyCertificate}
       />
     </>
   );
