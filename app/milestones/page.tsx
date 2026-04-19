@@ -44,6 +44,7 @@ function MilestonesPageContent() {
 
   const portfolioHref = `/portfolio?name=${encodeURIComponent(portfolioName)}`;
   const riskHref = `/risk?name=${encodeURIComponent(portfolioName)}`;
+  const riskRulesHref = `/risk-rules?name=${encodeURIComponent(portfolioName)}`;
   const milestonesHref = `/milestones?name=${encodeURIComponent(portfolioName)}`;
 
   const anchored = certificates.filter((c) => c.anchorStatus === "anchored");
@@ -61,6 +62,7 @@ function MilestonesPageContent() {
           <AppTopNavigation
             portfolioHref={portfolioHref}
             riskHref={riskHref}
+            riskRulesHref={riskRulesHref}
             milestonesHref={milestonesHref}
           />
         </div>
