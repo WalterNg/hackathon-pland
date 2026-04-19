@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { label: "Portfolio", href: "/portfolio" },
-  { label: "Risk Management", href: "/risk" },
+  { label: "Risk Rules", href: "/risk-rules" },
   { label: "Journal", href: "/journal" },
   { label: "Milestones", href: "/milestones" },
 ] as const;
@@ -21,10 +21,16 @@ function normalizePath(path: string): string {
 type AppTopNavigationProps = {
   portfolioHref?: string;
   riskHref?: string;
+  riskRulesHref?: string;
   milestonesHref?: string | null;
 };
 
-export function AppTopNavigation({ portfolioHref = "/portfolio", riskHref = "/risk", milestonesHref = "/milestones" }: AppTopNavigationProps) {
+export function AppTopNavigation({
+  portfolioHref = "/portfolio",
+  riskHref = "/risk",
+  riskRulesHref = "/risk-rules",
+  milestonesHref = "/milestones",
+}: AppTopNavigationProps) {
   const pathname = usePathname();
   const currentPath = normalizePath(pathname);
 
@@ -39,8 +45,8 @@ export function AppTopNavigation({ portfolioHref = "/portfolio", riskHref = "/ri
         {navItems.map((item) => {
           const href = item.href === "/portfolio"
             ? portfolioHref
-            : item.href === "/risk"
-              ? riskHref
+            : item.href === "/risk-rules"
+              ? riskRulesHref
               : item.href === "/milestones"
                 ? milestonesHref
                 : item.href;

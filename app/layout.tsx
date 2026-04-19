@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
+import { RiskAlertToastProvider } from "./components/ui/risk-alert-toast-provider";
 
 export const metadata: Metadata = {
   title: "Pland",
@@ -38,6 +39,7 @@ export default function RootLayout({
       </head>
       <body className="bg-background text-body antialiased transition-colors duration-200">
         {children}
+        <RiskAlertToastProvider />
       </body>
     </html>
   );

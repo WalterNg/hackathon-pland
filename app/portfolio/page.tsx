@@ -169,6 +169,7 @@ function PortfolioContent() {
   const isConnectedPortfolio = currentPortfolio?.mode === "binance_connected";
   const primaryActionLabel = isMainPortfolio ? "Create portfolio" : isConnectedPortfolio ? "Read-only" : "Add transaction";
   const riskManagementHref = `/risk?name=${encodeURIComponent(portfolioName)}`;
+  const riskRulesHref = `/risk-rules?name=${encodeURIComponent(portfolioName)}`;
   const connectedPortfolioTimestamp = lastServerSyncAt ?? effectiveSnapshot?.summary.timestamp ?? null;
   const connectedStatusDescription =
     isConnectedPortfolio && connectedPortfolioTimestamp
@@ -337,6 +338,7 @@ function PortfolioContent() {
           <AppTopNavigation
             portfolioHref={`/portfolio?name=${encodeURIComponent(portfolioName)}`}
             riskHref={riskManagementHref}
+            riskRulesHref={riskRulesHref}
             milestonesHref={isMainPortfolio ? null : `/milestones?name=${encodeURIComponent(portfolioName)}`}
           />
         </div>
