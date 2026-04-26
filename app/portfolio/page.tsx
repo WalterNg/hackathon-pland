@@ -20,6 +20,7 @@ import { CertifySnapshotDialog } from "../components/portfolio/certify-snapshot-
 import { Sidebar } from "../components/ui/sidebar";
 import { AuthGuard } from "../components/auth/auth-guard";
 import { useTradingAgentAnalysis } from "../hooks/use-trading-agent-analysis";
+import { usePortfolioUiSession } from "../hooks/use-portfolio-ui-session";
 import { usePortfolios } from "../hooks/use-portfolios";
 import { usePortfolioSnapshotCertificates } from "../hooks/use-portfolio-snapshot-certificates";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
@@ -120,6 +121,7 @@ function PortfolioContent() {
     [portfolios, portfolioName]
   );
   const portfolioId = currentPortfolio?.id ?? null;
+  usePortfolioUiSession(portfolioId);
   const {
     snapshot,
     isLoading,
