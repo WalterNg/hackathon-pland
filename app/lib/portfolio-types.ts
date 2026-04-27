@@ -188,6 +188,7 @@ export type PortfolioAIRecommendationMetadata = {
 };
 
 export type PortfolioAIRecommendation = {
+  portfolioUiSessionId?: string | null;
   action: AIAnalysisAction;
   confidence: number;
   summary: string;

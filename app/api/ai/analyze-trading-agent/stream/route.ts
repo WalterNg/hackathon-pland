@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 
 type AnalyzeRequestBody = {
   portfolioName?: string;
+  portfolioUiSessionId?: string | null;
 };
 
 type BackendStreamError = {
@@ -82,10 +83,6 @@ function normalizeSignalTone(
   return "Neutral";
 }
 
-function recommendationPortfolioId(portfolioId: string): string {
-  return `${portfolioId}::${WORKFLOW_VERSION}`;
-}
-
 function buildTradingAgentPortfolioInput(
   positions: Array<{ symbol: string; quantity: number }>,
   snapshot: Awaited<ReturnType<typeof buildBinancePortfolioSnapshot>>
@@ -117,6 +114,11 @@ function buildTradingAgentPortfolioInput(
     portfolioItems,
     stablecoinReserve,
   };
+}
+
+function normalizePortfolioUiSessionId(input: string | null | undefined): string | null {
+  const value = input?.trim();
+  return value ? value.slice(0, 128) : null;
 }
 
 function sse(event: string, data: unknown) {
@@ -153,9 +155,11 @@ function buildRecommendation(
   payload: TradingAgentResult,
   snapshot: Awaited<ReturnType<typeof buildBinancePortfolioSnapshot>>,
   activeAlerts: Awaited<ReturnType<typeof listRiskAlerts>>,
-  activeRiskProfile: Awaited<ReturnType<typeof getActiveRiskProfileByPortfolio>>
+  activeRiskProfile: Awaited<ReturnType<typeof getActiveRiskProfileByPortfolio>>,
+  portfolioUiSessionId: string | null
 ): PortfolioAIRecommendation {
   const recommendationBase: PortfolioAIRecommendation = {
+    portfolioUiSessionId,
     action: payload.final_decision?.action ?? "Hold",
     confidence: payload.final_decision?.confidence ?? 5,
     summary: payload.final_decision?.summary ?? "Trading agent completed without a final summary.",
@@ -196,6 +200,7 @@ function buildRecommendation(
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as AnalyzeRequestBody;
   const context = await getAuthorizedPortfolio(request, body.portfolioName);
+  const portfolioUiSessionId = normalizePortfolioUiSessionId(body.portfolioUiSessionId);
 
   if (!context.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -293,11 +298,17 @@ export async function POST(request: Request) {
             return;
           }
 
-          const recommendation = buildRecommendation(result, snapshot, activeAlerts, activeRiskProfile);
+          const recommendation = buildRecommendation(
+            result,
+            snapshot,
+            activeAlerts,
+            activeRiskProfile,
+            portfolioUiSessionId
+          );
           await savePortfolioAIRecommendation(
             supabase,
             user.id,
-            recommendationPortfolioId(portfolio.id),
+            portfolio.id,
             recommendation
           );
 

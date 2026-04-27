@@ -5,6 +5,7 @@ import { useRef } from "react";
 
 import { createSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { clearAllPortfolioUiSessionRecords } from "@/app/lib/portfolio-ui-session";
+import { clearAllPortfolioAIRecommendationCache } from "@/app/lib/ai-recommendation-cache";
 
 export function PortfolioUiSessionCleanup() {
   const hasSeenAuthenticatedSessionRef = useRef(false);
@@ -29,6 +30,7 @@ export function PortfolioUiSessionCleanup() {
 
         if (event === "SIGNED_OUT" && hasSeenAuthenticatedSessionRef.current) {
           clearAllPortfolioUiSessionRecords();
+          clearAllPortfolioAIRecommendationCache();
           hasSeenAuthenticatedSessionRef.current = false;
         }
       });

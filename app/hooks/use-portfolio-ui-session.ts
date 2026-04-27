@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { createSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import {
@@ -15,64 +15,78 @@ import {
 
 type UsePortfolioUiSessionResult = {
   portfolioUiSessionId: string | null;
+  portfolioUiSessionUserId: string | null;
   portfolioUiSession: PortfolioUiSessionRecord | null;
+  isReady: boolean;
   resetPortfolioUiSession: () => void;
 };
 
 export function usePortfolioUiSession(portfolioId: string | null): UsePortfolioUiSessionResult {
   const [portfolioUiSession, setPortfolioUiSession] = useState<PortfolioUiSessionRecord | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
-  const portfolioKey = useMemo(
-    () => normalizePortfolioUiSessionPortfolioKey(portfolioId),
-    [portfolioId]
-  );
+  const portfolioKey = normalizePortfolioUiSessionPortfolioKey(portfolioId);
 
   useEffect(() => {
     let isCancelled = false;
+    setIsReady(false);
+    setPortfolioUiSession(null);
+
+    const exactRecord = portfolioKey ? readPortfolioUiSessionRecord(portfolioKey) : null;
+    setCurrentUserId(exactRecord?.userId ?? null);
+    if (exactRecord) {
+      setPortfolioUiSession(exactRecord);
+    }
 
     if (!portfolioKey) {
-      setPortfolioUiSession(null);
+      setIsReady(true);
       return () => {
         isCancelled = true;
       };
     }
 
     const resolveSession = async () => {
-      const supabase = await createSupabaseBrowserClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      try {
+        const supabase = await createSupabaseBrowserClient();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-      if (isCancelled) {
-        return;
-      }
+        if (isCancelled) {
+          return;
+        }
 
-      const userId = session?.user.id ?? null;
-      setCurrentUserId(userId);
+        const userId = session?.user.id ?? null;
+        setCurrentUserId(userId);
 
-      if (!userId) {
-        return;
-      }
+        if (!userId) {
+          return;
+        }
 
-      const exactRecord = readPortfolioUiSessionRecord(portfolioKey);
-      if (exactRecord) {
-        const nextRecord = writePortfolioUiSessionRecord({
-          ...exactRecord,
-          userId,
-          lastSeenAt: new Date().toISOString(),
-        });
+        const currentRecord = readPortfolioUiSessionRecord(portfolioKey);
+        if (currentRecord) {
+          const nextRecord = writePortfolioUiSessionRecord({
+            ...currentRecord,
+            userId,
+            lastSeenAt: new Date().toISOString(),
+          });
+          if (!isCancelled) {
+            setPortfolioUiSession(nextRecord);
+          }
+          return;
+        }
+
+        const nextRecord = writePortfolioUiSessionRecord(
+          createPortfolioUiSessionRecord(userId, portfolioKey)
+        );
         if (!isCancelled) {
           setPortfolioUiSession(nextRecord);
         }
-        return;
-      }
-
-      const nextRecord = writePortfolioUiSessionRecord(
-        createPortfolioUiSessionRecord(userId, portfolioKey)
-      );
-      if (!isCancelled) {
-        setPortfolioUiSession(nextRecord);
+      } finally {
+        if (!isCancelled) {
+          setIsReady(true);
+        }
       }
     };
 
@@ -96,7 +110,9 @@ export function usePortfolioUiSession(portfolioId: string | null): UsePortfolioU
 
   return {
     portfolioUiSessionId: portfolioUiSession?.sessionId ?? null,
+    portfolioUiSessionUserId: currentUserId,
     portfolioUiSession,
+    isReady,
     resetPortfolioUiSession,
   };
 }

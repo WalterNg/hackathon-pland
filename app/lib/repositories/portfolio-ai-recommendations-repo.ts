@@ -31,28 +31,38 @@ export async function savePortfolioAIRecommendation(
   portfolioId: string,
   recommendation: PortfolioAIRecommendation,
 ): Promise<void> {
-  await supabase.from("portfolio_ai_recommendations").insert({
+  const { error } = await supabase.from("portfolio_ai_recommendations").insert({
     user_id: userId,
     portfolio_id: portfolioId,
+    portfolio_ui_session_id: recommendation.portfolioUiSessionId ?? null,
     analyzed_at: recommendation.analyzedAt,
     action: recommendation.action,
     confidence: recommendation.confidence,
     metadata: recommendation,
   });
+
+  if (error) {
+    throw error;
+  }
 }
 
 export async function getLatestPortfolioAIRecommendation(
   supabase: SupabaseClient,
   userId: string,
   portfolioId: string,
+  portfolioUiSessionId?: string | null,
 ): Promise<PortfolioAIRecommendation | null> {
-  const { data, error } = await supabase
+  const query = supabase
     .from("portfolio_ai_recommendations")
     .select("metadata")
     .eq("user_id", userId)
-    .eq("portfolio_id", portfolioId)
-    .order("analyzed_at", { ascending: false })
-    .limit(1);
+    .eq("portfolio_id", portfolioId);
+
+  if (portfolioUiSessionId?.trim()) {
+    query.eq("portfolio_ui_session_id", portfolioUiSessionId.trim());
+  }
+
+  const { data, error } = await query.order("analyzed_at", { ascending: false }).limit(1);
 
   if (error || !data || data.length === 0) {
     return null;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { PortfolioAIRecommendation } from "@/app/lib/portfolio-types";
 import type {
@@ -12,8 +12,11 @@ import type {
   TradingAgentStreamStartEvent,
   TradingAgentTraceEvent,
 } from "@/app/lib/trading-agent-types";
+import {
+  readPortfolioAIRecommendationCache,
+  writePortfolioAIRecommendationCache,
+} from "@/app/lib/ai-recommendation-cache";
 import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
-import { createSupabaseBrowserClient } from "@/app/lib/supabase/client";
 
 type TradingAgentRunStatus = "idle" | "streaming" | "completed" | "error";
 
@@ -40,6 +43,74 @@ type UseTradingAgentAnalysisResult = {
 const TOTAL_STEPS = 10;
 const RECOMMENDATION_LOAD_COOLDOWN_MS = 1_500;
 const latestRecommendationRequestAt = new Map<string, number>();
+
+type UseTradingAgentAnalysisOptions = {
+  scopeKey?: string | null;
+  portfolioId?: string | null;
+  portfolioUiSessionId?: string | null;
+  portfolioUiSessionUserId?: string | null;
+  portfolioUiSessionReady?: boolean;
+  portfolioResolved?: boolean;
+  portfolioRecommendationRefreshToken?: number;
+};
+
+type RecommendationCacheParts = {
+  userId: string;
+  portfolioId: string;
+  portfolioUiSessionId: string;
+};
+
+function normalizeReadableValue(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
+function getRecommendationCacheParts(
+  portfolioId: string | null | undefined,
+  portfolioUiSessionId: string | null | undefined,
+  portfolioUiSessionUserId: string | null | undefined
+): RecommendationCacheParts | null {
+  const userId = normalizeReadableValue(portfolioUiSessionUserId);
+  const nextPortfolioId = normalizeReadableValue(portfolioId);
+  const sessionId = normalizeReadableValue(portfolioUiSessionId);
+
+  if (!userId || !nextPortfolioId || !sessionId) {
+    return null;
+  }
+
+  return {
+    userId,
+    portfolioId: nextPortfolioId,
+    portfolioUiSessionId: sessionId,
+  };
+}
+
+function buildRecommendationRequestKey(
+  scopeKey: string | null | undefined,
+  portfolioId: string | null | undefined,
+  portfolioUiSessionId: string | null | undefined,
+  refreshToken: number
+): string {
+  return `${scopeKey ?? ""}::${portfolioId ?? ""}::${portfolioUiSessionId ?? ""}::${refreshToken}`;
+}
+
+function resetTradingAgentViewState(setters: {
+  setLatestResult: (value: TradingAgentResult | null) => void;
+  setTrace: (value: TradingAgentTraceEvent[]) => void;
+  setWarnings: (value: string[]) => void;
+  setStatus: (value: TradingAgentRunStatus) => void;
+  setError: (value: string | null) => void;
+  setActiveNodes: (value: string[]) => void;
+  setPreparedContext: (value: TradingAgentPreparedContext | null) => void;
+}) {
+  setters.setLatestResult(null);
+  setters.setTrace([]);
+  setters.setWarnings([]);
+  setters.setStatus("idle");
+  setters.setError(null);
+  setters.setActiveNodes([]);
+  setters.setPreparedContext(null);
+}
 
 function humanizeNodeLabel(node: string): string {
   return node
@@ -74,7 +145,15 @@ function parseSseBlock(block: string): { event: string; data: string } | null {
   };
 }
 
-export function useTradingAgentAnalysis(scopeKey?: string | null): UseTradingAgentAnalysisResult {
+export function useTradingAgentAnalysis({
+  scopeKey,
+  portfolioId,
+  portfolioUiSessionId,
+  portfolioUiSessionUserId,
+  portfolioUiSessionReady = true,
+  portfolioResolved = true,
+  portfolioRecommendationRefreshToken = 0,
+}: UseTradingAgentAnalysisOptions): UseTradingAgentAnalysisResult {
   const [recommendation, setRecommendation] = useState<PortfolioAIRecommendation | null>(null);
   const [latestResult, setLatestResult] = useState<TradingAgentResult | null>(null);
   const [preparedContext, setPreparedContext] = useState<TradingAgentPreparedContext | null>(null);
@@ -84,6 +163,19 @@ export function useTradingAgentAnalysis(scopeKey?: string | null): UseTradingAge
   const [error, setError] = useState<string | null>(null);
   const [activeNodes, setActiveNodes] = useState<string[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const recommendationCacheParts = getRecommendationCacheParts(
+    portfolioId,
+    portfolioUiSessionId,
+    portfolioUiSessionUserId
+  );
+
+  const persistRecommendationToCache = (nextRecommendation: PortfolioAIRecommendation | null) => {
+    if (!nextRecommendation || !recommendationCacheParts) {
+      return;
+    }
+
+    writePortfolioAIRecommendationCache(recommendationCacheParts, nextRecommendation);
+  };
 
   useEffect(() => {
     return () => {
@@ -91,41 +183,67 @@ export function useTradingAgentAnalysis(scopeKey?: string | null): UseTradingAge
     };
   }, []);
 
+  useLayoutEffect(() => {
+    abortControllerRef.current?.abort();
+    resetTradingAgentViewState({
+      setLatestResult,
+      setTrace,
+      setWarnings,
+      setStatus,
+      setError,
+      setActiveNodes,
+      setPreparedContext,
+    });
+
+    if (!scopeKey?.trim() || !portfolioResolved || !recommendationCacheParts) {
+      setRecommendation(null);
+      return;
+    }
+
+    const cachedRecommendation = readPortfolioAIRecommendationCache(recommendationCacheParts);
+    setRecommendation(cachedRecommendation?.recommendation ?? null);
+  }, [
+    portfolioId,
+    portfolioResolved,
+    portfolioUiSessionId,
+    portfolioUiSessionUserId,
+    portfolioRecommendationRefreshToken,
+    scopeKey,
+  ]);
+
   useEffect(() => {
     let isCancelled = false;
-    abortControllerRef.current?.abort();
-    setRecommendation(null);
-    setLatestResult(null);
-    setTrace([]);
-    setWarnings([]);
-    setStatus("idle");
-    setError(null);
-    setActiveNodes([]);
-    setPreparedContext(null);
 
     const loadLatestRecommendation = async () => {
-      if (!scopeKey?.trim()) {
+      if (!scopeKey?.trim() || !portfolioResolved || !portfolioUiSessionReady) {
         return;
       }
 
-      const now = Date.now();
-      const lastRequestedAt = latestRecommendationRequestAt.get(scopeKey) ?? 0;
-      if (now - lastRequestedAt < RECOMMENDATION_LOAD_COOLDOWN_MS) {
+      if (!recommendationCacheParts) {
         return;
       }
-      latestRecommendationRequestAt.set(scopeKey, now);
 
       try {
-        const supabase = await createSupabaseBrowserClient();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (!session?.access_token) {
+        const requestKey = buildRecommendationRequestKey(
+          scopeKey,
+          portfolioId,
+          portfolioUiSessionId,
+          portfolioRecommendationRefreshToken
+        );
+        const lastRequestedAt = latestRecommendationRequestAt.get(requestKey) ?? 0;
+        const now = Date.now();
+        if (now - lastRequestedAt < RECOMMENDATION_LOAD_COOLDOWN_MS) {
           return;
         }
+        latestRecommendationRequestAt.set(requestKey, now);
 
-        const response = await fetchWithSupabaseAuth(`/api/ai/analyze-trading-agent?portfolioName=${encodeURIComponent(scopeKey)}`, {
+        const url = new URL("/api/ai/analyze-trading-agent", window.location.origin);
+        url.searchParams.set("portfolioName", scopeKey);
+        if (portfolioUiSessionId) {
+          url.searchParams.set("portfolioUiSessionId", portfolioUiSessionId);
+        }
+
+        const response = await fetchWithSupabaseAuth(url.toString(), {
           cache: "no-store",
         });
         const payload = (await response.json().catch(() => null)) as
@@ -136,7 +254,10 @@ export function useTradingAgentAnalysis(scopeKey?: string | null): UseTradingAge
           return;
         }
 
-        setRecommendation(payload?.recommendation ?? null);
+        const nextRecommendation = payload?.recommendation ?? null;
+        setRecommendation(nextRecommendation);
+
+        persistRecommendationToCache(nextRecommendation);
       } catch {
         return;
       }
@@ -147,7 +268,15 @@ export function useTradingAgentAnalysis(scopeKey?: string | null): UseTradingAge
     return () => {
       isCancelled = true;
     };
-  }, [scopeKey]);
+  }, [
+    portfolioId,
+    portfolioResolved,
+    portfolioUiSessionId,
+    portfolioUiSessionReady,
+    portfolioUiSessionUserId,
+    portfolioRecommendationRefreshToken,
+    scopeKey,
+  ]);
 
   const analyze = async ({ portfolioName }: AnalyzeInput) => {
     if (!portfolioName.trim() || status === "streaming") {
@@ -172,7 +301,7 @@ export function useTradingAgentAnalysis(scopeKey?: string | null): UseTradingAge
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ portfolioName }),
+        body: JSON.stringify({ portfolioName, portfolioUiSessionId }),
         signal: abortController.signal,
       });
 
@@ -231,6 +360,7 @@ export function useTradingAgentAnalysis(scopeKey?: string | null): UseTradingAge
                 setActiveNodes([]);
                 setError(donePayload.result.error || donePayload.warning);
                 setStatus(donePayload.result.status === "error" ? "error" : "completed");
+                persistRecommendationToCache(donePayload.recommendation);
                 didComplete = true;
               }
 
