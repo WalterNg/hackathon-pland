@@ -105,6 +105,7 @@ function PortfolioContent() {
   });
   const isMainPortfolio = useMemo(() => portfolioName === DEFAULT_PORTFOLIO_NAME, [portfolioName]);
   const tradingAgentScopeKey = isMainPortfolio ? null : portfolioName;
+  const aiHistoryHref = isMainPortfolio ? null : `/ai-history?name=${encodeURIComponent(portfolioName)}`;
 
   const currentPortfolio = useMemo(
     () => portfolios.find((portfolio) => portfolio.name === portfolioName) ?? null,
@@ -369,6 +370,7 @@ function PortfolioContent() {
         <div className="w-full">
           <AppTopNavigation
             portfolioHref={`/portfolio?name=${encodeURIComponent(portfolioName)}`}
+            aiHistoryHref={aiHistoryHref}
             riskHref={riskManagementHref}
             riskRulesHref={riskRulesHref}
             milestonesHref={isMainPortfolio ? null : `/milestones?name=${encodeURIComponent(portfolioName)}`}

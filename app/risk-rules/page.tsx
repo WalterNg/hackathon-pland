@@ -79,6 +79,7 @@ function quickMetric(label: string, value: string) {
 function RiskRulesPageContent() {
   const searchParams = useSearchParams();
   const portfolioName = searchParams.get("name")?.trim() || DEFAULT_PORTFOLIO_NAME;
+  const isMainPortfolio = portfolioName === DEFAULT_PORTFOLIO_NAME;
   const { portfolios } = usePortfolios();
 
   const currentPortfolio = useMemo(
@@ -88,6 +89,7 @@ function RiskRulesPageContent() {
 
   const portfolioHref = `/portfolio?name=${encodeURIComponent(portfolioName)}`;
   const riskRulesHref = `/risk-rules?name=${encodeURIComponent(portfolioName)}`;
+  const aiHistoryHref = isMainPortfolio ? null : `/ai-history?name=${encodeURIComponent(portfolioName)}`;
 
   const { snapshot } = usePortfolioSnapshot(currentPortfolio?.id ?? null, portfolioName);
 
@@ -139,7 +141,7 @@ function RiskRulesPageContent() {
     <AuthGuard>
       <div className="flex min-h-screen flex-col bg-background">
         <header className="border-b border-border px-6 py-3">
-          <AppTopNavigation portfolioHref={portfolioHref} riskRulesHref={riskRulesHref} />
+          <AppTopNavigation portfolioHref={portfolioHref} aiHistoryHref={aiHistoryHref} riskRulesHref={riskRulesHref} />
         </header>
 
         <div className="flex flex-1">

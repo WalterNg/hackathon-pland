@@ -202,6 +202,25 @@ export type PortfolioAIRecommendation = {
   metadata?: PortfolioAIRecommendationMetadata;
 };
 
+export type PortfolioAIRecommendationHistoryItem = {
+  id: string;
+  analyzedAt: string;
+  createdAt: string;
+  action: AIAnalysisAction;
+  confidence: number;
+  portfolioUiSessionId: string | null;
+  recommendation: PortfolioAIRecommendation;
+};
+
+export type PortfolioAIRecommendationHistoryPage = {
+  items: PortfolioAIRecommendationHistoryItem[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  hasNextPage: boolean;
+};
+
 export type DashboardRecentTransaction = {
   id: string;
   portfolioName: string;

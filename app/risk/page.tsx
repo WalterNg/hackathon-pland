@@ -38,6 +38,7 @@ function RiskPageContent() {
   const alertStatus = parseAlertStatus(searchParams.get("status"));
   const focus = searchParams.get("focus");
   const isMainPortfolio = portfolioName === DEFAULT_PORTFOLIO_NAME;
+  const aiHistoryHref = isMainPortfolio ? null : `/ai-history?name=${encodeURIComponent(portfolioName)}`;
   const { portfolios } = usePortfolios();
   const currentPortfolio = useMemo(
     () => portfolios.find((portfolio) => portfolio.name === portfolioName) ?? null,
@@ -154,7 +155,7 @@ function RiskPageContent() {
 
   return (
     <>
-      <RiskHeader portfolioHref={portfolioHref} riskHref={riskHref} />
+      <RiskHeader portfolioHref={portfolioHref} aiHistoryHref={aiHistoryHref} riskHref={riskHref} />
 
       <div className="app-shell flex overflow-hidden">
         <Sidebar portfolios={portfolios} sectionPath="/risk" />
