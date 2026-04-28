@@ -4,7 +4,7 @@ import { buildBinancePortfolioSnapshot } from "@/app/lib/binance-portfolio";
 import { deriveRecommendationMetadata } from "@/app/lib/portfolio-ai-actions";
 import { buildPortfolioAIEvidence } from "@/app/lib/portfolio-ai-evidence";
 import type { PortfolioAIRecommendation } from "@/app/lib/portfolio-types";
-import type { TradingAgentResult } from "@/app/lib/trading-agent-types";
+import type { TradingAgentPreparedContext, TradingAgentResult, TradingAgentStepEvent } from "@/app/lib/trading-agent-types";
 import { savePortfolioAIRecommendation } from "@/app/lib/repositories/portfolio-ai-recommendations-repo";
 import { getActiveRiskProfileByPortfolio, listRiskAlerts } from "@/app/lib/repositories/risk-repo";
 import { getUserPortfolioPositions } from "@/app/lib/repositories/portfolio-repo";
@@ -121,10 +121,12 @@ function buildRecommendation(
   snapshot: Awaited<ReturnType<typeof buildBinancePortfolioSnapshot>>,
   activeAlerts: Awaited<ReturnType<typeof listRiskAlerts>>,
   activeRiskProfile: Awaited<ReturnType<typeof getActiveRiskProfileByPortfolio>>,
-  portfolioUiSessionId: string | null
+  portfolioUiSessionId: string | null,
+  preparedContext: TradingAgentPreparedContext | null
 ): PortfolioAIRecommendation {
   const recommendationBase: PortfolioAIRecommendation = {
     portfolioUiSessionId,
+    preparedContext,
     action: payload.final_decision?.action ?? "Hold",
     confidence: payload.final_decision?.confidence ?? 5,
     summary: payload.final_decision?.summary ?? "Trading agent completed without a final summary.",
@@ -134,6 +136,7 @@ function buildRecommendation(
     snapshotTimestamp: snapshot.summary.timestamp,
     evidence: buildPortfolioAIEvidence(snapshot),
     workflowVersion: payload.workflow_version || WORKFLOW_VERSION,
+    analysisResult: payload,
     signals: [
       {
         label: "TA",
@@ -236,6 +239,7 @@ export async function POST(request: Request) {
       }
 
       let buffer = "";
+      let latestPreparedContext: TradingAgentPreparedContext | null = null;
 
       const emit = (event: string, data: unknown) => {
         controller.enqueue(encoder.encode(sse(event, data)));
@@ -268,7 +272,8 @@ export async function POST(request: Request) {
             snapshot,
             activeAlerts,
             activeRiskProfile,
-            portfolioUiSessionId
+            portfolioUiSessionId,
+            latestPreparedContext
           );
           await savePortfolioAIRecommendation(
             supabase,
@@ -284,6 +289,11 @@ export async function POST(request: Request) {
             result,
           });
           return;
+        }
+
+        const stepPayload = payload as TradingAgentStepEvent;
+        if (stepPayload.state?.prepared_context) {
+          latestPreparedContext = stepPayload.state.prepared_context;
         }
 
         emit(parsed.event, payload);

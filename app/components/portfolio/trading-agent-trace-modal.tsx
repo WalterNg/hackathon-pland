@@ -8,6 +8,11 @@ import type {
   TradingAgentResult,
   TradingAgentTraceEvent,
 } from "@/app/lib/trading-agent-types";
+import {
+  DetailSectionView as SharedDetailSectionView,
+  PrepareContextExplainPanel as SharedPrepareContextExplainPanel,
+  buildTradingAgentTraceStepDetail,
+} from "./trading-agent-trace-content";
 
 /* ---------------------------------------------------------------------------
  * Types
@@ -735,7 +740,12 @@ function StepDetailPanel({
   portfolioName: string;
   warnings: string[];
 }) {
-  const content = buildStepDetail(phase, result, trace, portfolioName);
+  const traceDetail = trace.find((event) => event.step === phase.id)?.detail;
+  const content = buildTradingAgentTraceStepDetail(phase, {
+    result,
+    preparedContext,
+    traceDetail,
+  });
   const normalizedBearCase = result?.investment_debate?.bear_case?.trim() || "";
   const hasBearCaseFallbackWarning = warnings.some((warning) =>
     warning.toLowerCase().includes(BEAR_CASE_FALLBACK_WARNING_FRAGMENT)
@@ -799,38 +809,10 @@ function StepDetailPanel({
 
       {/* Content sections */}
       {phase.id === "prepare_context" ? (
-        <PrepareContextExplainPanel preparedContext={preparedContext} warnings={warnings} />
+        <SharedPrepareContextExplainPanel preparedContext={preparedContext} warnings={warnings} />
       ) : (
-      content.sections && content.sections.map((sec) =>
-        sec.items.length > 0 ? (
-          <div key={sec.heading}>
-            <p className="mb-2 text-[0.72rem] font-bold uppercase tracking-[0.18em] text-slate-500">{sec.heading}</p>
-            <div className="space-y-2">
-              {sec.items.map((item, i) => {
-                const sentiment = !sec.isChecklist 
-                  ? (sec.forcedSentiment 
-                      ? getSentimentInfo({ text: "", sentiment: sec.forcedSentiment }) 
-                      : getSentimentInfo(item)) 
-                  : null;
-                return (
-                  <div
-                    key={i}
-                    className={`relative overflow-hidden flex items-center gap-2.5 rounded-xl border border-white/8 bg-[#0d1117] px-3.5 py-2.5 text-[0.83rem] leading-relaxed text-slate-300 ${sentiment?.bg || ""}`}
-                  >
-                    {!sec.isChecklist && sentiment && (
-                      <div className={`absolute left-0 top-0 bottom-0 w-0.75 ${sentiment.dot} opacity-70`} />
-                    )}
-                    {sec.isChecklist && (
-                      <MaterialIcon name="check_circle" outlined={false} className="text-success-dim flex h-5 w-5 shrink-0 items-center justify-center text-[0.9rem] leading-none" />
-                    )}
-                    <span className="flex-1 whitespace-pre-wrap">{typeof item === "string" ? item : item.text}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : null
-      ))}
+        content.sections?.map((section) => <SharedDetailSectionView key={section.heading} section={section} />)
+      )}
 
       {/* No data fallback */}
       {phase.id !== "prepare_context" &&

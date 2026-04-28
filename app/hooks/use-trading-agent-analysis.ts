@@ -12,10 +12,7 @@ import type {
   TradingAgentStreamStartEvent,
   TradingAgentTraceEvent,
 } from "@/app/lib/trading-agent-types";
-import {
-  readPortfolioAIRecommendationCache,
-  writePortfolioAIRecommendationCache,
-} from "@/app/lib/ai-recommendation-cache";
+import { buildTradingAgentResultFromRecommendation } from "@/app/lib/trading-agent-rehydration";
 import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 type TradingAgentRunStatus = "idle" | "streaming" | "completed" | "error";
@@ -48,42 +45,10 @@ type UseTradingAgentAnalysisOptions = {
   scopeKey?: string | null;
   portfolioId?: string | null;
   portfolioUiSessionId?: string | null;
-  portfolioUiSessionUserId?: string | null;
   portfolioUiSessionReady?: boolean;
   portfolioResolved?: boolean;
   portfolioRecommendationRefreshToken?: number;
 };
-
-type RecommendationCacheParts = {
-  userId: string;
-  portfolioId: string;
-  portfolioUiSessionId: string;
-};
-
-function normalizeReadableValue(value: string | null | undefined): string | null {
-  const normalized = value?.trim();
-  return normalized ? normalized : null;
-}
-
-function getRecommendationCacheParts(
-  portfolioId: string | null | undefined,
-  portfolioUiSessionId: string | null | undefined,
-  portfolioUiSessionUserId: string | null | undefined
-): RecommendationCacheParts | null {
-  const userId = normalizeReadableValue(portfolioUiSessionUserId);
-  const nextPortfolioId = normalizeReadableValue(portfolioId);
-  const sessionId = normalizeReadableValue(portfolioUiSessionId);
-
-  if (!userId || !nextPortfolioId || !sessionId) {
-    return null;
-  }
-
-  return {
-    userId,
-    portfolioId: nextPortfolioId,
-    portfolioUiSessionId: sessionId,
-  };
-}
 
 function buildRecommendationRequestKey(
   scopeKey: string | null | undefined,
@@ -94,22 +59,31 @@ function buildRecommendationRequestKey(
   return `${scopeKey ?? ""}::${portfolioId ?? ""}::${portfolioUiSessionId ?? ""}::${refreshToken}`;
 }
 
-function resetTradingAgentViewState(setters: {
-  setLatestResult: (value: TradingAgentResult | null) => void;
-  setTrace: (value: TradingAgentTraceEvent[]) => void;
-  setWarnings: (value: string[]) => void;
-  setStatus: (value: TradingAgentRunStatus) => void;
-  setError: (value: string | null) => void;
-  setActiveNodes: (value: string[]) => void;
-  setPreparedContext: (value: TradingAgentPreparedContext | null) => void;
-}) {
-  setters.setLatestResult(null);
-  setters.setTrace([]);
-  setters.setWarnings([]);
-  setters.setStatus("idle");
-  setters.setError(null);
+function restoreTradingAgentState(
+  recommendation: PortfolioAIRecommendation | null,
+  setters: {
+    setRecommendation: (value: PortfolioAIRecommendation | null) => void;
+    setLatestResult: (value: TradingAgentResult | null) => void;
+    setTrace: (value: TradingAgentTraceEvent[]) => void;
+    setWarnings: (value: string[]) => void;
+    setStatus: (value: TradingAgentRunStatus) => void;
+    setError: (value: string | null) => void;
+    setActiveNodes: (value: string[]) => void;
+    setPreparedContext: (value: TradingAgentPreparedContext | null) => void;
+  }
+) {
+  const restoredResult = recommendation
+    ? recommendation.analysisResult ?? buildTradingAgentResultFromRecommendation(recommendation)
+    : null;
+
+  setters.setRecommendation(recommendation);
+  setters.setLatestResult(restoredResult);
+  setters.setTrace(restoredResult?.trace ?? []);
+  setters.setWarnings(restoredResult?.warnings ?? []);
+  setters.setStatus(restoredResult ? (restoredResult.status === "error" ? "error" : "completed") : recommendation ? "completed" : "idle");
+  setters.setError(restoredResult?.error ?? null);
   setters.setActiveNodes([]);
-  setters.setPreparedContext(null);
+  setters.setPreparedContext(recommendation?.preparedContext ?? null);
 }
 
 function humanizeNodeLabel(node: string): string {
@@ -149,7 +123,6 @@ export function useTradingAgentAnalysis({
   scopeKey,
   portfolioId,
   portfolioUiSessionId,
-  portfolioUiSessionUserId,
   portfolioUiSessionReady = true,
   portfolioResolved = true,
   portfolioRecommendationRefreshToken = 0,
@@ -163,19 +136,6 @@ export function useTradingAgentAnalysis({
   const [error, setError] = useState<string | null>(null);
   const [activeNodes, setActiveNodes] = useState<string[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const recommendationCacheParts = getRecommendationCacheParts(
-    portfolioId,
-    portfolioUiSessionId,
-    portfolioUiSessionUserId
-  );
-
-  const persistRecommendationToCache = (nextRecommendation: PortfolioAIRecommendation | null) => {
-    if (!nextRecommendation || !recommendationCacheParts) {
-      return;
-    }
-
-    writePortfolioAIRecommendationCache(recommendationCacheParts, nextRecommendation);
-  };
 
   useEffect(() => {
     return () => {
@@ -185,7 +145,8 @@ export function useTradingAgentAnalysis({
 
   useLayoutEffect(() => {
     abortControllerRef.current?.abort();
-    resetTradingAgentViewState({
+    restoreTradingAgentState(null, {
+      setRecommendation,
       setLatestResult,
       setTrace,
       setWarnings,
@@ -194,19 +155,10 @@ export function useTradingAgentAnalysis({
       setActiveNodes,
       setPreparedContext,
     });
-
-    if (!scopeKey?.trim() || !portfolioResolved || !recommendationCacheParts) {
-      setRecommendation(null);
-      return;
-    }
-
-    const cachedRecommendation = readPortfolioAIRecommendationCache(recommendationCacheParts);
-    setRecommendation(cachedRecommendation?.recommendation ?? null);
   }, [
     portfolioId,
     portfolioResolved,
     portfolioUiSessionId,
-    portfolioUiSessionUserId,
     portfolioRecommendationRefreshToken,
     scopeKey,
   ]);
@@ -216,10 +168,6 @@ export function useTradingAgentAnalysis({
 
     const loadLatestRecommendation = async () => {
       if (!scopeKey?.trim() || !portfolioResolved || !portfolioUiSessionReady) {
-        return;
-      }
-
-      if (!recommendationCacheParts) {
         return;
       }
 
@@ -254,10 +202,16 @@ export function useTradingAgentAnalysis({
           return;
         }
 
-        const nextRecommendation = payload?.recommendation ?? null;
-        setRecommendation(nextRecommendation);
-
-        persistRecommendationToCache(nextRecommendation);
+        restoreTradingAgentState(payload?.recommendation ?? null, {
+          setRecommendation,
+          setLatestResult,
+          setTrace,
+          setWarnings,
+          setStatus,
+          setError,
+          setActiveNodes,
+          setPreparedContext,
+        });
       } catch {
         return;
       }
@@ -273,7 +227,6 @@ export function useTradingAgentAnalysis({
     portfolioResolved,
     portfolioUiSessionId,
     portfolioUiSessionReady,
-    portfolioUiSessionUserId,
     portfolioRecommendationRefreshToken,
     scopeKey,
   ]);
@@ -353,18 +306,25 @@ export function useTradingAgentAnalysis({
 
               if (parsed.event === "done") {
                 const donePayload = parsedPayload as TradingAgentStreamDoneEvent;
-                setRecommendation(donePayload.recommendation);
-                setLatestResult(donePayload.result);
-                setTrace(donePayload.result.trace);
-                setWarnings(donePayload.result.warnings);
-                setActiveNodes([]);
-                setError(donePayload.result.error || donePayload.warning);
-                setStatus(donePayload.result.status === "error" ? "error" : "completed");
-                persistRecommendationToCache(donePayload.recommendation);
-                didComplete = true;
-              }
+                const nextRecommendation: PortfolioAIRecommendation = {
+                  ...donePayload.recommendation,
+                  analysisResult: donePayload.result,
+                  preparedContext,
+                };
 
-              if (parsed.event === "error") {
+                restoreTradingAgentState(nextRecommendation, {
+                  setRecommendation,
+                  setLatestResult,
+                  setTrace,
+                  setWarnings,
+                  setStatus,
+                  setError,
+                  setActiveNodes,
+                  setPreparedContext,
+                });
+                setError(donePayload.result.error || donePayload.warning);
+                didComplete = true;
+              } else if (parsed.event === "error") {
                 const errorPayload = parsedPayload as TradingAgentStreamErrorEvent;
                 throw new Error(errorPayload.message || "Trading agent stream failed.");
               }

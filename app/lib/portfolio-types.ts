@@ -189,6 +189,7 @@ export type PortfolioAIRecommendationMetadata = {
 
 export type PortfolioAIRecommendation = {
   portfolioUiSessionId?: string | null;
+  preparedContext?: import("@/app/lib/trading-agent-types").TradingAgentPreparedContext | null;
   action: AIAnalysisAction;
   confidence: number;
   summary: string;
@@ -200,6 +201,7 @@ export type PortfolioAIRecommendation = {
   evidence: PortfolioAIAnalysisEvidence;
   workflowVersion?: string;
   metadata?: PortfolioAIRecommendationMetadata;
+  analysisResult?: import("@/app/lib/trading-agent-types").TradingAgentResult | null;
 };
 
 export type PortfolioAIRecommendationHistoryItem = {

@@ -24,7 +24,6 @@ import { usePortfolioUiSession } from "../hooks/use-portfolio-ui-session";
 import { usePortfolios } from "../hooks/use-portfolios";
 import { usePortfolioSnapshotCertificates } from "../hooks/use-portfolio-snapshot-certificates";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
-import { clearPortfolioAIRecommendationCache } from "@/app/lib/ai-recommendation-cache";
 import { RefreshIntervals } from "@/app/lib/refresh-intervals";
 import type { PortfolioMode, PortfolioSnapshot } from "@/app/lib/portfolio-types";
 
@@ -114,7 +113,6 @@ function PortfolioContent() {
   const portfolioId = currentPortfolio?.id ?? null;
   const {
     portfolioUiSessionId,
-    portfolioUiSessionUserId,
     isReady: isPortfolioUiSessionReady,
   } = usePortfolioUiSession(portfolioId);
   const {
@@ -132,7 +130,6 @@ function PortfolioContent() {
     scopeKey: tradingAgentScopeKey,
     portfolioId,
     portfolioUiSessionId,
-    portfolioUiSessionUserId,
     portfolioUiSessionReady: isPortfolioUiSessionReady,
     portfolioResolved: portfolioId !== null,
     portfolioRecommendationRefreshToken: tradingAgentRecommendationRefreshToken,
@@ -160,14 +157,6 @@ function PortfolioContent() {
   const scopedSnapshot = snapshot?.summary.name === portfolioName ? snapshot : null;
 
   const invalidateTradingAgentRecommendationCache = () => {
-    if (portfolioUiSessionUserId && portfolioId && portfolioUiSessionId) {
-      clearPortfolioAIRecommendationCache({
-        userId: portfolioUiSessionUserId,
-        portfolioId,
-        portfolioUiSessionId,
-      });
-    }
-
     setTradingAgentRecommendationRefreshToken((value) => value + 1);
   };
 
