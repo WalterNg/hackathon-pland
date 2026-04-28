@@ -48,6 +48,7 @@ TradingAgents/
 .understand-anything/
 .cursor/
 .claude/
+AGENTS.md
 
 # Data files
 backend/scripts/data_model/

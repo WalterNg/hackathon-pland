@@ -2,6 +2,8 @@
 
 import type { PortfolioAIRecommendationHistoryItem } from "@/app/lib/portfolio-types";
 
+import { confidenceTone, groupByDate } from "./ai-recommendation-history-utils";
+
 type Props = {
   items: PortfolioAIRecommendationHistoryItem[];
   page: number;
@@ -9,66 +11,22 @@ type Props = {
   isLoading: boolean;
   error: string | null;
   onPageChange: (page: number) => void;
+  onSelectItem: (item: PortfolioAIRecommendationHistoryItem) => void;
 };
-
-function formatDateLabel(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-  }).format(date);
-}
-
-function groupByDate(items: PortfolioAIRecommendationHistoryItem[]) {
-  return items.reduce<Array<{ dateLabel: string; items: PortfolioAIRecommendationHistoryItem[] }>>(
-    (groups, item) => {
-      const dateLabel = formatDateLabel(item.recommendation.analyzedAt);
-      const lastGroup = groups[groups.length - 1];
-
-      if (lastGroup && lastGroup.dateLabel === dateLabel) {
-        lastGroup.items.push(item);
-        return groups;
-      }
-
-      groups.push({
-        dateLabel,
-        items: [item],
-      });
-
-      return groups;
-    },
-    []
-  );
-}
-
-function confidenceTone(action: string): string {
-  if (action === "Accumulate") {
-    return "text-success-soft";
-  }
-
-  if (action === "Reduce Risk" || action === "Stop Loss") {
-    return "text-rose-300";
-  }
-
-  if (action === "Rebalance") {
-    return "text-amber-300";
-  }
-
-  return "text-strong";
-}
 
 function RecommendationRow({
   item,
+  onSelectItem,
 }: {
   item: PortfolioAIRecommendationHistoryItem;
+  onSelectItem: (item: PortfolioAIRecommendationHistoryItem) => void;
 }) {
   return (
-    <article
+    <button
+      type="button"
+      onClick={() => onSelectItem(item)}
       className={[
-        "rounded-2xl border border-white/6 bg-(--surface-container-low) px-4 py-4 transition-colors hover:border-white/10 hover:bg-white/[0.035]",
+        "w-full rounded-2xl border border-white/5 bg-(--surface-container-low) px-4 py-4 text-left transition-colors hover:border-white/10 hover:bg-white/[0.035] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50",
         "min-h-36",
       ].join(" ")}
     >
@@ -85,7 +43,7 @@ function RecommendationRow({
           <p className={`mt-1 text-lg font-bold ${confidenceTone(item.recommendation.action)}`}>{item.recommendation.confidence}/10</p>
         </div>
       </div>
-    </article>
+    </button>
   );
 }
 
@@ -107,7 +65,7 @@ function PaginationBar({
         type="button"
         onClick={() => onPageChange(page - 1)}
         disabled={!canGoPrev}
-        className="inline-flex items-center gap-1.5 rounded-full border border-white/6 px-3 py-2 font-medium text-muted transition-colors hover:border-white/10 hover:bg-white/3 hover:text-strong disabled:cursor-not-allowed disabled:opacity-40"
+        className="inline-flex items-center gap-1.5 rounded-full border border-white/6 px-3 py-2 font-medium text-muted transition-colors hover:border-white/10 hover:bg-white/[0.03] hover:text-strong disabled:cursor-not-allowed disabled:opacity-40"
       >
         <span>Prev</span>
       </button>
@@ -120,7 +78,7 @@ function PaginationBar({
         type="button"
         onClick={() => onPageChange(page + 1)}
         disabled={!canGoNext}
-        className="inline-flex items-center gap-1.5 rounded-full border border-white/6 px-3 py-2 font-medium text-muted transition-colors hover:border-white/10 hover:bg-white/3 hover:text-strong disabled:cursor-not-allowed disabled:opacity-40"
+        className="inline-flex items-center gap-1.5 rounded-full border border-white/6 px-3 py-2 font-medium text-muted transition-colors hover:border-white/10 hover:bg-white/[0.03] hover:text-strong disabled:cursor-not-allowed disabled:opacity-40"
       >
         <span>Next</span>
       </button>
@@ -135,6 +93,7 @@ export function AiRecommendationHistoryList({
   isLoading,
   error,
   onPageChange,
+  onSelectItem,
 }: Props) {
   if (isLoading) {
     return (
@@ -169,16 +128,19 @@ export function AiRecommendationHistoryList({
 
   return (
     <div className="space-y-4">
-      <div className="space-y-4">
+      <div className="space-y-5">
         {groupedItems.map((group) => (
-          <section key={group.dateLabel} className="space-y-2">
-            <div className="px-1 text-xs font-semibold uppercase tracking-[0.22em] text-muted">
+          <section key={group.dateLabel} className="relative space-y-3 pl-6">
+            <div className="absolute left-2 top-7 bottom-0 w-px bg-white/6" />
+
+            <div className="inline-flex items-center gap-2 px-1 text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-muted">
+              <span className="h-2 w-2 rounded-full bg-rose-300/70" />
               {group.dateLabel}
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {group.items.map((item) => (
-                <RecommendationRow key={item.id} item={item} />
+                <RecommendationRow key={item.id} item={item} onSelectItem={onSelectItem} />
               ))}
             </div>
           </section>

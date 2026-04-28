@@ -1,18 +1,20 @@
 "use client";
 
-import { Suspense, useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { AuthGuard } from "../components/auth/auth-guard";
 import { AppTopNavigation } from "../components/ui/app-top-navigation";
 import { Sidebar } from "../components/ui/sidebar";
 import { AiRecommendationHistoryList } from "../components/portfolio/ai-recommendation-history-list";
+import { AiRecommendationHistoryTraceModal } from "../components/portfolio/ai-recommendation-history-trace-modal";
 import { usePortfolioAIRecommendationHistory } from "../hooks/use-portfolio-ai-recommendation-history";
 import { usePortfolioUiSession } from "../hooks/use-portfolio-ui-session";
 import { usePortfolios } from "../hooks/use-portfolios";
+import type { PortfolioAIRecommendationHistoryItem } from "../lib/portfolio-types";
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
-const HISTORY_PAGE_SIZE = 10;
+const HISTORY_PAGE_SIZE = 5;
 
 function parsePage(value: string | null): number {
   if (!value) {
@@ -30,6 +32,7 @@ function parsePage(value: string | null): number {
 function AiHistoryPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [selectedItem, setSelectedItem] = useState<PortfolioAIRecommendationHistoryItem | null>(null);
   const portfolioName = searchParams.get("name")?.trim() || DEFAULT_PORTFOLIO_NAME;
   const page = parsePage(searchParams.get("page"));
   const { portfolios } = usePortfolios();
@@ -145,10 +148,18 @@ function AiHistoryPageContent() {
               isLoading={isInitialLoading}
               error={error}
               onPageChange={(nextPage) => updateSearchParams({ page: String(nextPage) })}
+              onSelectItem={setSelectedItem}
             />
           </div>
         </main>
       </div>
+
+      <AiRecommendationHistoryTraceModal
+        open={selectedItem !== null}
+        item={selectedItem}
+        portfolioName={portfolioName}
+        onClose={() => setSelectedItem(null)}
+      />
     </>
   );
 }
