@@ -65,7 +65,7 @@ function PaginationBar({
         type="button"
         onClick={() => onPageChange(page - 1)}
         disabled={!canGoPrev}
-        className="inline-flex items-center gap-1.5 rounded-full border border-white/6 px-3 py-2 font-medium text-muted transition-colors hover:border-white/10 hover:bg-white/[0.03] hover:text-strong disabled:cursor-not-allowed disabled:opacity-40"
+        className="inline-flex items-center gap-1.5 rounded-full border border-white/6 px-3 py-2 font-medium text-muted transition-colors hover:border-white/10 hover:bg-white/3 hover:text-strong disabled:cursor-not-allowed disabled:opacity-40"
       >
         <span>Prev</span>
       </button>
@@ -78,7 +78,7 @@ function PaginationBar({
         type="button"
         onClick={() => onPageChange(page + 1)}
         disabled={!canGoNext}
-        className="inline-flex items-center gap-1.5 rounded-full border border-white/6 px-3 py-2 font-medium text-muted transition-colors hover:border-white/10 hover:bg-white/[0.03] hover:text-strong disabled:cursor-not-allowed disabled:opacity-40"
+        className="inline-flex items-center gap-1.5 rounded-full border border-white/6 px-3 py-2 font-medium text-muted transition-colors hover:border-white/10 hover:bg-white/3 hover:text-strong disabled:cursor-not-allowed disabled:opacity-40"
       >
         <span>Next</span>
       </button>

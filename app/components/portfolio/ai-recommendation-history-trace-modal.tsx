@@ -695,7 +695,7 @@ function Sidebar({
                 onClick={() => onSelect(phase.id)}
                 className={[
                   "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-150",
-                  isSelected ? "bg-white/6 border-l-2 border-l-sky-400" : isDone ? "bg-white/[0.015] hover:bg-white/4" : "hover:bg-white/4",
+                  isSelected ? "bg-white/6 border-l-2 border-l-sky-400" : isDone ? "bg-white/1.5 hover:bg-white/4" : "hover:bg-white/4",
                 ].join(" ")}
               >
                 <div className="shrink-0">
