@@ -113,6 +113,7 @@ function PortfolioContent() {
   const portfolioId = currentPortfolio?.id ?? null;
   const {
     portfolioUiSessionId,
+    portfolioUiSessionUserId,
     isReady: isPortfolioUiSessionReady,
   } = usePortfolioUiSession(portfolioId);
   const {
@@ -130,6 +131,7 @@ function PortfolioContent() {
     scopeKey: tradingAgentScopeKey,
     portfolioId,
     portfolioUiSessionId,
+    portfolioUiSessionUserId,
     portfolioUiSessionReady: isPortfolioUiSessionReady,
     portfolioResolved: portfolioId !== null,
     portfolioRecommendationRefreshToken: tradingAgentRecommendationRefreshToken,
