@@ -7,15 +7,10 @@ import type { PortfolioAIRecommendation } from "@/app/lib/portfolio-types";
 import { getLatestPortfolioAIRecommendation, savePortfolioAIRecommendation } from "@/app/lib/repositories/portfolio-ai-recommendations-repo";
 import { getActiveRiskProfileByPortfolio, listRiskAlerts } from "@/app/lib/repositories/risk-repo";
 import { getUserPortfolioPositions } from "@/app/lib/repositories/portfolio-repo";
-import { resolveUserPortfolioByName } from "@/app/lib/repositories/portfolios-repo";
-import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
-import { createSupabaseServerClient } from "@/app/lib/supabase/server";
+import { getAuthorizedPortfolio, normalizePortfolioUiSessionId } from "./shared";
 
 export const dynamic = "force-dynamic";
-
-type AnalyzeRequestBody = {
-  portfolioName?: string;
-};
+const WORKFLOW_VERSION = "trading_agent_v1";
 
 type BackendTradingAgentResponse = {
   status: "success" | "error";
@@ -63,8 +58,6 @@ type BackendTradingAgentResponse = {
 };
 
 const DEFAULT_BACKEND_URL = "http://127.0.0.1:8000";
-const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
-const WORKFLOW_VERSION = "trading_agent_v1";
 const STABLE_VALUE_SYMBOLS = new Set(["USDT", "USDC", "FDUSD", "BUSD", "USDS", "TUSD"]);
 
 function backendBaseUrl(): string {
@@ -73,21 +66,6 @@ function backendBaseUrl(): string {
     process.env.BACKEND_API_URL?.trim() ||
     DEFAULT_BACKEND_URL
   );
-}
-
-async function getAuthContext(request: Request) {
-  const authorization = request.headers.get("authorization")?.trim();
-
-  if (authorization) {
-    return getSupabaseAuthContext(request);
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  return { supabase, user };
 }
 
 function normalizeSignalTone(
@@ -111,22 +89,6 @@ function normalizeSignalTone(
     return "Bearish";
   }
   return "Neutral";
-}
-
-async function getAuthorizedPortfolio(request: Request, portfolioNameInput?: string | null) {
-  const { supabase, user } = await getAuthContext(request);
-  const portfolioName = portfolioNameInput?.trim() || DEFAULT_PORTFOLIO_NAME;
-
-  if (!user?.id) {
-    return { supabase, user, portfolio: null, portfolioName };
-  }
-
-  const portfolio = await resolveUserPortfolioByName(supabase, user.id, portfolioName);
-  return { supabase, user, portfolio, portfolioName };
-}
-
-function recommendationPortfolioId(portfolioId: string): string {
-  return `${portfolioId}::${WORKFLOW_VERSION}`;
 }
 
 function buildTradingAgentPortfolioInput(
@@ -162,9 +124,15 @@ function buildTradingAgentPortfolioInput(
   };
 }
 
+type AnalyzeRequestBody = {
+  portfolioName?: string;
+  portfolioUiSessionId?: string | null;
+};
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const context = await getAuthorizedPortfolio(request, searchParams.get("portfolioName"));
+  const portfolioUiSessionId = normalizePortfolioUiSessionId(searchParams.get("portfolioUiSessionId"));
 
   if (!context.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -177,7 +145,8 @@ export async function GET(request: Request) {
   const recommendation = await getLatestPortfolioAIRecommendation(
     context.supabase,
     context.user.id,
-    recommendationPortfolioId(context.portfolio.id)
+    context.portfolio.id,
+    portfolioUiSessionId
   );
 
   return NextResponse.json({ recommendation });
@@ -186,6 +155,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as AnalyzeRequestBody;
   const context = await getAuthorizedPortfolio(request, body.portfolioName);
+  const portfolioUiSessionId = normalizePortfolioUiSessionId(body.portfolioUiSessionId);
 
   if (!context.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -277,6 +247,7 @@ export async function POST(request: Request) {
   };
 
   const recommendation: PortfolioAIRecommendation = {
+    portfolioUiSessionId,
     ...recommendationBase,
     metadata: deriveRecommendationMetadata(recommendationBase, activeAlerts, activeRiskProfile),
   };
@@ -284,7 +255,7 @@ export async function POST(request: Request) {
   await savePortfolioAIRecommendation(
     supabase,
     user.id,
-    recommendationPortfolioId(portfolio.id),
+    portfolio.id,
     recommendation
   );
 

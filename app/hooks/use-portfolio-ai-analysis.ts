@@ -67,7 +67,11 @@ const STEPS: AIAnalysisStep[] = [
   },
 ];
 
-export function usePortfolioAIAnalysis(scopeKey?: string | null): UsePortfolioAIAnalysisResult {
+export function usePortfolioAIAnalysis(
+  scopeKey?: string | null,
+  portfolioUiSessionId?: string | null,
+  portfolioUiSessionReady = true
+): UsePortfolioAIAnalysisResult {
   const [recommendation, setRecommendation] = useState<PortfolioAIRecommendation | null>(null);
   const [isAnalyzing, setAnalyzing] = useState(false);
   const [activeStepId, setActiveStepId] = useState<AIAnalysisStepId | null>(null);
@@ -97,8 +101,18 @@ export function usePortfolioAIAnalysis(scopeKey?: string | null): UsePortfolioAI
         return;
       }
 
+      if (!portfolioUiSessionReady) {
+        return;
+      }
+
       try {
-        const response = await fetch(`/api/ai/analyze?portfolioName=${encodeURIComponent(scopeKey)}`, {
+        const url = new URL("/api/ai/analyze", window.location.origin);
+        url.searchParams.set("portfolioName", scopeKey);
+        if (portfolioUiSessionId) {
+          url.searchParams.set("portfolioUiSessionId", portfolioUiSessionId);
+        }
+
+        const response = await fetch(url.toString(), {
           cache: "no-store",
         });
 
@@ -121,7 +135,7 @@ export function usePortfolioAIAnalysis(scopeKey?: string | null): UsePortfolioAI
     return () => {
       isCancelled = true;
     };
-  }, [scopeKey]);
+  }, [portfolioUiSessionId, portfolioUiSessionReady, scopeKey]);
 
   const analyze = async (input: AnalyzeInput) => {
     if (!input.snapshot || isAnalyzing) {
@@ -164,6 +178,7 @@ export function usePortfolioAIAnalysis(scopeKey?: string | null): UsePortfolioAI
         },
         body: JSON.stringify({
           portfolioName: input.portfolioName,
+          portfolioUiSessionId,
         }),
       });
 

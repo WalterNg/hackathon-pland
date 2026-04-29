@@ -45,6 +45,7 @@ function MilestonesPageContent() {
   const portfolioHref = `/portfolio?name=${encodeURIComponent(portfolioName)}`;
   const riskHref = `/risk?name=${encodeURIComponent(portfolioName)}`;
   const riskRulesHref = `/risk-rules?name=${encodeURIComponent(portfolioName)}`;
+  const aiHistoryHref = portfolioName === DEFAULT_PORTFOLIO_NAME ? null : `/ai-history?name=${encodeURIComponent(portfolioName)}`;
   const milestonesHref = `/milestones?name=${encodeURIComponent(portfolioName)}`;
 
   const anchored = certificates.filter((c) => c.anchorStatus === "anchored");
@@ -61,6 +62,7 @@ function MilestonesPageContent() {
         <div className="w-full">
           <AppTopNavigation
             portfolioHref={portfolioHref}
+            aiHistoryHref={aiHistoryHref}
             riskHref={riskHref}
             riskRulesHref={riskRulesHref}
             milestonesHref={milestonesHref}

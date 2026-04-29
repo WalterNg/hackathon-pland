@@ -20,6 +20,7 @@ import { CertifySnapshotDialog } from "../components/portfolio/certify-snapshot-
 import { Sidebar } from "../components/ui/sidebar";
 import { AuthGuard } from "../components/auth/auth-guard";
 import { useTradingAgentAnalysis } from "../hooks/use-trading-agent-analysis";
+import { usePortfolioUiSession } from "../hooks/use-portfolio-ui-session";
 import { usePortfolios } from "../hooks/use-portfolios";
 import { usePortfolioSnapshotCertificates } from "../hooks/use-portfolio-snapshot-certificates";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
@@ -95,6 +96,7 @@ function PortfolioContent() {
   const [holdingsTab, setHoldingsTab] = useState<"assets" | "transactions">("assets");
   const [isCertificateDialogOpen, setCertificateDialogOpen] = useState(false);
   const [snapshotCacheByPortfolio, setSnapshotCacheByPortfolio] = useState<Record<string, PortfolioSnapshot>>({});
+  const [tradingAgentRecommendationRefreshToken, setTradingAgentRecommendationRefreshToken] = useState(0);
   const [selectedCoin, setSelectedCoin] = useState<{ symbol: string; name: string | null; baseAsset: string; quoteAsset: string } | null>(null);
   const [transactionIntent, setTransactionIntent] = useState<{ action: "buy" | "sell" | "transfer"; note: string }>({
     action: "buy",
@@ -102,6 +104,18 @@ function PortfolioContent() {
   });
   const isMainPortfolio = useMemo(() => portfolioName === DEFAULT_PORTFOLIO_NAME, [portfolioName]);
   const tradingAgentScopeKey = isMainPortfolio ? null : portfolioName;
+  const aiHistoryHref = isMainPortfolio ? null : `/ai-history?name=${encodeURIComponent(portfolioName)}`;
+
+  const currentPortfolio = useMemo(
+    () => portfolios.find((portfolio) => portfolio.name === portfolioName) ?? null,
+    [portfolios, portfolioName]
+  );
+  const portfolioId = currentPortfolio?.id ?? null;
+  const {
+    portfolioUiSessionId,
+    portfolioUiSessionUserId,
+    isReady: isPortfolioUiSessionReady,
+  } = usePortfolioUiSession(portfolioId);
   const {
     recommendation: tradingAgentRecommendation,
     latestResult: tradingAgentResult,
@@ -113,13 +127,15 @@ function PortfolioContent() {
     activeNodes: tradingAgentActiveNodes,
     progressLabel: tradingAgentProgressLabel,
     analyze: analyzeTradingAgent,
-  } = useTradingAgentAnalysis(tradingAgentScopeKey);
-
-  const currentPortfolio = useMemo(
-    () => portfolios.find((portfolio) => portfolio.name === portfolioName) ?? null,
-    [portfolios, portfolioName]
-  );
-  const portfolioId = currentPortfolio?.id ?? null;
+  } = useTradingAgentAnalysis({
+    scopeKey: tradingAgentScopeKey,
+    portfolioId,
+    portfolioUiSessionId,
+    portfolioUiSessionUserId,
+    portfolioUiSessionReady: isPortfolioUiSessionReady,
+    portfolioResolved: portfolioId !== null,
+    portfolioRecommendationRefreshToken: tradingAgentRecommendationRefreshToken,
+  });
   const {
     snapshot,
     isLoading,
@@ -141,6 +157,10 @@ function PortfolioContent() {
     getCertificate,
   } = usePortfolioSnapshotCertificates(portfolioId, portfolioName);
   const scopedSnapshot = snapshot?.summary.name === portfolioName ? snapshot : null;
+
+  const invalidateTradingAgentRecommendationCache = () => {
+    setTradingAgentRecommendationRefreshToken((value) => value + 1);
+  };
 
   useEffect(() => {
     if (!scopedSnapshot) {
@@ -229,6 +249,7 @@ function PortfolioContent() {
         window.alert(result.message ?? "Unable to sync portfolio.");
         return;
       }
+      invalidateTradingAgentRecommendationCache();
       await reload();
     } finally {
       setSyncingPortfolio(false);
@@ -269,6 +290,7 @@ function PortfolioContent() {
   };
 
   const handleTransactionCreated = async () => {
+    invalidateTradingAgentRecommendationCache();
     await reload();
   };
 
@@ -317,6 +339,8 @@ function PortfolioContent() {
         return;
       }
 
+      invalidateTradingAgentRecommendationCache();
+
       window.location.assign(`/portfolio?name=${encodeURIComponent(DEFAULT_PORTFOLIO_NAME)}`);
     } finally {
       setRemovingPortfolio(false);
@@ -337,6 +361,7 @@ function PortfolioContent() {
         <div className="w-full">
           <AppTopNavigation
             portfolioHref={`/portfolio?name=${encodeURIComponent(portfolioName)}`}
+            aiHistoryHref={aiHistoryHref}
             riskHref={riskManagementHref}
             riskRulesHref={riskRulesHref}
             milestonesHref={isMainPortfolio ? null : `/milestones?name=${encodeURIComponent(portfolioName)}`}
@@ -400,7 +425,12 @@ function PortfolioContent() {
                     tradingAgentError={tradingAgentError}
                     showTradingAgentControls={!isMainPortfolio}
                     onAnalyzeTradingAgent={handleAnalyzeTradingAgent}
-                    isAnalyzeDisabled={isMainPortfolio || !effectiveSnapshot || isLoading}
+                    isAnalyzeDisabled={
+                      isMainPortfolio ||
+                      !effectiveSnapshot ||
+                      isLoading ||
+                      !isPortfolioUiSessionReady
+                    }
                   />
                 ) : null}
                 <PortfolioMetrics metrics={throttledMetrics ?? scopedMetrics} />

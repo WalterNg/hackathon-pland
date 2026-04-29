@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { label: "Portfolio", href: "/portfolio" },
+  { label: "AI History", href: "/ai-history" },
   { label: "Risk Rules", href: "/risk-rules" },
   { label: "Journal", href: "/journal" },
   { label: "Milestones", href: "/milestones" },
@@ -20,6 +21,7 @@ function normalizePath(path: string): string {
 
 type AppTopNavigationProps = {
   portfolioHref?: string;
+  aiHistoryHref?: string | null;
   riskHref?: string;
   riskRulesHref?: string;
   milestonesHref?: string | null;
@@ -27,6 +29,7 @@ type AppTopNavigationProps = {
 
 export function AppTopNavigation({
   portfolioHref = "/portfolio",
+  aiHistoryHref = null,
   riskHref = "/risk",
   riskRulesHref = "/risk-rules",
   milestonesHref = "/milestones",
@@ -42,35 +45,39 @@ export function AppTopNavigation({
 
       <nav className="min-w-0 flex-1 overflow-x-auto">
         <div className="flex min-w-max items-center gap-5 pr-4 lg:pr-0">
-        {navItems.map((item) => {
-          const href = item.href === "/portfolio"
-            ? portfolioHref
-            : item.href === "/risk-rules"
-              ? riskRulesHref
-              : item.href === "/milestones"
-                ? milestonesHref
-                : item.href;
+          {navItems.map((item) => {
+            const href =
+              item.href === "/portfolio"
+                ? portfolioHref
+                : item.href === "/ai-history"
+                  ? aiHistoryHref
+                  : item.href === "/risk-rules"
+                    ? riskRulesHref
+                    : item.href === "/milestones"
+                      ? milestonesHref
+                      : item.href;
 
-          // Hide nav item if href is explicitly null
-          if (href === null) return null;
+            if (href === null) {
+              return null;
+            }
 
-          const normalizedHref = normalizePath(item.href);
-          const isActive = currentPath === normalizedHref || currentPath.startsWith(`${normalizedHref}/`);
+            const normalizedHref = normalizePath(item.href);
+            const isActive = currentPath === normalizedHref || currentPath.startsWith(`${normalizedHref}/`);
 
-          return (
-            <Link
-              key={item.href}
-              href={href}
-              className={
-                isActive
-                  ? "relative py-3 text-sm font-semibold text-strong after:absolute after:-bottom-px after:left-0 after:h-0.5 after:w-full after:rounded-full after:bg-primary"
-                  : "relative py-3 text-sm font-semibold text-muted transition-colors hover:text-strong"
-              }
-            >
-              {item.label}
-            </Link>
-          );
-        })}
+            return (
+              <Link
+                key={item.href}
+                href={href}
+                className={
+                  isActive
+                    ? "relative py-3 text-sm font-semibold text-strong after:absolute after:-bottom-px after:left-0 after:h-0.5 after:w-full after:rounded-full after:bg-primary"
+                    : "relative py-3 text-sm font-semibold text-muted transition-colors hover:text-strong"
+                }
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </div>
       </nav>
     </div>

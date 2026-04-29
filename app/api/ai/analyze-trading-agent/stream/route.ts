@@ -4,18 +4,17 @@ import { buildBinancePortfolioSnapshot } from "@/app/lib/binance-portfolio";
 import { deriveRecommendationMetadata } from "@/app/lib/portfolio-ai-actions";
 import { buildPortfolioAIEvidence } from "@/app/lib/portfolio-ai-evidence";
 import type { PortfolioAIRecommendation } from "@/app/lib/portfolio-types";
-import type { TradingAgentResult } from "@/app/lib/trading-agent-types";
+import type { TradingAgentPreparedContext, TradingAgentResult, TradingAgentStepEvent } from "@/app/lib/trading-agent-types";
 import { savePortfolioAIRecommendation } from "@/app/lib/repositories/portfolio-ai-recommendations-repo";
 import { getActiveRiskProfileByPortfolio, listRiskAlerts } from "@/app/lib/repositories/risk-repo";
 import { getUserPortfolioPositions } from "@/app/lib/repositories/portfolio-repo";
-import { resolveUserPortfolioByName } from "@/app/lib/repositories/portfolios-repo";
-import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
-import { createSupabaseServerClient } from "@/app/lib/supabase/server";
+import { getAuthorizedPortfolio, normalizePortfolioUiSessionId } from "../shared";
 
 export const dynamic = "force-dynamic";
 
 type AnalyzeRequestBody = {
   portfolioName?: string;
+  portfolioUiSessionId?: string | null;
 };
 
 type BackendStreamError = {
@@ -24,39 +23,11 @@ type BackendStreamError = {
 };
 
 const DEFAULT_BACKEND_URL = "http://127.0.0.1:8000";
-const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
 const WORKFLOW_VERSION = "trading_agent_v1";
 const STABLE_VALUE_SYMBOLS = new Set(["USDT", "USDC", "FDUSD", "BUSD", "USDS", "TUSD"]);
 
 function backendBaseUrl(): string {
   return process.env.AI_BACKEND_URL?.trim() || process.env.BACKEND_API_URL?.trim() || DEFAULT_BACKEND_URL;
-}
-
-async function getAuthContext(request: Request) {
-  const authorization = request.headers.get("authorization")?.trim();
-
-  if (authorization) {
-    return getSupabaseAuthContext(request);
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  return { supabase, user };
-}
-
-async function getAuthorizedPortfolio(request: Request, portfolioNameInput?: string | null) {
-  const { supabase, user } = await getAuthContext(request);
-  const portfolioName = portfolioNameInput?.trim() || DEFAULT_PORTFOLIO_NAME;
-
-  if (!user?.id) {
-    return { supabase, user, portfolio: null, portfolioName };
-  }
-
-  const portfolio = await resolveUserPortfolioByName(supabase, user.id, portfolioName);
-  return { supabase, user, portfolio, portfolioName };
 }
 
 function normalizeSignalTone(
@@ -80,10 +51,6 @@ function normalizeSignalTone(
     return "Bearish";
   }
   return "Neutral";
-}
-
-function recommendationPortfolioId(portfolioId: string): string {
-  return `${portfolioId}::${WORKFLOW_VERSION}`;
 }
 
 function buildTradingAgentPortfolioInput(
@@ -153,9 +120,13 @@ function buildRecommendation(
   payload: TradingAgentResult,
   snapshot: Awaited<ReturnType<typeof buildBinancePortfolioSnapshot>>,
   activeAlerts: Awaited<ReturnType<typeof listRiskAlerts>>,
-  activeRiskProfile: Awaited<ReturnType<typeof getActiveRiskProfileByPortfolio>>
+  activeRiskProfile: Awaited<ReturnType<typeof getActiveRiskProfileByPortfolio>>,
+  portfolioUiSessionId: string | null,
+  preparedContext: TradingAgentPreparedContext | null
 ): PortfolioAIRecommendation {
   const recommendationBase: PortfolioAIRecommendation = {
+    portfolioUiSessionId,
+    preparedContext,
     action: payload.final_decision?.action ?? "Hold",
     confidence: payload.final_decision?.confidence ?? 5,
     summary: payload.final_decision?.summary ?? "Trading agent completed without a final summary.",
@@ -165,6 +136,7 @@ function buildRecommendation(
     snapshotTimestamp: snapshot.summary.timestamp,
     evidence: buildPortfolioAIEvidence(snapshot),
     workflowVersion: payload.workflow_version || WORKFLOW_VERSION,
+    analysisResult: payload,
     signals: [
       {
         label: "TA",
@@ -196,6 +168,7 @@ function buildRecommendation(
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as AnalyzeRequestBody;
   const context = await getAuthorizedPortfolio(request, body.portfolioName);
+  const portfolioUiSessionId = normalizePortfolioUiSessionId(body.portfolioUiSessionId);
 
   if (!context.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -266,6 +239,7 @@ export async function POST(request: Request) {
       }
 
       let buffer = "";
+      let latestPreparedContext: TradingAgentPreparedContext | null = null;
 
       const emit = (event: string, data: unknown) => {
         controller.enqueue(encoder.encode(sse(event, data)));
@@ -293,11 +267,18 @@ export async function POST(request: Request) {
             return;
           }
 
-          const recommendation = buildRecommendation(result, snapshot, activeAlerts, activeRiskProfile);
+          const recommendation = buildRecommendation(
+            result,
+            snapshot,
+            activeAlerts,
+            activeRiskProfile,
+            portfolioUiSessionId,
+            latestPreparedContext
+          );
           await savePortfolioAIRecommendation(
             supabase,
             user.id,
-            recommendationPortfolioId(portfolio.id),
+            portfolio.id,
             recommendation
           );
 
@@ -308,6 +289,11 @@ export async function POST(request: Request) {
             result,
           });
           return;
+        }
+
+        const stepPayload = payload as TradingAgentStepEvent;
+        if (stepPayload.state?.prepared_context) {
+          latestPreparedContext = stepPayload.state.prepared_context;
         }
 
         emit(parsed.event, payload);

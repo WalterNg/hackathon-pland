@@ -188,6 +188,8 @@ export type PortfolioAIRecommendationMetadata = {
 };
 
 export type PortfolioAIRecommendation = {
+  portfolioUiSessionId?: string | null;
+  preparedContext?: import("@/app/lib/trading-agent-types").TradingAgentPreparedContext | null;
   action: AIAnalysisAction;
   confidence: number;
   summary: string;
@@ -199,6 +201,26 @@ export type PortfolioAIRecommendation = {
   evidence: PortfolioAIAnalysisEvidence;
   workflowVersion?: string;
   metadata?: PortfolioAIRecommendationMetadata;
+  analysisResult?: import("@/app/lib/trading-agent-types").TradingAgentResult | null;
+};
+
+export type PortfolioAIRecommendationHistoryItem = {
+  id: string;
+  analyzedAt: string;
+  createdAt: string;
+  action: AIAnalysisAction;
+  confidence: number;
+  portfolioUiSessionId: string | null;
+  recommendation: PortfolioAIRecommendation;
+};
+
+export type PortfolioAIRecommendationHistoryPage = {
+  items: PortfolioAIRecommendationHistoryItem[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  hasNextPage: boolean;
 };
 
 export type DashboardRecentTransaction = {
