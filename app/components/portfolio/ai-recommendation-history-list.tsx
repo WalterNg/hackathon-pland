@@ -26,7 +26,7 @@ function RecommendationRow({
       type="button"
       onClick={() => onSelectItem(item)}
       className={[
-        "w-full rounded-2xl border border-white/5 bg-(--surface-container-low) px-4 py-4 text-left transition-colors hover:border-white/10 hover:bg-white/[0.035] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50",
+        "w-full rounded-2xl border border-white/5 bg-(--surface-container-low) px-4 py-4 text-left transition-colors hover:border-white/10 hover:bg-white/3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50",
         "min-h-36",
       ].join(" ")}
     >

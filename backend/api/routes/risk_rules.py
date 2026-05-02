@@ -31,8 +31,12 @@ PROFILE_SELECT = (
 ALERT_SELECT = (
     "id,portfolio_id,risk_profile_id,event_type,severity,status,title,message,"
     "observed_value,threshold_value,symbol,signature,trigger_count,"
-    "first_triggered_at,last_triggered_at,acknowledged_at,resolved_at"
+    "first_triggered_at,last_triggered_at,acknowledged_at,resolved_at,"
+    "override_reason,override_expires_at,override_value,override_at,"
+    "snoozed_until"
 )
+
+OVERRIDE_ESCALATION_BAND = 1.15  # re-alert if observed exceeds override_value * this
 EVENT_SELECT = "id,event_type,severity,details,occurred_at"
 
 
@@ -45,7 +49,10 @@ class RiskRulesPayload(BaseModel):
 
 
 class AlertStatusUpdate(BaseModel):
-    status: Literal["acknowledged", "resolved"]
+    status: Literal["acknowledged", "snoozed", "overridden", "resolved"]
+    overrideReason: str | None = None            # E1
+    overrideExpiresInHours: float | None = None  # E1
+    snoozedUntilMinutes: int | None = None       # E2: 15 | 30 | 60
 
 
 class SnapshotMetrics(BaseModel):
@@ -141,6 +148,13 @@ def _row_to_alert(row: dict[str, Any]) -> dict[str, Any]:
         "lastTriggeredAt": row.get("last_triggered_at"),
         "acknowledgedAt": row.get("acknowledged_at"),
         "resolvedAt": row.get("resolved_at"),
+        # E1: override fields
+        "overrideReason": row.get("override_reason"),
+        "overrideExpiresAt": row.get("override_expires_at"),
+        "overrideValue": row.get("override_value"),
+        "overrideAt": row.get("override_at"),
+        # E2: snooze
+        "snoozedUntil": row.get("snoozed_until"),
     }
 
 
@@ -257,7 +271,9 @@ async def _resolve_stale_alerts(
     now_iso: str,
     current_signatures: set[str],
 ) -> None:
-    """Auto-resolve active alerts whose rule is no longer violated."""
+    """Auto-resolve active alerts whose rule is no longer violated.
+    Overridden and snoozed alerts are skipped — they manage their own lifecycle.
+    """
     active_rows = await select_rows(
         "risk_alerts",
         params=[
@@ -280,6 +296,26 @@ async def _resolve_stale_alerts(
                 ],
                 updates={"status": "resolved", "resolved_at": now_iso},
             )
+
+
+async def _log_override_event(
+    *,
+    user_id: str,
+    portfolio_id: str,
+    risk_profile_id: str,
+    event_type: str,  # "override_set" | "override_revoked" | "override_expired" | "override_escalated"
+    details: dict[str, Any],
+) -> None:
+    """E1-S6: Write an audit event for override lifecycle actions."""
+    await insert_row("risk_events", {
+        "user_id": user_id,
+        "portfolio_id": portfolio_id,
+        "risk_profile_id": risk_profile_id,
+        "event_type": event_type,
+        "severity": "info",
+        "details": details,
+        "occurred_at": datetime.now(timezone.utc).isoformat(),
+    })
 
 
 # ─── GET /api/risk-rules/rules ────────────────────────────────────────────────
@@ -406,12 +442,71 @@ async def patch_risk_alert(
     user_id = await _require_user_id(authorization)
     now_iso = datetime.now(timezone.utc).isoformat()
 
+    # Fetch the current alert so we can log audit events and compute expiry
+    existing_rows = await select_rows(
+        "risk_alerts",
+        params=[
+            build_filter_select(ALERT_SELECT),
+            build_filter_eq("id", alert_id),
+            build_filter_eq("user_id", user_id),
+            build_filter_limit(1),
+        ],
+    )
+    existing = existing_rows[0] if isinstance(existing_rows, list) and existing_rows else None
+    if not existing:
+        raise HTTPException(status_code=404, detail="Alert not found.")
+
     updates: dict[str, Any] = {"status": payload.status}
+
     if payload.status == "acknowledged":
         updates["acknowledged_at"] = now_iso
         updates["resolved_at"] = None
+
+    elif payload.status == "snoozed":
+        # E2-S1: set snoozed_until timestamp
+        minutes = payload.snoozedUntilMinutes or 30
+        from datetime import timedelta
+        snoozed_until = (
+            datetime.now(timezone.utc) + timedelta(minutes=minutes)
+        ).isoformat()
+        updates["snoozed_until"] = snoozed_until
+
     elif payload.status == "resolved":
         updates["resolved_at"] = now_iso
+        updates["snoozed_until"] = None
+
+    elif payload.status == "overridden":
+        # E1-S1: set override fields
+        updates["override_at"] = now_iso
+        updates["override_reason"] = payload.overrideReason
+        updates["override_value"] = existing.get("observed_value")
+        if payload.overrideExpiresInHours is not None:
+            from datetime import timedelta
+            expires_at = (
+                datetime.now(timezone.utc) + timedelta(hours=payload.overrideExpiresInHours)
+            ).isoformat()
+            updates["override_expires_at"] = expires_at
+        else:
+            updates["override_expires_at"] = None  # manual revoke only
+
+        # E1-S6: audit log
+        profile_id = str(existing.get("risk_profile_id") or "")
+        portfolio_id = str(existing.get("portfolio_id") or "")
+        await _log_override_event(
+            user_id=user_id,
+            portfolio_id=portfolio_id,
+            risk_profile_id=profile_id,
+            event_type="override_set",
+            details={
+                "alertId": alert_id,
+                "ruleType": existing.get("event_type"),
+                "symbol": existing.get("symbol"),
+                "observedValue": existing.get("observed_value"),
+                "thresholdValue": existing.get("threshold_value"),
+                "reason": payload.overrideReason,
+                "expiresAt": updates.get("override_expires_at"),
+            },
+        )
 
     updated = await update_rows(
         "risk_alerts",
@@ -424,6 +519,91 @@ async def patch_risk_alert(
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Alert not found.")
+
+    return {"alert": _row_to_alert(updated)}
+
+
+# ─── DELETE /api/risk-rules/alerts/{alert_id}/override ───────────────────────
+
+@router.delete("/risk-rules/alerts/{alert_id}/override")
+async def revoke_override(
+    alert_id: str,
+    authorization: str | None = Header(default=None),
+):
+    """E1-S4: Manually revoke an override, reactivating the alert."""
+    user_id = await _require_user_id(authorization)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    existing_rows = await select_rows(
+        "risk_alerts",
+        params=[
+            build_filter_select(ALERT_SELECT),
+            build_filter_eq("id", alert_id),
+            build_filter_eq("user_id", user_id),
+            build_filter_limit(1),
+        ],
+    )
+    existing = existing_rows[0] if isinstance(existing_rows, list) and existing_rows else None
+    if not existing or existing.get("status") != "overridden":
+        raise HTTPException(status_code=404, detail="Overridden alert not found.")
+
+    updated = await update_rows(
+        "risk_alerts",
+        params=[
+            build_filter_eq("id", alert_id),
+            build_filter_eq("user_id", user_id),
+        ],
+        updates={
+            "status": "active",
+            "override_reason": None,
+            "override_expires_at": None,
+            "override_value": None,
+            "override_at": None,
+        },
+        single=True,
+    )
+
+    # E1-S6: audit log
+    profile_id = str(existing.get("risk_profile_id") or "")
+    portfolio_id = str(existing.get("portfolio_id") or "")
+    await _log_override_event(
+        user_id=user_id,
+        portfolio_id=portfolio_id,
+        risk_profile_id=profile_id,
+        event_type="override_revoked",
+        details={
+            "alertId": alert_id,
+            "ruleType": existing.get("event_type"),
+            "symbol": existing.get("symbol"),
+            "reason": "manual_revoke",
+        },
+    )
+
+    return {"alert": _row_to_alert(updated or existing)}
+
+
+# ─── DELETE /api/risk-rules/alerts/{alert_id}/snooze ─────────────────────────
+
+@router.delete("/risk-rules/alerts/{alert_id}/snooze")
+async def cancel_snooze(
+    alert_id: str,
+    authorization: str | None = Header(default=None),
+):
+    """E2-S1: Cancel a snooze early, reactivating the alert immediately."""
+    user_id = await _require_user_id(authorization)
+
+    updated = await update_rows(
+        "risk_alerts",
+        params=[
+            build_filter_eq("id", alert_id),
+            build_filter_eq("user_id", user_id),
+            build_filter_eq("status", "snoozed"),
+        ],
+        updates={"status": "active", "snoozed_until": None},
+        single=True,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Snoozed alert not found.")
 
     return {"alert": _row_to_alert(updated)}
 
@@ -560,44 +740,162 @@ async def evaluate_risk(
         await _resolve_stale_alerts(user_id, portfolio_id, now_iso, set())
         return {"violations": [], "alertsCreated": 0}
 
-    # Load existing active alerts for dedup
+    # ── Load existing active AND overridden alerts for dedup / override checks ─
     active_rows = await select_rows(
         "risk_alerts",
         params=[
             build_filter_select(ALERT_SELECT),
             build_filter_eq("user_id", user_id),
             build_filter_eq("portfolio_id", portfolio_id),
-            build_filter_eq("status", "active"),
-            build_filter_limit(100),
+            build_filter_order("last_triggered_at", ascending=False),
+            build_filter_limit(200),
         ],
     )
-    active_by_sig: dict[str, dict[str, Any]] = {
-        r["signature"]: r
-        for r in (active_rows or [])
-        if isinstance(r, dict) and r.get("signature")
-    }
+    active_by_sig: dict[str, dict[str, Any]] = {}
+    overridden_by_sig: dict[str, dict[str, Any]] = {}
+    snoozed_by_sig: dict[str, dict[str, Any]] = {}
+    for r in (active_rows or []):
+        if not isinstance(r, dict) or not r.get("signature"):
+            continue
+        if r.get("status") == "active":
+            active_by_sig[r["signature"]] = r
+        elif r.get("status") == "overridden":
+            overridden_by_sig[r["signature"]] = r
+        elif r.get("status") == "snoozed":
+            snoozed_by_sig[r["signature"]] = r
 
     alerts_created = 0
     for violation in violations:
         sig = violation["signature"]
         existing = active_by_sig.get(sig)
 
-        if existing:
-            next_trigger_count = max(1, int(existing.get("trigger_count") or 1)) + 1
-        else:
-            next_trigger_count = 1
+        # ── E1-S2 / E1-S3 / E1-S4: override checks ──────────────────────────
+        overridden = overridden_by_sig.get(sig)
+        if overridden:
+            override_id = str(overridden["id"])
+            override_value = overridden.get("override_value")
+            override_expires_at = overridden.get("override_expires_at")
+            profile_id_for_log = str(overridden.get("risk_profile_id") or profile_id)
 
+            # E1-S4: auto-expiry check
+            if override_expires_at:
+                try:
+                    exp_ts = datetime.fromisoformat(
+                        str(override_expires_at).replace("Z", "+00:00")
+                    ).timestamp()
+                    if datetime.now(timezone.utc).timestamp() > exp_ts:
+                        # Expired — reactivate, log, and fall through to normal processing
+                        await update_rows(
+                            "risk_alerts",
+                            params=[
+                                build_filter_eq("id", override_id),
+                                build_filter_eq("user_id", user_id),
+                            ],
+                            updates={
+                                "status": "active",
+                                "override_reason": None,
+                                "override_expires_at": None,
+                                "override_value": None,
+                                "override_at": None,
+                                "title": f"[Override expired] {overridden.get('title', '')}",
+                            },
+                        )
+                        await _log_override_event(
+                            user_id=user_id,
+                            portfolio_id=portfolio_id,
+                            risk_profile_id=profile_id_for_log,
+                            event_type="override_expired",
+                            details={"alertId": override_id, "signature": sig},
+                        )
+                        # Move to active_by_sig so it's treated as existing active alert
+                        active_by_sig[sig] = overridden
+                        existing = overridden
+                        overridden = None
+                except Exception:
+                    pass
+
+            if overridden:
+                # E1-S3: escalation band check
+                observed = violation["observed_value"]
+                if override_value is not None and observed > float(override_value) * OVERRIDE_ESCALATION_BAND:
+                    # Worsened significantly — revoke override, create critical alert
+                    await update_rows(
+                        "risk_alerts",
+                        params=[
+                            build_filter_eq("id", override_id),
+                            build_filter_eq("user_id", user_id),
+                        ],
+                        updates={
+                            "status": "active",
+                            "severity": "critical",
+                            "override_reason": None,
+                            "override_expires_at": None,
+                            "override_value": None,
+                            "override_at": None,
+                            "observed_value": observed,
+                            "last_triggered_at": now_iso,
+                            "message": (
+                                f"{violation['message']} "
+                                f"This violation has worsened beyond your override threshold "
+                                f"(was {float(override_value):.2f}, now {observed:.2f})."
+                            ),
+                        },
+                    )
+                    await _log_override_event(
+                        user_id=user_id,
+                        portfolio_id=portfolio_id,
+                        risk_profile_id=profile_id_for_log,
+                        event_type="override_escalated",
+                        details={
+                            "alertId": override_id,
+                            "signature": sig,
+                            "overrideValue": float(override_value),
+                            "observedValue": observed,
+                        },
+                    )
+                    alerts_created += 1
+                else:
+                    # E1-S2: still within override — suppress entirely
+                    pass
+                continue  # Skip normal alert creation for this violation
+
+        # ── E2-S1: snooze check ──────────────────────────────────────────────
+        snoozed = snoozed_by_sig.get(sig)
+        if snoozed:
+            snooze_id = str(snoozed["id"])
+            snoozed_until = snoozed.get("snoozed_until")
+            expired = False
+            if snoozed_until:
+                try:
+                    exp_ts = datetime.fromisoformat(
+                        str(snoozed_until).replace("Z", "+00:00")
+                    ).timestamp()
+                    expired = datetime.now(timezone.utc).timestamp() > exp_ts
+                except Exception:
+                    expired = True
+
+            if expired:
+                # Snooze window passed — reactivate alert
+                await update_rows(
+                    "risk_alerts",
+                    params=[
+                        build_filter_eq("id", snooze_id),
+                        build_filter_eq("user_id", user_id),
+                    ],
+                    updates={"status": "active", "snoozed_until": None},
+                )
+                active_by_sig[sig] = snoozed
+                existing = snoozed
+            else:
+                # Still within snooze window — suppress notification
+                continue
+
+        # Severity is set once based on how far observed exceeds threshold (1.25× = critical)
         severity = violation["severity"]
-        if severity != "critical" and next_trigger_count >= 3:
-            severity = "critical"
-
         message = violation["message"]
-        if next_trigger_count >= 3:
-            message = (
-                f"{message} This breach has repeated {next_trigger_count} times while still active."
-            )
 
-        logged = await _log_event_if_changed(
+        # Audit log with 15-min cooldown (keeps risk_events clean without flooding)
+        await _log_event_if_changed(
             user_id=user_id,
             portfolio_id=portfolio_id,
             risk_profile_id=profile_id,
@@ -611,14 +909,11 @@ async def evaluate_risk(
                 "symbol": violation.get("symbol"),
                 "signature": violation["dedup_key"],
                 "alertSignature": sig,
-                "triggerCount": next_trigger_count,
             },
         )
 
-        if logged:
-            alerts_created += 1
-
         if not existing:
+            # New violation — create alert
             await insert_row("risk_alerts", {
                 "user_id": user_id,
                 "portfolio_id": portfolio_id,
@@ -638,7 +933,9 @@ async def evaluate_risk(
                 "acknowledged_at": None,
                 "resolved_at": None,
             })
-        elif logged:
+            alerts_created += 1
+        else:
+            # Existing active alert — just refresh the figures in place
             await update_rows(
                 "risk_alerts",
                 params=[
@@ -646,15 +943,10 @@ async def evaluate_risk(
                     build_filter_eq("user_id", user_id),
                 ],
                 updates={
-                    "risk_profile_id": profile_id,
                     "severity": severity,
-                    "title": violation["title"],
                     "message": message,
                     "observed_value": violation["observed_value"],
-                    "threshold_value": violation["threshold_value"],
-                    "symbol": violation.get("symbol"),
                     "last_triggered_at": now_iso,
-                    "trigger_count": next_trigger_count,
                 },
             )
 

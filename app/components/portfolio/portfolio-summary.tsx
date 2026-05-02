@@ -74,7 +74,7 @@ function actionTheme(action: string) {
   if (action === "Reduce Risk" || action === "Stop Loss") {
     return {
       heroBorder: "border-rose-500/25",
-      heroBg: "bg-rose-500/[0.03]",
+      heroBg: "bg-rose-500/3",
       actionText: "text-rose-300",
       accentText: "text-rose-400",
       accentDot: "bg-rose-500/50",
@@ -85,7 +85,7 @@ function actionTheme(action: string) {
   if (action === "Rebalance") {
     return {
       heroBorder: "border-amber-500/25",
-      heroBg: "bg-amber-500/[0.03]",
+      heroBg: "bg-amber-500/3",
       actionText: "text-amber-300",
       accentText: "text-amber-400",
       accentDot: "bg-amber-500/50",
@@ -95,7 +95,7 @@ function actionTheme(action: string) {
 
   return {
     heroBorder: "border-sky-500/20",
-    heroBg: "bg-sky-500/[0.03]",
+    heroBg: "bg-sky-500/3",
     actionText: "text-sky-200",
     accentText: "text-sky-300",
     accentDot: "bg-sky-400/50",

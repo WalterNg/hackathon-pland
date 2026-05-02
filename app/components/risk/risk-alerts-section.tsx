@@ -1,6 +1,7 @@
 "use client";
 
 import type { RiskAlertRecord, RiskAlertStatus } from "@/app/lib/risk-types";
+import type { OverridePayload } from "@/app/hooks/use-risk-alerts-v2";
 import { RiskAlertList, riskAlertFilters } from "./risk-alert-list";
 
 type RiskAlertsSectionProps = {
@@ -12,6 +13,10 @@ type RiskAlertsSectionProps = {
   onStatusChange: (status: RiskAlertStatus | "all") => void;
   onAcknowledge: (alertId: string) => Promise<boolean>;
   onResolve: (alertId: string) => Promise<boolean>;
+  onOverride?: (alertId: string, payload: OverridePayload) => Promise<boolean>;
+  onRevokeOverride?: (alertId: string) => Promise<boolean>;
+  onSnooze?: (alertId: string, minutes: number) => Promise<boolean>;
+  onCancelSnooze?: (alertId: string) => Promise<boolean>;
 };
 
 export function RiskAlertsSection({
@@ -23,6 +28,10 @@ export function RiskAlertsSection({
   onStatusChange,
   onAcknowledge,
   onResolve,
+  onOverride,
+  onRevokeOverride,
+  onSnooze,
+  onCancelSnooze,
 }: RiskAlertsSectionProps) {
   return (
     <section className="panel-base rounded-3xl p-5 sm:p-6" aria-labelledby="risk-alerts-heading">
@@ -65,6 +74,10 @@ export function RiskAlertsSection({
           isUpdatingId={isUpdatingId}
           onAcknowledge={onAcknowledge}
           onResolve={onResolve}
+          onOverride={onOverride}
+          onRevokeOverride={onRevokeOverride}
+          onSnooze={onSnooze}
+          onCancelSnooze={onCancelSnooze}
         />
       )}
     </section>

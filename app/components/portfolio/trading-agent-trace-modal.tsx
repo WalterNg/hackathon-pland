@@ -91,20 +91,20 @@ function actionTheme(action: string | undefined) {
   if (action === "Reduce Risk" || action === "Stop Loss")
     return {
       heroBorder: "border-rose-500/30",
-      heroBg: "bg-rose-500/[0.04]",
+      heroBg: "bg-rose-500/4",
       actionText: "text-rose-300",
       actionLabel: "text-rose-400/60",
     };
   if (action === "Rebalance")
     return {
       heroBorder: "border-amber-500/30",
-      heroBg: "bg-amber-500/[0.04]",
+      heroBg: "bg-amber-500/4",
       actionText: "text-amber-300",
       actionLabel: "text-amber-400/60",
     };
   return {
     heroBorder: "border-sky-500/25",
-    heroBg: "bg-sky-500/[0.04]",
+    heroBg: "bg-sky-500/4",
     actionText: "text-sky-200",
     actionLabel: "text-sky-400/60",
   };

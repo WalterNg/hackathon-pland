@@ -68,6 +68,13 @@ type RiskAlertRow = {
   last_triggered_at: string;
   acknowledged_at: string | null;
   resolved_at: string | null;
+  // E1: override fields
+  override_reason: string | null;
+  override_expires_at: string | null;
+  override_value: number | null;
+  override_at: string | null;
+  // E2: snooze
+  snoozed_until: string | null;
 };
 
 const EVENT_DEDUP_COOLDOWN_MINUTES = 15;
@@ -142,6 +149,11 @@ function toRiskAlert(row: RiskAlertRow): RiskAlertRecord {
     lastTriggeredAt: row.last_triggered_at,
     acknowledgedAt: row.acknowledged_at,
     resolvedAt: row.resolved_at,
+    overrideReason: row.override_reason ?? null,
+    overrideExpiresAt: row.override_expires_at ?? null,
+    overrideValue: toFiniteNumberOrNull(row.override_value),
+    overrideAt: row.override_at ?? null,
+    snoozedUntil: row.snoozed_until ?? null,
   };
 }
 
@@ -605,34 +617,121 @@ export async function listRiskAlertsByPortfolioIds(
   return (data as RiskAlertRow[]).map(toRiskAlert);
 }
 
+const ALERT_SELECT_FIELDS =
+  "id, portfolio_id, risk_profile_id, event_type, severity, status, title, message, " +
+  "observed_value, threshold_value, symbol, signature, trigger_count, " +
+  "first_triggered_at, last_triggered_at, acknowledged_at, resolved_at, " +
+  "override_reason, override_expires_at, override_value, override_at, snoozed_until";
+
+export type OverrideAlertPayload = {
+  reason?: string;
+  expiresInHours: number | null;
+  snoozedUntilMinutes?: number; // E2
+};
+
 export async function updateRiskAlertStatus(
   supabase: SupabaseClient,
   userId: string,
   alertId: string,
-  status: RiskAlertStatus
+  status: RiskAlertStatus,
+  overridePayload?: OverrideAlertPayload
 ): Promise<RiskAlertRecord | null> {
   const nowIso = new Date().toISOString();
-  const patch = {
+
+  // Fetch current alert to capture observed_value for override_value
+  const { data: existing } = await supabase
+    .from("risk_alerts")
+    .select(ALERT_SELECT_FIELDS)
+    .eq("id", alertId)
+    .eq("user_id", userId)
+    .limit(1);
+  const current = existing?.[0] as unknown as RiskAlertRow | undefined;
+
+  const patch: Record<string, unknown> = {
     status,
     acknowledged_at: status === "acknowledged" ? nowIso : null,
     resolved_at: status === "resolved" ? nowIso : null,
   };
+
+  if (status === "snoozed" && overridePayload?.snoozedUntilMinutes) {
+    const snoozedUntil = new Date(
+      Date.now() + overridePayload.snoozedUntilMinutes * 60_000
+    ).toISOString();
+    patch.snoozed_until = snoozedUntil;
+  } else if (status !== "snoozed") {
+    patch.snoozed_until = null; // clear on any other transition
+  }
+
+  if (status === "overridden" && overridePayload) {
+    patch.override_at = nowIso;
+    patch.override_reason = overridePayload.reason ?? null;
+    patch.override_value = current?.observed_value ?? null;
+    patch.override_expires_at = overridePayload.expiresInHours !== null
+      ? new Date(Date.now() + overridePayload.expiresInHours * 3_600_000).toISOString()
+      : null;
+  }
 
   const { data, error } = await supabase
     .from("risk_alerts")
     .update(patch)
     .eq("id", alertId)
     .eq("user_id", userId)
-    .select(
-      "id, portfolio_id, risk_profile_id, event_type, severity, status, title, message, observed_value, threshold_value, symbol, signature, trigger_count, first_triggered_at, last_triggered_at, acknowledged_at, resolved_at"
-    )
+    .select(ALERT_SELECT_FIELDS)
     .limit(1);
 
   if (error || !data || data.length === 0) {
     return null;
   }
 
-  return toRiskAlert(data[0] as RiskAlertRow);
+  return toRiskAlert(data[0] as unknown as RiskAlertRow);
+}
+
+export async function revokeRiskAlertOverride(
+  supabase: SupabaseClient,
+  userId: string,
+  alertId: string
+): Promise<RiskAlertRecord | null> {
+  const { data, error } = await supabase
+    .from("risk_alerts")
+    .update({
+      status: "active",
+      override_reason: null,
+      override_expires_at: null,
+      override_value: null,
+      override_at: null,
+    })
+    .eq("id", alertId)
+    .eq("user_id", userId)
+    .eq("status", "overridden")
+    .select(ALERT_SELECT_FIELDS)
+    .limit(1);
+
+  if (error || !data || data.length === 0) {
+    return null;
+  }
+
+  return toRiskAlert(data[0] as unknown as RiskAlertRow);
+}
+
+export async function cancelRiskAlertSnooze(
+  supabase: SupabaseClient,
+  userId: string,
+  alertId: string
+): Promise<RiskAlertRecord | null> {
+  const { data, error } = await supabase
+    .from("risk_alerts")
+    .update({ status: "active", snoozed_until: null })
+    .eq("id", alertId)
+    .eq("user_id", userId)
+    .eq("status", "snoozed")
+    .select(ALERT_SELECT_FIELDS)
+    .limit(1);
+
+  if (error || !data || data.length === 0) {
+    return null;
+  }
+
+  return toRiskAlert(data[0] as unknown as RiskAlertRow);
 }
 
 export async function logRiskViolations(
@@ -752,62 +851,4 @@ export async function listRecentRiskEvents(
     details: parseEventDetails(row.details),
     occurredAt: row.occurred_at,
   }));
-}
-
-export async function listRecentRiskEventsByPortfolioIds(
-  supabase: SupabaseClient,
-  userId: string,
-  portfolioIds: string[],
-  limit = 20
-): Promise<RiskEventRecord[]> {
-  if (portfolioIds.length === 0) {
-    return [];
-  }
-
-  const boundedLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 100) : 20;
-  const { data, error } = await supabase
-    .from("risk_events")
-    .select("id, event_type, severity, details, occurred_at")
-    .eq("user_id", userId)
-    .in("portfolio_id", portfolioIds)
-    .order("occurred_at", { ascending: false })
-    .limit(boundedLimit);
-
-  if (error || !data) {
-    return [];
-  }
-
-  return (data as RiskEventRow[]).map((row) => ({
-    id: row.id,
-    eventType: row.event_type,
-    severity: row.severity,
-    details: parseEventDetails(row.details),
-    occurredAt: row.occurred_at,
-  }));
-}
-
-export function parseRiskRulesInput(payload: Record<string, unknown>): RiskRulesFormValues {
-  const drawdown = toFiniteNumberOrNull(payload.maxDrawdownPct);
-  const positionSize = toFiniteNumberOrNull(payload.maxPositionSizePct);
-  const dailyLoss = toFiniteNumberOrNull(payload.maxDailyLossUsd);
-
-  return {
-    maxDrawdownPct: drawdown,
-    maxPositionSizePct: positionSize,
-    maxDailyLossUsd: dailyLoss,
-  };
-}
-
-export function isValidRiskRulesInput(input: RiskRulesFormValues): boolean {
-  const values = [input.maxDrawdownPct, input.maxPositionSizePct, input.maxDailyLossUsd];
-
-  return values.every((value) => value === null || (Number.isFinite(value) && value >= 0));
-}
-
-export function parseRiskAlertStatus(value: string | null): RiskAlertStatus | "all" {
-  if (value === "all") {
-    return "all";
-  }
-
-  return isAlertStatus(value) ? value : "active";
 }

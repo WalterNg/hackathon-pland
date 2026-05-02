@@ -22,7 +22,7 @@ const PAGE_ACTION_LABELS = {
 } as const;
 
 function parseAlertStatus(value: string | null): RiskAlertStatus | "all" {
-  if (value === "active" || value === "acknowledged" || value === "resolved") {
+  if (value === "active" || value === "acknowledged" || value === "snoozed" || value === "overridden" || value === "resolved") {
     return value;
   }
 
@@ -60,6 +60,10 @@ function RiskPageContent() {
     reload: reloadAlertCenter,
     acknowledge,
     resolve,
+    override,
+    revokeOverride,
+    snooze,
+    cancelSnooze,
   } = useRiskAlerts(portfolioName, alertStatus, 15_000, !isMainPortfolio);
   const {
     summary: aggregatedSummary,
@@ -110,6 +114,34 @@ function RiskPageContent() {
     await Promise.all([reloadRiskEvents(), reloadAlertCenter()]);
     return true;
   }, [reloadAlertCenter, reloadRiskEvents, resolve]);
+
+  const handleOverrideAlert = useCallback(async (alertId: string, payload: Parameters<typeof override>[1]) => {
+    const ok = await override(alertId, payload);
+    if (!ok) return false;
+    await reloadAlertCenter();
+    return true;
+  }, [override, reloadAlertCenter]);
+
+  const handleRevokeOverride = useCallback(async (alertId: string) => {
+    const ok = await revokeOverride(alertId);
+    if (!ok) return false;
+    await reloadAlertCenter();
+    return true;
+  }, [revokeOverride, reloadAlertCenter]);
+
+  const handleSnoozeAlert = useCallback(async (alertId: string, minutes: number) => {
+    const ok = await snooze(alertId, minutes);
+    if (!ok) return false;
+    await reloadAlertCenter();
+    return true;
+  }, [snooze, reloadAlertCenter]);
+
+  const handleCancelSnooze = useCallback(async (alertId: string) => {
+    const ok = await cancelSnooze(alertId);
+    if (!ok) return false;
+    await reloadAlertCenter();
+    return true;
+  }, [cancelSnooze, reloadAlertCenter]);
 
   const updateSearchParams = (updates: Record<string, string | null>) => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -241,6 +273,10 @@ function RiskPageContent() {
                   onStatusChange={(nextStatus) => updateSearchParams({ status: nextStatus, focus: "alerts" })}
                   onAcknowledge={handleAcknowledgeAlert}
                   onResolve={handleResolveAlert}
+                  onOverride={handleOverrideAlert}
+                  onRevokeOverride={handleRevokeOverride}
+                  onSnooze={handleSnoozeAlert}
+                  onCancelSnooze={handleCancelSnooze}
                 />
               )}
             </div>
