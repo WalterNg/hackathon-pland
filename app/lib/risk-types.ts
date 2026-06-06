@@ -1,6 +1,6 @@
 export type RiskSeverity = "info" | "warning" | "critical";
 
-export type RiskAlertStatus = "active" | "acknowledged" | "resolved";
+export type RiskAlertStatus = "active" | "acknowledged" | "snoozed" | "overridden" | "resolved";
 
 export type RiskRuleSource = "none" | "global" | "portfolio";
 
@@ -72,7 +72,33 @@ export type RiskAlertRecord = {
   lastTriggeredAt: string;
   acknowledgedAt: string | null;
   resolvedAt: string | null;
+  // E1: override fields
+  overrideReason: string | null;
+  overrideExpiresAt: string | null;
+  overrideValue: number | null;
+  overrideAt: string | null;
+  // E2: snooze
+  snoozedUntil: string | null;
 };
+
+export const SNOOZE_OPTIONS: { label: string; minutes: number }[] = [
+  { label: "15 minutes", minutes: 15 },
+  { label: "30 minutes", minutes: 30 },
+  { label: "1 hour", minutes: 60 },
+];
+
+export type OverrideReason =
+  | "Taking profit soon"
+  | "Intentional overweight"
+  | "Other";
+
+export const OVERRIDE_DURATION_OPTIONS: { label: string; hours: number | null }[] = [
+  { label: "24 hours", hours: 24 },
+  { label: "3 days", hours: 72 },
+  { label: "7 days", hours: 168 },
+  { label: "Until I revoke manually", hours: null },
+]
+;
 
 export type RiskAlertGroup = {
   portfolioId: string;

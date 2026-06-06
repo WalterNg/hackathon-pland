@@ -8,6 +8,11 @@ type RiskAlertsResponse = {
   alerts: RiskAlertRecord[];
 };
 
+export type OverridePayload = {
+  reason?: string;
+  expiresInHours: number | null;
+};
+
 type UseRiskAlertsResult = {
   alerts: RiskAlertRecord[];
   isLoading: boolean;
@@ -16,6 +21,10 @@ type UseRiskAlertsResult = {
   reload: () => Promise<void>;
   acknowledge: (alertId: string) => Promise<boolean>;
   resolve: (alertId: string) => Promise<boolean>;
+  override: (alertId: string, payload: OverridePayload) => Promise<boolean>;
+  revokeOverride: (alertId: string) => Promise<boolean>;
+  snooze: (alertId: string, minutes: number) => Promise<boolean>;
+  cancelSnooze: (alertId: string) => Promise<boolean>;
 };
 
 const DEFAULT_REFRESH_INTERVAL_MS = 15_000;
@@ -92,7 +101,7 @@ export function useRiskAlerts(
     setRefreshNonce((value) => value + 1);
   }, []);
 
-  const mutateStatus = useCallback(async (alertId: string, nextStatus: RiskAlertStatus) => {
+  const mutateStatus = useCallback(async (alertId: string, nextStatus: RiskAlertStatus, extra?: Record<string, unknown>) => {
     setUpdatingId(alertId);
     setError(null);
 
@@ -102,7 +111,7 @@ export function useRiskAlerts(
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify({ status: nextStatus, ...extra }),
       });
 
       if (!response.ok) {
@@ -128,6 +137,66 @@ export function useRiskAlerts(
     }
   }, [status]);
 
+  const revokeOverride = useCallback(async (alertId: string): Promise<boolean> => {
+    setUpdatingId(alertId);
+    setError(null);
+    try {
+      const response = await fetchWithSupabaseAuth(
+        `/api/risk/alerts/${encodeURIComponent(alertId)}/override`,
+        { method: "DELETE" }
+      );
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? `Failed to revoke override (${response.status})`);
+      }
+      const payload = (await response.json()) as { alert?: RiskAlertRecord };
+      const updated = payload.alert;
+      if (updated) {
+        setAlerts((prev) =>
+          status === "all"
+            ? prev.map((a) => (a.id === updated.id ? updated : a))
+            : prev.filter((a) => a.id !== updated.id)
+        );
+      }
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to revoke override");
+      return false;
+    } finally {
+      setUpdatingId(null);
+    }
+  }, [status]);
+
+  const cancelSnooze = useCallback(async (alertId: string): Promise<boolean> => {
+    setUpdatingId(alertId);
+    setError(null);
+    try {
+      const response = await fetchWithSupabaseAuth(
+        `/api/risk/alerts/${encodeURIComponent(alertId)}/snooze`,
+        { method: "DELETE" }
+      );
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? `Failed to cancel snooze (${response.status})`);
+      }
+      const payload = (await response.json()) as { alert?: RiskAlertRecord };
+      const updated = payload.alert;
+      if (updated) {
+        setAlerts((prev) =>
+          status === "all"
+            ? prev.map((a) => (a.id === updated.id ? updated : a))
+            : prev.filter((a) => a.id !== updated.id)
+        );
+      }
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to cancel snooze");
+      return false;
+    } finally {
+      setUpdatingId(null);
+    }
+  }, [status]);
+
   return {
     alerts,
     isLoading,
@@ -136,5 +205,17 @@ export function useRiskAlerts(
     reload,
     acknowledge: useCallback(async (alertId: string) => mutateStatus(alertId, "acknowledged"), [mutateStatus]),
     resolve: useCallback(async (alertId: string) => mutateStatus(alertId, "resolved"), [mutateStatus]),
+    override: useCallback(
+      async (alertId: string, { reason, expiresInHours }: OverridePayload) =>
+        mutateStatus(alertId, "overridden", { overrideReason: reason, overrideExpiresInHours: expiresInHours }),
+      [mutateStatus]
+    ),
+    revokeOverride,
+    snooze: useCallback(
+      async (alertId: string, minutes: number) =>
+        mutateStatus(alertId, "snoozed", { snoozedUntilMinutes: minutes }),
+      [mutateStatus]
+    ),
+    cancelSnooze,
   };
 }

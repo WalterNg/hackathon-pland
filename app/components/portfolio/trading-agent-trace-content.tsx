@@ -76,7 +76,7 @@ export function actionTheme(action: string | undefined) {
   if (action === "Reduce Risk" || action === "Stop Loss") {
     return {
       heroBorder: "border-rose-500/30",
-      heroBg: "bg-rose-500/[0.04]",
+      heroBg: "bg-rose-500/4",
       actionText: "text-rose-300",
       actionLabel: "text-rose-400/60",
       badge: "border-rose-400/30 bg-rose-400/10 text-rose-300",
@@ -86,7 +86,7 @@ export function actionTheme(action: string | undefined) {
   if (action === "Rebalance") {
     return {
       heroBorder: "border-amber-500/30",
-      heroBg: "bg-amber-500/[0.04]",
+      heroBg: "bg-amber-500/4",
       actionText: "text-amber-300",
       actionLabel: "text-amber-400/60",
       badge: "border-amber-400/30 bg-amber-400/10 text-amber-300",
@@ -95,7 +95,7 @@ export function actionTheme(action: string | undefined) {
 
   return {
     heroBorder: "border-sky-500/25",
-    heroBg: "bg-sky-500/[0.04]",
+    heroBg: "bg-sky-500/4",
     actionText: "text-sky-200",
     actionLabel: "text-sky-400/60",
     badge: "border-sky-400/30 bg-sky-400/10 text-sky-200",

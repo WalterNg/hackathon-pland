@@ -1,0 +1,18 @@
+-- CONSCIOUS RISK OVERRIDE: ADD OVERRIDE COLUMNS AND UPDATE STATUS CHECK
+
+-- 1. DROP EXISTING STATUS CHECK
+ALTER TABLE public.risk_alerts
+DROP CONSTRAINT IF EXISTS risk_alerts_status_check;
+
+-- 2. ADD OVERRIDE COLUMNS
+ALTER TABLE public.risk_alerts
+ADD COLUMN IF NOT EXISTS override_reason TEXT,
+ADD COLUMN IF NOT EXISTS override_expires_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS override_value NUMERIC(30, 12),
+ADD COLUMN IF NOT EXISTS override_at TIMESTAMPTZ;
+
+-- 3. RE-APPLY STATUS CONSTRAINT WITH 'OVERRIDDEN'
+ALTER TABLE public.risk_alerts
+ADD CONSTRAINT risk_alerts_status_check
+CHECK (status IN ('active', 'acknowledged', 'overridden', 'resolved'));
+
