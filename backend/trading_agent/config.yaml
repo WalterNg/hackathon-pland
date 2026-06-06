@@ -1,0 +1,10 @@
+llm:
+  provider: "openrouter"
+  model_name: "google/gemini-2.5-flash"
+  temperature: 0.2
+  max_retries: 3
+
+trading_agent:
+  investment_debate_rounds: 1
+  risk_debate_rounds: 1
+  recursion_limit: 100

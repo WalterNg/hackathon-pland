@@ -9,6 +9,7 @@ ROOT_DIR = Path(__file__).parent.parent.parent.absolute()
 class Settings(BaseSettings):
     project_name: str = "hackathon-pland"
     gemini_api_key: str = ""
+    openrouter_api_key: str = ""
 
     # Supabase Configuration
     supabase_url: str = Field(default="", alias="NEXT_PUBLIC_SUPABASE_URL")
