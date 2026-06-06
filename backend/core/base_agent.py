@@ -4,10 +4,12 @@ from abc import ABC, abstractmethod
 from typing import Any, Type
 
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, ValidationError
 from google.api_core.exceptions import GoogleAPIError
 
 from core.config import settings
+from trading_agent.config import DEFAULT_TRADING_AGENT_CONFIG
 
 class AgentError(Exception):
     """Raised when an agent fails to produce a valid result."""
@@ -27,20 +29,36 @@ class BaseAgent(ABC):
 
     def __init__(self):
         self.logger = logging.getLogger(self.__class__.__name__.upper())
-        self._llm: ChatGoogleGenerativeAI | None = None
+        self._llm: Any = None
 
-    def _get_llm(self) -> ChatGoogleGenerativeAI:
+    def _get_llm(self) -> Any:
         """Lazy-initialize and return the shared LLM instance."""
         if self._llm is None:
-            api_key = settings.gemini_api_key
-            if not api_key:
-                raise AgentError("GEMINI_API_KEY is not set in environment")
-            self._llm = ChatGoogleGenerativeAI(
-                model=self.MODEL_NAME,
-                api_key=api_key,
-                temperature=self.TEMPERATURE,
-                max_retries=self.MAX_RETRIES,
-            )
+            provider = DEFAULT_TRADING_AGENT_CONFIG.llm_provider.lower()
+            if provider == "openrouter":
+                api_key = settings.openrouter_api_key
+                if not api_key:
+                    raise AgentError("OPENROUTER_API_KEY is not set in environment")
+                model = DEFAULT_TRADING_AGENT_CONFIG.model_name
+                if model == "gemini-2.5-flash":
+                    model = "google/gemini-2.5-flash"
+                self._llm = ChatOpenAI(
+                    model=model,
+                    api_key=api_key,
+                    base_url="https://openrouter.ai/api/v1",
+                    temperature=self.TEMPERATURE,
+                    max_retries=self.MAX_RETRIES,
+                )
+            else:
+                api_key = settings.gemini_api_key
+                if not api_key:
+                    raise AgentError("GEMINI_API_KEY is not set in environment")
+                self._llm = ChatGoogleGenerativeAI(
+                    model=self.MODEL_NAME,
+                    api_key=api_key,
+                    temperature=self.TEMPERATURE,
+                    max_retries=self.MAX_RETRIES,
+                )
         return self._llm
 
     async def run(
@@ -59,7 +77,9 @@ class BaseAgent(ABC):
             structured_llm = llm.with_structured_output(output_schema)
             messages = [("system", system_prompt), ("human", user_input)]
 
-            self.logger.info(f"Invoking Gemini ({output_schema.__name__})...")
+            provider_name = DEFAULT_TRADING_AGENT_CONFIG.llm_provider.upper()
+            self.logger.info(f"Invoking {provider_name} ({output_schema.__name__})...")
+
             start = time.perf_counter()
             result = await structured_llm.ainvoke(messages)
             duration = time.perf_counter() - start
@@ -71,4 +91,5 @@ class BaseAgent(ABC):
         except GoogleAPIError as e:
             raise AgentError(f"Gemini API error: {e}") from e
         except Exception as e:
-            raise AgentError(f"Unexpected error: {e}") from e
+            raise AgentError(f"LLM API error: {e}") from e
+
