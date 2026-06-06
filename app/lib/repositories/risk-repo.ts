@@ -852,3 +852,64 @@ export async function listRecentRiskEvents(
     occurredAt: row.occurred_at,
   }));
 }
+
+export function parseRiskRulesInput(payload: any): RiskRulesFormValues {
+  const parseVal = (val: any): number | null => {
+    if (val === undefined || val === null || val === "") return null;
+    const parsed = Number(val);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  return {
+    maxDrawdownPct: parseVal(payload?.maxDrawdownPct),
+    maxPositionSizePct: parseVal(payload?.maxPositionSizePct),
+    maxDailyLossUsd: parseVal(payload?.maxDailyLossUsd),
+  };
+}
+
+export function isValidRiskRulesInput(input: RiskRulesFormValues): boolean {
+  const isValidVal = (val: number | null) => val === null || (val >= 0 && !Number.isNaN(val));
+  return (
+    isValidVal(input.maxDrawdownPct) &&
+    isValidVal(input.maxPositionSizePct) &&
+    isValidVal(input.maxDailyLossUsd)
+  );
+}
+
+export function parseRiskAlertStatus(value: string | null | undefined): RiskAlertStatus | "all" {
+  if (value === "active" || value === "acknowledged" || value === "snoozed" || value === "overridden" || value === "resolved" || value === "all") {
+    return value;
+  }
+  return "active";
+}
+
+export async function listRecentRiskEventsByPortfolioIds(
+  supabase: SupabaseClient,
+  userId: string,
+  portfolioIds: string[],
+  limit = 20
+): Promise<RiskEventRecord[]> {
+  if (portfolioIds.length === 0) {
+    return [];
+  }
+  const boundedLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 100) : 20;
+  const { data, error } = await supabase
+    .from("risk_events")
+    .select("id, event_type, severity, details, occurred_at")
+    .eq("user_id", userId)
+    .in("portfolio_id", portfolioIds)
+    .order("occurred_at", { ascending: false })
+    .limit(boundedLimit);
+
+  if (error || !data) {
+    return [];
+  }
+
+  return (data as RiskEventRow[]).map((row) => ({
+    id: row.id,
+    eventType: row.event_type,
+    severity: row.severity,
+    details: parseEventDetails(row.details),
+    occurredAt: row.occurred_at,
+  }));
+}
