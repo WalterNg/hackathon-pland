@@ -445,6 +445,7 @@ export async function buildBinancePortfolioSnapshot(
         sharpeRatio7d: null,
         sharpeRatio30d: null,
         sharpeRatio90d: null,
+        downsideRiskPercent: 0,
         riskScore: 0,
         violatedRulesCount: 0,
         lastRiskUpdatedAt: new Date().toISOString()
@@ -597,6 +598,7 @@ export async function buildBinancePortfolioSnapshot(
       sharpeRatio7d: riskMetrics.sharpeRatio7d,
       sharpeRatio30d: riskMetrics.sharpeRatio30d,
       sharpeRatio90d: riskMetrics.sharpeRatio90d,
+      downsideRiskPercent: riskMetrics.downsideRiskPercent,
       riskScore: riskMetrics.riskScore,
       violatedRulesCount: 0,
       lastRiskUpdatedAt: riskUpdatedAt,

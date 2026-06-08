@@ -133,6 +133,17 @@ export function calculateVolatilityFromSeries(values: number[]): number {
   return round(volatility, 2);
 }
 
+export function calculateDownsideRiskFromSeries(values: number[]): number {
+  const returns = toReturnSeries(values);
+  if (returns.length === 0) {
+    return 0;
+  }
+
+  const negativeReturns = returns.map((r) => (r < 0 ? r : 0));
+  const downside = standardDeviation(negativeReturns) * Math.sqrt(DAYS_PER_YEAR) * 100;
+  return round(downside, 2);
+}
+
 export function calculateConcentrationHerfindahl(allocationsPercent: number[]): number {
   if (allocationsPercent.length === 0) {
     return 0;
@@ -245,13 +256,16 @@ export function calculateRiskMetricsFromPortfolio(
     if (sharpeRatio7d === null) sharpeRatio7d = round(sharpeRatio90d * 0.9, 3);
   }
 
+  const downsideRiskPercent = calculateDownsideRiskFromSeries(navSeriesUsd);
+
   const riskScore = calculateCompositeRiskScore({
     maxDrawdownPercent,
     volatilityPercent,
     concentrationIndex,
     sharpeRatio7d,
     sharpeRatio30d,
-    sharpeRatio90d
+    sharpeRatio90d,
+    downsideRiskPercent
   });
 
   return {
@@ -261,6 +275,7 @@ export function calculateRiskMetricsFromPortfolio(
     sharpeRatio7d,
     sharpeRatio30d,
     sharpeRatio90d,
+    downsideRiskPercent,
     riskScore
   };
 }

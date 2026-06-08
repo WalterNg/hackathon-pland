@@ -33,6 +33,7 @@ export type RiskMetricsSnapshot = {
   sharpeRatio7d: number | null;
   sharpeRatio30d: number | null;
   sharpeRatio90d: number | null;
+  downsideRiskPercent: number;
   riskScore: number;
 };
 

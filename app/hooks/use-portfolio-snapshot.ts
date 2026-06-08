@@ -179,6 +179,7 @@ function applyRealtimeTicker(
   const sharpeRatio7d = currentSnapshot.metrics.sharpeRatio7d ?? null;
   const sharpeRatio30d = currentSnapshot.metrics.sharpeRatio30d ?? null;
   const sharpeRatio90d = currentSnapshot.metrics.sharpeRatio90d ?? null;
+  const downsideRiskPercent = currentSnapshot.metrics.downsideRiskPercent ?? 0;
   const riskScore = calculateCompositeRiskScore({
     maxDrawdownPercent,
     volatilityPercent,
@@ -186,6 +187,7 @@ function applyRealtimeTicker(
     sharpeRatio7d,
     sharpeRatio30d,
     sharpeRatio90d,
+    downsideRiskPercent,
   });
 
   return {

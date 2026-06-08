@@ -96,6 +96,7 @@ export function PortfolioMetrics({ metrics }: PortfolioMetricsProps) {
   const volatility = metrics.volatilityPercent;
   const concentration = metrics.concentrationIndex;
   const activeAssets = metrics.activeAssets;
+  const downsideRisk = metrics.downsideRiskPercent;
   const violatedRules = metrics.violatedRulesCount ?? 0;
 
   const allTimeProfitTooltip = (
@@ -398,18 +399,26 @@ export function PortfolioMetrics({ metrics }: PortfolioMetricsProps) {
               )}
             </MetricCard>
 
-            {/* Card 4: Active Assets */}
+            {/* Card 4: Downside Risk */}
             <MetricCard
-              title="Active Assets"
-              tooltipText="The total number of unique cryptocurrencies currently held in your portfolio."
+              title="Downside Risk"
+              tooltipText="Downside deviation of returns. Measures volatility of negative returns (Sortino denominator). Lower is better."
               tooltipPosition="center"
               value={
                 <p className="text-xl font-bold leading-tight text-strong">
-                  {activeAssets ?? 0}
+                  {downsideRisk !== undefined && downsideRisk !== null ? `${downsideRisk.toFixed(2)}%` : "N/A"}
                 </p>
               }
             >
-              <p className="mt-1.5 text-xs text-muted leading-snug">Unique holdings</p>
+              {downsideRisk !== undefined && downsideRisk !== null ? (
+                <div className={`mt-1.5 text-xs font-semibold ${
+                  downsideRisk >= 30 ? "text-danger" : downsideRisk >= 15 ? "text-warning" : "text-success"
+                }`}>
+                  {downsideRisk >= 30 ? "High Downside" : downsideRisk >= 15 ? "Moderate Downside" : "Low Downside"}
+                </div>
+              ) : (
+                <p className="mt-1.5 text-xs text-muted leading-snug">Downside volatility</p>
+              )}
             </MetricCard>
 
             {/* Card 5: Risk Rules Breached */}
