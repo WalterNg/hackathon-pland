@@ -437,12 +437,14 @@ export async function buildBinancePortfolioSnapshot(
         totalCostBasisUsd: 0,
         allTimeProfitUsd: 0,
         allTimeProfitPercent: 0,
-        bestPerformer24h: null,
-        worstPerformer24h: null,
+        bestPerformerAllTime: null,
+        worstPerformerAllTime: null,
         maxDrawdownPercent: 0,
         volatilityPercent: 0,
         concentrationIndex: 0,
+        sharpeRatio7d: null,
         sharpeRatio30d: null,
+        sharpeRatio90d: null,
         riskScore: 0,
         violatedRulesCount: 0,
         lastRiskUpdatedAt: new Date().toISOString()
@@ -533,8 +535,8 @@ export async function buildBinancePortfolioSnapshot(
     return {
       symbol,
       quantity: position.quantity,
-      avgBuyPriceUsd: round(position.avgBuyPriceUsd),
-      priceUsd: round(priceUsd),
+      avgBuyPriceUsd: round(position.avgBuyPriceUsd, 8),
+      priceUsd: round(priceUsd, 8),
       valueUsd: round(valueUsd),
       change24hPercent: round(changes24h[symbol] ?? 0),
       change7dPercent: round(get7dChangePercent(dailyKlinesMap[symbol] ?? [])),
@@ -551,11 +553,11 @@ export async function buildBinancePortfolioSnapshot(
     allocationPercent: totalValueUsdRaw > 0 ? round((asset.valueUsd / totalValueUsdRaw) * 100) : 0,
   }));
 
-  const sortedBy24h = [...assets]
+  const sortedByAllTime = [...assets]
     .filter((asset) => isPerformerCandidate(asset.symbol))
-    .sort((a, b) => b.change24hPercent - a.change24hPercent);
-  const best = sortedBy24h[0] ?? null;
-  const worst = sortedBy24h[sortedBy24h.length - 1] ?? null;
+    .sort((a, b) => b.pnlPercent - a.pnlPercent);
+  const best = sortedByAllTime[0] ?? null;
+  const worst = sortedByAllTime[sortedByAllTime.length - 1] ?? null;
   const costBasisTimeline = buildCostBasisTimeline(transactions);
   const chart = holdingsTimeline.length > 0
     ? buildChartFromTimeline(klinesMap, prices, holdingsTimeline, effectiveStartMs, firstTransactionMs, costBasisTimeline)
@@ -582,17 +584,19 @@ export async function buildBinancePortfolioSnapshot(
       totalCostBasisUsd: round(totalCostBasisUsd),
       allTimeProfitUsd: round(allTimeProfitUsdRaw),
       allTimeProfitPercent: round(allTimeProfitPercentRaw),
-      bestPerformer24h: best
-        ? { symbol: best.symbol, change24hPercent: best.change24hPercent }
+      bestPerformerAllTime: best
+        ? { symbol: best.symbol, pnlUsd: best.pnlUsd, pnlPercent: best.pnlPercent }
         : null,
-      worstPerformer24h: worst
-        ? { symbol: worst.symbol, change24hPercent: worst.change24hPercent }
+      worstPerformerAllTime: worst
+        ? { symbol: worst.symbol, pnlUsd: worst.pnlUsd, pnlPercent: worst.pnlPercent }
         : null,
       maxDrawdownPercent: riskMetrics.maxDrawdownPercent,
       maxDrawdownDetail,
       volatilityPercent: riskMetrics.volatilityPercent,
       concentrationIndex: riskMetrics.concentrationIndex,
+      sharpeRatio7d: riskMetrics.sharpeRatio7d,
       sharpeRatio30d: riskMetrics.sharpeRatio30d,
+      sharpeRatio90d: riskMetrics.sharpeRatio90d,
       riskScore: riskMetrics.riskScore,
       violatedRulesCount: 0,
       lastRiskUpdatedAt: riskUpdatedAt,

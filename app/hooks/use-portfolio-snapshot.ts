@@ -110,7 +110,7 @@ function applyRealtimeTicker(
       return asset;
     }
 
-    const nextPriceUsd = round(lastPriceUsd);
+    const nextPriceUsd = round(lastPriceUsd, 8);
     const nextValueUsd = round(asset.quantity * nextPriceUsd);
     const costBasisUsd = asset.quantity * asset.avgBuyPriceUsd;
     const nextPnlUsd = round(nextValueUsd - costBasisUsd);
@@ -135,11 +135,11 @@ function applyRealtimeTicker(
   const allTimeProfitUsd = round(totalValueUsdRaw - totalCostBasisUsd);
   const allTimeProfitPercent = totalCostBasisUsd > 0 ? round((allTimeProfitUsd / totalCostBasisUsd) * 100) : 0;
 
-  const sortedBy24h = [...updatedAssets]
+  const sortedByAllTime = [...updatedAssets]
     .filter((asset) => isPerformerCandidate(asset.symbol))
-    .sort((a, b) => b.change24hPercent - a.change24hPercent);
-  const bestPerformer = sortedBy24h[0] ?? null;
-  const worstPerformer = sortedBy24h[sortedBy24h.length - 1] ?? null;
+    .sort((a, b) => b.pnlPercent - a.pnlPercent);
+  const bestPerformer = sortedByAllTime[0] ?? null;
+  const worstPerformer = sortedByAllTime[sortedByAllTime.length - 1] ?? null;
 
   const assetsWithAllocation = updatedAssets.map((asset) => ({
     ...asset,
@@ -176,12 +176,16 @@ function applyRealtimeTicker(
   const concentrationIndex = calculateConcentrationHerfindahl(assetsWithAllocation.map((asset) => asset.allocationPercent));
   const maxDrawdownPercent = calculateMaxDrawdownFromSeries(navSeriesUsd);
   const volatilityPercent = calculateVolatilityFromSeries(navSeriesUsd);
+  const sharpeRatio7d = currentSnapshot.metrics.sharpeRatio7d ?? null;
   const sharpeRatio30d = currentSnapshot.metrics.sharpeRatio30d ?? null;
+  const sharpeRatio90d = currentSnapshot.metrics.sharpeRatio90d ?? null;
   const riskScore = calculateCompositeRiskScore({
     maxDrawdownPercent,
     volatilityPercent,
     concentrationIndex,
+    sharpeRatio7d,
     sharpeRatio30d,
+    sharpeRatio90d,
   });
 
   return {
@@ -199,11 +203,11 @@ function applyRealtimeTicker(
       activeAssets,
       allTimeProfitUsd,
       allTimeProfitPercent,
-      bestPerformer24h: bestPerformer
-        ? { symbol: bestPerformer.symbol, change24hPercent: bestPerformer.change24hPercent }
+      bestPerformerAllTime: bestPerformer
+        ? { symbol: bestPerformer.symbol, pnlUsd: bestPerformer.pnlUsd, pnlPercent: bestPerformer.pnlPercent }
         : null,
-      worstPerformer24h: worstPerformer
-        ? { symbol: worstPerformer.symbol, change24hPercent: worstPerformer.change24hPercent }
+      worstPerformerAllTime: worstPerformer
+        ? { symbol: worstPerformer.symbol, pnlUsd: worstPerformer.pnlUsd, pnlPercent: worstPerformer.pnlPercent }
         : null,
       maxDrawdownPercent,
       volatilityPercent,

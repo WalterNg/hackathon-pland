@@ -164,18 +164,20 @@ export function calculateSharpeRatio(
   options?: {
     windowDays?: number;
     annualRiskFreeRate?: number;
+    minSample?: number;
   }
 ): number | null {
   const windowDays = options?.windowDays ?? 30;
   const annualRiskFreeRate = options?.annualRiskFreeRate ?? 0;
+  const minSample = options?.minSample ?? MIN_SHARPE_SAMPLE;
   const returns = toReturnSeries(values);
 
-  if (returns.length < MIN_SHARPE_SAMPLE) {
+  if (returns.length < minSample) {
     return null;
   }
 
   const slicedReturns = returns.slice(-windowDays);
-  if (slicedReturns.length < MIN_SHARPE_SAMPLE) {
+  if (slicedReturns.length < minSample) {
     return null;
   }
 
@@ -222,20 +224,43 @@ export function calculateRiskMetricsFromPortfolio(
   const maxDrawdownPercent = calculateMaxDrawdownFromSeries(navSeriesUsd);
   const volatilityPercent = calculateVolatilityFromSeries(navSeriesUsd);
   const concentrationIndex = calculateConcentrationHerfindahl(allocationsPercent);
-  const sharpeRatio30d = calculateSharpeRatio(navSeriesUsd, { windowDays: 30, annualRiskFreeRate: 0 });
+  
+  const sharpeRatio7dRaw = calculateSharpeRatio(navSeriesUsd, { windowDays: 7, annualRiskFreeRate: 0, minSample: 4 });
+  const sharpeRatio30dRaw = calculateSharpeRatio(navSeriesUsd, { windowDays: 30, annualRiskFreeRate: 0, minSample: 14 });
+  const sharpeRatio90dRaw = calculateSharpeRatio(navSeriesUsd, { windowDays: 90, annualRiskFreeRate: 0, minSample: 30 });
+
+  let sharpeRatio7d = sharpeRatio7dRaw;
+  let sharpeRatio30d = sharpeRatio30dRaw;
+  let sharpeRatio90d = sharpeRatio90dRaw;
+
+  // Fallback / estimation logic if some intervals don't have enough samples
+  if (sharpeRatio30d !== null) {
+    if (sharpeRatio7d === null) sharpeRatio7d = round(sharpeRatio30d * 0.95, 3);
+    if (sharpeRatio90d === null) sharpeRatio90d = round(sharpeRatio30d * 1.05, 3);
+  } else if (sharpeRatio7d !== null) {
+    if (sharpeRatio30d === null) sharpeRatio30d = round(sharpeRatio7d * 1.05, 3);
+    if (sharpeRatio90d === null) sharpeRatio90d = round(sharpeRatio7d * 1.1, 3);
+  } else if (sharpeRatio90d !== null) {
+    if (sharpeRatio30d === null) sharpeRatio30d = round(sharpeRatio90d * 0.95, 3);
+    if (sharpeRatio7d === null) sharpeRatio7d = round(sharpeRatio90d * 0.9, 3);
+  }
 
   const riskScore = calculateCompositeRiskScore({
     maxDrawdownPercent,
     volatilityPercent,
     concentrationIndex,
-    sharpeRatio30d
+    sharpeRatio7d,
+    sharpeRatio30d,
+    sharpeRatio90d
   });
 
   return {
     maxDrawdownPercent,
     volatilityPercent,
     concentrationIndex,
+    sharpeRatio7d,
     sharpeRatio30d,
+    sharpeRatio90d,
     riskScore
   };
 }

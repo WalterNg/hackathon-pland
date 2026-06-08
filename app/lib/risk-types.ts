@@ -30,7 +30,9 @@ export type RiskMetricsSnapshot = {
   maxDrawdownPercent: number;
   volatilityPercent: number;
   concentrationIndex: number;
+  sharpeRatio7d: number | null;
   sharpeRatio30d: number | null;
+  sharpeRatio90d: number | null;
   riskScore: number;
 };
 

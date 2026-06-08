@@ -1,5 +1,8 @@
-import type { MaxDrawdownDetail, PortfolioMetrics as PortfolioMetricsType } from "@/app/lib/portfolio-types";
+import { useState } from "react";
+import type { PortfolioMetrics as PortfolioMetricsType } from "@/app/lib/portfolio-types";
 import { MaterialIcon } from "../dashboard/material-icon";
+import { MetricCard } from "./metric-card";
+import { DrawdownRecovery } from "./drawdown-recovery";
 
 type PortfolioMetricsProps = {
   metrics: PortfolioMetricsType;
@@ -49,143 +52,395 @@ function getSharpeBand(sharpe: number): SharpeBand {
   return               { label: "Poor",      colorClass: "text-danger",  pillClass: "status-pill-negative" };
 }
 
-function DrawdownRecovery({ detail }: { detail: MaxDrawdownDetail }) {
-  if (detail.recovered) {
-    return (
-      <span className="flex items-center gap-0.5 text-success">
-        <MaterialIcon name="check_circle" outlined={false} className="text-xs" />
-        Recovered in {detail.recoveryDays}d
-      </span>
-    );
+function getSharpeQuality(sharpe: number | null | undefined): { label: string; colorClass: string } {
+  if (sharpe === null || sharpe === undefined) {
+    return { label: "—", colorClass: "text-muted" };
   }
-  return (
-    <span className="flex items-center gap-0.5 text-warning">
-      <MaterialIcon name="schedule" outlined className="text-xs" />
-      Not recovered
-    </span>
-  );
+  if (sharpe >= 2.0) return { label: "Strong", colorClass: "text-success" };
+  if (sharpe >= 1.0) return { label: "Good",   colorClass: "text-success" };
+  if (sharpe >= 0.0) return { label: "Weak",   colorClass: "text-warning" };
+  return                    { label: "Poor",   colorClass: "text-danger"  };
+}
+
+function getRiskScoreBand(score: number): SharpeBand {
+  if (score >= 75) return { label: "High Risk", colorClass: "text-danger", pillClass: "status-pill-negative" };
+  if (score >= 50) return { label: "Medium Risk", colorClass: "text-warning", pillClass: "bg-warning/10 text-warning border border-warning/10 px-2.5 py-1" };
+  return { label: "Low Risk", colorClass: "text-success", pillClass: "status-pill-positive" };
+}
+
+function getConcentrationLabel(hhi: number): { label: string; colorClass: string } {
+  if (hhi >= 4000) return { label: "Very Concentrated", colorClass: "text-danger" };
+  if (hhi >= 2000) return { label: "Moderately Concentrated", colorClass: "text-warning" };
+  return { label: "Well Diversified", colorClass: "text-success" };
+}
+
+function formatAbsolutePnl(pnlUsd: number): string {
+  const absPnl = Math.abs(pnlUsd);
+  const sign = pnlUsd >= 0 ? "+" : "-";
+  return sign + usdFormatter.format(absPnl);
 }
 
 export function PortfolioMetrics({ metrics }: PortfolioMetricsProps) {
-  const best = metrics.bestPerformer24h;
-  const worst = metrics.worstPerformer24h;
+  const [page, setPage] = useState<0 | 1>(0);
+
+  const best = metrics.bestPerformerAllTime;
+  const worst = metrics.worstPerformerAllTime;
   const sharpe = metrics.sharpeRatio30d;
   const mdd = metrics.maxDrawdownDetail;
   const mddPercent = mdd
     ? (((mdd.peakValueUsd - mdd.troughValueUsd) / mdd.peakValueUsd) * 100).toFixed(2)
     : null;
 
+  // Page 2 metrics
+  const riskScore = metrics.riskScore ?? 0;
+  const volatility = metrics.volatilityPercent;
+  const concentration = metrics.concentrationIndex;
+  const activeAssets = metrics.activeAssets;
+  const violatedRules = metrics.violatedRulesCount ?? 0;
+
+  const allTimeProfitTooltip = (
+    <div className="space-y-2 text-[11px] leading-relaxed">
+      <div className="font-bold text-strong border-b border-white/6 pb-1">How is it calculated?</div>
+      <ul className="list-disc pl-3.5 space-y-1.5 text-muted">
+        <li>
+          <span className="font-semibold text-strong">All-time Profit</span> = Realised Profit + Unrealised Profit
+        </li>
+        <li>
+          <span className="font-semibold text-strong">Realised Profit</span> = (Selling Price - Avg Buy Price) × Amount Sold - Selling Fees
+        </li>
+        <li>
+          <span className="font-semibold text-strong">Unrealised Profit</span> = (Current Market Price - Avg Buy Price) × Amount Held
+        </li>
+      </ul>
+      <a
+        href="https://en.wikipedia.org/wiki/Profit_(economics)"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group/link inline-flex items-center gap-0.5 pt-1.5 text-[11px] font-semibold text-primary hover:underline cursor-pointer transition-colors duration-200"
+      >
+        Learn more
+        <span className="transition-transform duration-200 group-hover/link:translate-x-0.5">→</span>
+      </a>
+    </div>
+  );
+
+  const costBasisTooltip = (
+    <div className="space-y-2 text-[11px] leading-relaxed">
+      <div className="font-bold text-strong border-b border-white/6 pb-1">How is it calculated?</div>
+      <p className="text-muted">
+        We use the Average Cost Basis (ACB) method for calculation:
+      </p>
+      <ul className="list-disc pl-3.5 space-y-1.5 text-muted">
+        <li>
+          <span className="font-semibold text-strong">Cost Basis</span> = Sum (Buy Price × Buy Amount) + Sum (Buying Fees)
+        </li>
+      </ul>
+      <a
+        href="https://www.investopedia.com/terms/c/costbasis.asp"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group/link inline-flex items-center gap-0.5 pt-1.5 text-[11px] font-semibold text-primary hover:underline cursor-pointer transition-colors duration-200"
+      >
+        Learn more
+        <span className="transition-transform duration-200 group-hover/link:translate-x-0.5">→</span>
+      </a>
+    </div>
+  );
+
+  const handlePrev = () => setPage((p) => (p === 1 ? 0 : 1));
+  const handleNext = () => setPage((p) => (p === 0 ? 1 : 0));
+
   return (
-    <section className="mb-6 grid grid-cols-2 gap-3 lg:mb-8 lg:grid-cols-5 lg:gap-4">
+    <section className="mb-6 relative group/metrics lg:mb-8 w-full">
+      {/* Left Arrow Button */}
+      <button
+        type="button"
+        onClick={handlePrev}
+        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-(--surface-glass) backdrop-blur-md text-muted shadow-lg opacity-100 lg:opacity-[0.25] lg:group-hover/metrics:opacity-100 transition-all hover:bg-white/10 hover:text-strong cursor-pointer focus-visible:outline-none"
+        aria-label="Previous page"
+      >
+        <MaterialIcon name="chevron_left" />
+      </button>
 
-      {/* ── All-time Profit ── */}
-      <article className="panel-base px-4 py-3.5">
-        <p className="mb-1.5 text-xs font-medium text-muted">All-time Profit</p>
-        <p className={`text-xl font-bold leading-tight ${metrics.allTimeProfitUsd >= 0 ? "text-success" : "text-danger"}`}>
-          {usdFormatter.format(metrics.allTimeProfitUsd)}
-        </p>
-        <div className={`mt-1.5 status-pill w-max text-xs ${metrics.allTimeProfitUsd >= 0 ? "status-pill-positive" : "status-pill-negative"}`}>
-          <span className="flex items-center gap-0.5">
-            <MaterialIcon
-              name={metrics.allTimeProfitUsd >= 0 ? "arrow_upward" : "arrow_downward"}
-              outlined={false}
-              className="text-xs"
-            />
-            {Math.abs(metrics.allTimeProfitPercent).toFixed(2)}%
-          </span>
-        </div>
-      </article>
-
-      {/* ── Cost Basis ── */}
-      <article className="panel-base px-4 py-3.5">
-        <p className="mb-1.5 text-xs font-medium text-muted">Cost Basis</p>
-        <p className="text-xl font-bold leading-tight text-strong">
-          {usdFormatter.format(metrics.totalCostBasisUsd)}
-        </p>
-      </article>
-
-      {/* ── Best + Worst Performer ── */}
-      <article className="panel-base col-span-2 px-4 py-3.5 lg:col-span-1">
-        <p className="mb-1.5 text-xs font-medium text-muted">24h Performance</p>
-        <div className="grid grid-cols-2 gap-x-3 divide-x divide-white/10">
-          {/* Best */}
-          <div className="pr-3">
-            <p className="mb-0.5 text-xs text-muted">Best</p>
-            <p className="truncate text-sm font-bold text-strong">
-              {best ? formatSymbol(best.symbol) : "N/A"}
-            </p>
-            <p className={`text-xs font-semibold ${(best?.change24hPercent ?? 0) >= 0 ? "text-success" : "text-danger"}`}>
-              {best ? `${best.change24hPercent >= 0 ? "+" : ""}${best.change24hPercent.toFixed(2)}%` : "—"}
-            </p>
-          </div>
-          {/* Worst */}
-          <div className="pl-3">
-            <p className="mb-0.5 text-xs text-muted">Worst</p>
-            <p className="truncate text-sm font-bold text-strong">
-              {worst ? formatSymbol(worst.symbol) : "N/A"}
-            </p>
-            <p className={`text-xs font-semibold ${(worst?.change24hPercent ?? 0) >= 0 ? "text-success" : "text-danger"}`}>
-              {worst ? `${worst.change24hPercent >= 0 ? "+" : ""}${worst.change24hPercent.toFixed(2)}%` : "—"}
-            </p>
-          </div>
-        </div>
-      </article>
-
-      {/* ── Sharpe Ratio ── */}
-      <article className="panel-base px-4 py-3.5">
-        <p className="mb-1.5 text-xs font-medium text-muted">
-          Sharpe Ratio <span className="font-normal opacity-60">(30d)</span>
-        </p>
-        {sharpe === null || sharpe === undefined ? (
-          <p className="text-xl font-bold text-muted">N/A</p>
-        ) : (
+      {/* Metrics Grid */}
+      <div 
+        key={page}
+        className="grid grid-cols-2 gap-3 lg:grid-cols-5 lg:gap-4 w-full animate-[fadeSlideIn_0.2s_ease_both]"
+      >
+        {page === 0 ? (
           <>
-            <p className={`text-xl font-bold leading-tight ${getSharpeBand(sharpe).colorClass}`}>
-              {sharpe.toFixed(2)}
-            </p>
-            <div className={`mt-1.5 status-pill w-max text-xs ${getSharpeBand(sharpe).pillClass}`}>
-              {getSharpeBand(sharpe).label}
-            </div>
-            <p className="mt-1.5 text-xs text-muted leading-snug">Return / risk unit</p>
-          </>
-        )}
-      </article>
-
-      {/* ── Max Drawdown ── */}
-      <article className="panel-base px-4 py-3.5">
-        <p className="mb-1.5 text-xs font-medium text-muted">Max Drawdown</p>
-        {!mdd || !mddPercent ? (
-          <p className="text-xl font-bold text-muted">N/A</p>
-        ) : (
-          <>
-            <div className="flex items-baseline gap-2">
-              <p className="text-xl font-bold leading-tight text-danger">-{mddPercent}%</p>
-              <p className="text-xs text-muted">({usdCompactFormatter.format(mdd.troughValueUsd - mdd.peakValueUsd)})</p>
-            </div>
-
-            <div className="mt-2 space-y-0.5 text-xs">
-              {/* Peak → Trough */}
-              <div className="flex items-center justify-between gap-2">
-                <span className="shrink-0 text-muted">
-                  {usdCompactFormatter.format(mdd.peakValueUsd)}
-                  <span className="mx-1 text-muted opacity-50">→</span>
-                  {usdCompactFormatter.format(mdd.troughValueUsd)}
+            {/* Card 1: All-time Profit */}
+            <MetricCard
+              title="All-time Profit"
+              tooltipText={allTimeProfitTooltip}
+              tooltipPosition="left"
+              tooltipWidthClass="w-80 md:w-[350px]"
+              value={
+                <p className={`text-xl font-bold leading-tight ${metrics.allTimeProfitUsd >= 0 ? "text-success" : "text-danger"}`}>
+                  {usdFormatter.format(metrics.allTimeProfitUsd)}
+                </p>
+              }
+            >
+              <div className={`mt-1.5 status-pill w-max text-xs ${metrics.allTimeProfitUsd >= 0 ? "status-pill-positive" : "status-pill-negative"}`}>
+                <span className="flex items-center gap-0.5">
+                  <MaterialIcon
+                    name={metrics.allTimeProfitUsd >= 0 ? "arrow_upward" : "arrow_downward"}
+                    outlined={false}
+                    className="text-xs"
+                  />
+                  {Math.abs(metrics.allTimeProfitPercent).toFixed(2)}%
                 </span>
-                <span className="text-muted">{mdd.durationDays}d</span>
               </div>
-              {/* Dates */}
-              <p className="text-muted opacity-70">
-                {dateShortFormatter.format(new Date(mdd.peakAt))} – {dateShortFormatter.format(new Date(mdd.troughAt))}
-              </p>
-              {/* Recovery */}
-              <div className="pt-0.5 text-xs font-medium">
-                <DrawdownRecovery detail={mdd} />
+            </MetricCard>
+
+            {/* Card 2: Cost Basis */}
+            <MetricCard
+              title="Cost Basis"
+              tooltipText={costBasisTooltip}
+              tooltipPosition="center"
+              tooltipWidthClass="w-80 md:w-[350px]"
+              value={
+                <p className="text-xl font-bold leading-tight text-strong">
+                  {usdFormatter.format(metrics.totalCostBasisUsd)}
+                </p>
+              }
+            />
+
+            {/* Card 3: Performance */}
+            <MetricCard
+              colSpan={2}
+              value={
+                <div className="grid grid-cols-2 gap-x-3 divide-x divide-white/10">
+                  {/* Best */}
+                  <div className="pr-3">
+                    <p className="mb-0.5 text-xs text-muted">Best Performer</p>
+                    <p className="truncate text-base font-bold text-strong mt-0.5">
+                      {best ? formatSymbol(best.symbol) : "N/A"}
+                    </p>
+                    {best ? (
+                      <p className="text-xs font-semibold text-success mt-1.5 flex items-center gap-1.5 flex-wrap">
+                        <span>{formatAbsolutePnl(best.pnlUsd)}</span>
+                        <span className="flex items-center gap-0.5">
+                          <span>▲</span>
+                          <span>{best.pnlPercent.toFixed(2)}%</span>
+                        </span>
+                      </p>
+                    ) : (
+                      <p className="text-xs font-semibold text-success mt-1.5">—</p>
+                    )}
+                  </div>
+                  {/* Worst */}
+                  <div className="pl-3">
+                    <p className="mb-0.5 text-xs text-muted">Worst Performer</p>
+                    <p className="truncate text-base font-bold text-strong mt-0.5">
+                      {worst ? formatSymbol(worst.symbol) : "N/A"}
+                    </p>
+                    {worst ? (
+                      <p className="text-xs font-semibold text-danger mt-1.5 flex items-center gap-1.5 flex-wrap">
+                        <span>{formatAbsolutePnl(worst.pnlUsd)}</span>
+                        <span className="flex items-center gap-0.5">
+                          <span>▼</span>
+                          <span>{Math.abs(worst.pnlPercent).toFixed(2)}%</span>
+                        </span>
+                      </p>
+                    ) : (
+                      <p className="text-xs font-semibold text-danger mt-1.5">—</p>
+                    )}
+                  </div>
+                </div>
+              }
+            />
+
+            {/* Card 4: Sharpe Ratio */}
+            <MetricCard
+              headerAlignClass="items-start"
+              title={
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs font-semibold text-strong leading-none">Sharpe Ratio</span>
+                  <span className="text-[10px] font-normal text-muted leading-none">Risk-adjusted return</span>
+                </div>
+              }
+              tooltipText="Measure of risk-adjusted return across 7D, 30D, and 90D timeframes. Higher values indicate better return per unit of volatility."
+              tooltipPosition="center"
+              value={
+                <div className="grid grid-cols-3 gap-1 pt-4 mt-2 pb-1.5">
+                  {/* 7D */}
+                  <div className="flex flex-col items-start">
+                    <span className="text-[10px] font-bold text-muted/70 tracking-wider uppercase leading-none">7D</span>
+                    <span className={`text-base font-bold mt-2.5 leading-none ${getSharpeQuality(metrics.sharpeRatio7d).colorClass}`}>
+                      {metrics.sharpeRatio7d !== null && metrics.sharpeRatio7d !== undefined
+                        ? metrics.sharpeRatio7d.toFixed(2)
+                        : "—"}
+                    </span>
+                    <span className="text-[10px] text-muted font-normal mt-2 leading-none">
+                      {getSharpeQuality(metrics.sharpeRatio7d).label}
+                    </span>
+                  </div>
+                  
+                  {/* 30D */}
+                  <div className="flex flex-col items-start pl-2">
+                    <span className="text-[10px] font-bold text-muted/70 tracking-wider uppercase leading-none">30D</span>
+                    <span className={`text-base font-bold mt-2.5 leading-none ${getSharpeQuality(metrics.sharpeRatio30d).colorClass}`}>
+                      {metrics.sharpeRatio30d !== null && metrics.sharpeRatio30d !== undefined
+                        ? metrics.sharpeRatio30d.toFixed(2)
+                        : "—"}
+                    </span>
+                    <span className="text-[10px] text-muted font-normal mt-2 leading-none">
+                      {getSharpeQuality(metrics.sharpeRatio30d).label}
+                    </span>
+                  </div>
+                  
+                  {/* 90D */}
+                  <div className="flex flex-col items-start pl-2">
+                    <span className="text-[10px] font-bold text-muted/70 tracking-wider uppercase leading-none">90D</span>
+                    <span className={`text-base font-bold mt-2.5 leading-none ${getSharpeQuality(metrics.sharpeRatio90d).colorClass}`}>
+                      {metrics.sharpeRatio90d !== null && metrics.sharpeRatio90d !== undefined
+                        ? metrics.sharpeRatio90d.toFixed(2)
+                        : "—"}
+                    </span>
+                    <span className="text-[10px] text-muted font-normal mt-2 leading-none">
+                      {getSharpeQuality(metrics.sharpeRatio90d).label}
+                    </span>
+                  </div>
+                </div>
+              }
+            />
+
+            {/* Card 5: Max Drawdown */}
+            <MetricCard
+              title="Max Drawdown"
+              tooltipText="The largest peak-to-trough drop in portfolio value before a new peak is achieved. Shows historical maximum loss risk."
+              tooltipPosition="right"
+              value={
+                !mdd || !mddPercent ? (
+                  <p className="text-xl font-bold text-muted">N/A</p>
+                ) : (
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-xl font-bold leading-tight text-danger">-{mddPercent}%</p>
+                    <p className="text-xs text-muted">({usdCompactFormatter.format(mdd.troughValueUsd - mdd.peakValueUsd)})</p>
+                  </div>
+                )
+              }
+            >
+              {mdd && mddPercent && (
+                <div className="mt-2 space-y-0.5 text-xs">
+                  {/* Peak → Trough */}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="shrink-0 text-muted">
+                      {usdCompactFormatter.format(mdd.peakValueUsd)}
+                      <span className="mx-1 text-muted opacity-50">→</span>
+                      {usdCompactFormatter.format(mdd.troughValueUsd)}
+                    </span>
+                    <span className="text-muted">{mdd.durationDays}d</span>
+                  </div>
+                  {/* Dates */}
+                  <p className="text-muted opacity-70">
+                    {dateShortFormatter.format(new Date(mdd.peakAt))} – {dateShortFormatter.format(new Date(mdd.troughAt))}
+                  </p>
+                  {/* Recovery */}
+                  <div className="pt-0.5 text-xs font-medium">
+                    <DrawdownRecovery detail={mdd} />
+                  </div>
+                </div>
+              )}
+            </MetricCard>
+          </>
+        ) : (
+          <>
+            {/* Card 1: Risk Score */}
+            <MetricCard
+              title="Risk Score"
+              tooltipText="Composite risk index (0-100) combining volatility, asset concentration, and active rule violations."
+              tooltipPosition="left"
+              value={
+                <p className={`text-xl font-bold leading-tight ${getRiskScoreBand(riskScore).colorClass}`}>
+                  {riskScore.toFixed(1)}/100
+                </p>
+              }
+            >
+              <div className={`mt-1.5 status-pill w-max text-xs ${getRiskScoreBand(riskScore).pillClass}`}>
+                {getRiskScoreBand(riskScore).label}
               </div>
-            </div>
+              <p className="mt-1.5 text-xs text-muted leading-snug">Overall portfolio risk</p>
+            </MetricCard>
+
+            {/* Card 2: Volatility */}
+            <MetricCard
+              title="Volatility"
+              tooltipText="Standard deviation of daily portfolio returns over the last 30 days, annualized. Shows price fluctuation intensity."
+              tooltipPosition="center"
+              value={
+                <p className="text-xl font-bold leading-tight text-strong">
+                  {volatility !== undefined && volatility !== null ? `${volatility.toFixed(2)}%` : "N/A"}
+                </p>
+              }
+            >
+              <p className="mt-1.5 text-xs text-muted leading-snug">30d Daily Volatility</p>
+            </MetricCard>
+
+            {/* Card 3: Concentration (HHI) */}
+            <MetricCard
+              title="Concentration (HHI)"
+              tooltipText="Herfindahl-Hirschman Index measuring asset allocation distribution. Lower values indicate better diversification."
+              tooltipPosition="center"
+              value={
+                <p className="text-xl font-bold leading-tight text-strong">
+                  {concentration !== undefined && concentration !== null ? concentration.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "N/A"}
+                </p>
+              }
+            >
+              {concentration !== undefined && concentration !== null ? (
+                <div className={`mt-1.5 text-xs font-semibold ${getConcentrationLabel(concentration).colorClass}`}>
+                  {getConcentrationLabel(concentration).label}
+                </div>
+              ) : (
+                <p className="mt-1.5 text-xs text-muted leading-snug">Diversification index</p>
+              )}
+            </MetricCard>
+
+            {/* Card 4: Active Assets */}
+            <MetricCard
+              title="Active Assets"
+              tooltipText="The total number of unique cryptocurrencies currently held in your portfolio."
+              tooltipPosition="center"
+              value={
+                <p className="text-xl font-bold leading-tight text-strong">
+                  {activeAssets ?? 0}
+                </p>
+              }
+            >
+              <p className="mt-1.5 text-xs text-muted leading-snug">Unique holdings</p>
+            </MetricCard>
+
+            {/* Card 5: Risk Rules Breached */}
+            <MetricCard
+              title="Risk Breaches"
+              tooltipText="The number of custom risk monitoring rules (e.g. max allocation, drawdown limits) currently violated."
+              tooltipPosition="right"
+              value={
+                <p className={`text-xl font-bold leading-tight ${violatedRules > 0 ? "text-danger" : "text-success"}`}>
+                  {violatedRules}
+                </p>
+              }
+            >
+              <div className={`mt-1.5 status-pill w-max text-xs ${violatedRules > 0 ? "status-pill-negative" : "status-pill-positive"}`}>
+                {violatedRules > 0 ? "Action Required" : "Safe"}
+              </div>
+              <p className="mt-1.5 text-xs text-muted leading-snug">Active rules breached</p>
+            </MetricCard>
           </>
         )}
-      </article>
+      </div>
 
+      {/* Right Arrow Button */}
+      <button
+        type="button"
+        onClick={handleNext}
+        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-(--surface-glass) backdrop-blur-md text-muted shadow-lg opacity-100 lg:opacity-[0.25] lg:group-hover/metrics:opacity-100 transition-all hover:bg-white/10 hover:text-strong cursor-pointer focus-visible:outline-none"
+        aria-label="Next page"
+      >
+        <MaterialIcon name="chevron_right" />
+      </button>
     </section>
   );
 }
