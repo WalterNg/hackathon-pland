@@ -3,10 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type PortfolioSnapshot } from "@/app/lib/portfolio-types";
 import {
-  calculateCompositeRiskScore,
-  calculateConcentrationHerfindahl,
-  calculateMaxDrawdownFromSeries,
-  calculateVolatilityFromSeries,
+  calculateDefaultBreachPenaltyScore,
+  calculateRiskMetricsFromPortfolio,
 } from "@/app/lib/risk-calculator";
 import { backendBaseUrl } from "@/app/lib/backend-base-url";
 import { RefreshIntervals } from "@/app/lib/refresh-intervals";
@@ -172,23 +170,17 @@ function applyRealtimeTicker(
   // Keep enough history: 35 daily klines + ~8 hours of per-minute realtime ticks.
   // The old limit of 90 would start dropping daily klines after just ~55 min of live ticks.
   const chartWindow = chart.slice(-500);
-  const navSeriesUsd = chartWindow.map((point) => point.totalValueUsd);
-  const concentrationIndex = calculateConcentrationHerfindahl(assetsWithAllocation.map((asset) => asset.allocationPercent));
-  const maxDrawdownPercent = calculateMaxDrawdownFromSeries(navSeriesUsd);
-  const volatilityPercent = calculateVolatilityFromSeries(navSeriesUsd);
-  const sharpeRatio7d = currentSnapshot.metrics.sharpeRatio7d ?? null;
-  const sharpeRatio30d = currentSnapshot.metrics.sharpeRatio30d ?? null;
-  const sharpeRatio90d = currentSnapshot.metrics.sharpeRatio90d ?? null;
-  const downsideRiskPercent = currentSnapshot.metrics.downsideRiskPercent ?? 0;
-  const riskScore = calculateCompositeRiskScore({
-    maxDrawdownPercent,
-    volatilityPercent,
-    concentrationIndex,
-    sharpeRatio7d,
-    sharpeRatio30d,
-    sharpeRatio90d,
-    downsideRiskPercent,
-  });
+  const breachPenaltyScore = calculateDefaultBreachPenaltyScore(
+    currentSnapshot.riskViolations?.length ?? currentSnapshot.metrics.violatedRulesCount ?? 0
+  );
+  const riskMetrics = calculateRiskMetricsFromPortfolio(
+    chartWindow.map((point) => ({
+      totalValueUsd: point.totalValueUsd,
+      btcPriceUsd: point.btcPriceUsd,
+    })),
+    assetsWithAllocation.map((asset) => asset.allocationPercent),
+    { breachPenaltyScore }
+  );
 
   return {
     ...currentSnapshot,
@@ -211,10 +203,17 @@ function applyRealtimeTicker(
       worstPerformerAllTime: worstPerformer
         ? { symbol: worstPerformer.symbol, pnlUsd: worstPerformer.pnlUsd, pnlPercent: worstPerformer.pnlPercent }
         : null,
-      maxDrawdownPercent,
-      volatilityPercent,
-      concentrationIndex,
-      riskScore,
+      maxDrawdownPercent: riskMetrics.maxDrawdownPercent,
+      volatilityPercent: riskMetrics.volatilityPercent,
+      concentrationIndex: riskMetrics.concentrationIndex,
+      sharpeRatio7d: riskMetrics.sharpeRatio7d,
+      sharpeRatio30d: riskMetrics.sharpeRatio30d,
+      sharpeRatio90d: riskMetrics.sharpeRatio90d,
+      downsideRiskPercent: riskMetrics.downsideRiskPercent,
+      riskScore: riskMetrics.riskScore,
+      expectedShortfallPercent: riskMetrics.expectedShortfallPercent,
+      beta: riskMetrics.beta,
+      breachPenaltyScore: riskMetrics.breachPenaltyScore,
       lastRiskUpdatedAt: nowIso
     },
     chart: chartWindow,

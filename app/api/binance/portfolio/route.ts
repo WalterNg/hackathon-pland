@@ -24,6 +24,10 @@ import {
   logRiskViolations,
 } from "@/app/lib/repositories/risk-repo";
 import { refreshMarketPricesFromSnapshot } from "@/app/lib/repositories/market-data-repo";
+import {
+  calculateDefaultBreachPenaltyScore,
+  calculateRiskMetricsFromPortfolio,
+} from "@/app/lib/risk-calculator";
 import { RefreshIntervals } from "@/app/lib/refresh-intervals";
 import { hasSupabaseEnv, hasSupabaseServiceEnv } from "@/app/lib/supabase/env";
 import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
@@ -139,10 +143,21 @@ async function buildAndCachePortfolioSnapshot(
     }));
   }
 
+  const breachPenaltyScore = calculateDefaultBreachPenaltyScore(riskViolations.length);
+  const recalculatedRiskMetrics = calculateRiskMetricsFromPortfolio(
+    snapshot.chart.map((point) => ({
+      totalValueUsd: point.totalValueUsd,
+      btcPriceUsd: point.btcPriceUsd,
+    })),
+    snapshot.assets.map((asset) => asset.allocationPercent),
+    { breachPenaltyScore }
+  );
+
   const snapshotWithRisk = {
     ...snapshot,
     metrics: {
       ...snapshot.metrics,
+      ...recalculatedRiskMetrics,
       violatedRulesCount: riskViolations.length,
       lastRiskUpdatedAt: nowIso,
     },

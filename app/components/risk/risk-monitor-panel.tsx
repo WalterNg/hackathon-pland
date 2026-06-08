@@ -1,4 +1,5 @@
 import type { PortfolioMetrics } from "@/app/lib/portfolio-types";
+import { getRiskScoreBand } from "@/app/lib/risk-calculator";
 import type { RiskAlertRecord, RiskEventRecord } from "@/app/lib/risk-types";
 
 type RiskMonitorPanelProps = {
@@ -24,22 +25,6 @@ function sharpeValue(value: number | null | undefined): string {
   }
 
   return value.toFixed(3);
-}
-
-function riskBand(score: number | null | undefined): { label: string; className: string } {
-  if (score === null || score === undefined || !Number.isFinite(score)) {
-    return { label: "Unknown", className: "bg-gray-100 text-muted" };
-  }
-
-  if (score >= 75) {
-    return { label: "High", className: "bg-danger-soft text-danger" };
-  }
-
-  if (score >= 50) {
-    return { label: "Medium", className: "bg-[rgba(255,184,106,0.14)] text-warning" };
-  }
-
-  return { label: "Low", className: "bg-success-soft text-success" };
 }
 
 function eventSeverityClass(severity: RiskEventRecord["severity"]): string {
@@ -88,7 +73,7 @@ export function RiskMonitorPanel({
   onViewAlerts,
 }: RiskMonitorPanelProps) {
   const score = metrics?.riskScore ?? null;
-  const scoreBand = riskBand(score);
+  const scoreBand = score !== null && score !== undefined && Number.isFinite(score) ? getRiskScoreBand(score) : null;
   const activeAlerts = alerts.filter((alert) => alert.status === "active");
   const criticalAlerts = activeAlerts.filter((alert) => alert.severity === "critical");
   const topCriticalAlert = criticalAlerts[0] ?? null;
@@ -103,8 +88,8 @@ export function RiskMonitorPanel({
           </p>
         </div>
 
-        <span className={`status-pill ${scoreBand.className}`}>
-          {scoreBand.label} Risk {score !== null ? `(${score.toFixed(1)})` : ""}
+        <span className={`status-pill ${scoreBand?.pillClass ?? "bg-gray-100 text-muted"}`}>
+          {scoreBand?.label ?? "Unknown"} {score !== null ? `(${score.toFixed(1)})` : ""}
         </span>
       </div>
 

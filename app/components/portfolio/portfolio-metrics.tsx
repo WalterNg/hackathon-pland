@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { PortfolioMetrics as PortfolioMetricsType } from "@/app/lib/portfolio-types";
+import { getRiskScoreBand } from "@/app/lib/risk-calculator";
 import { MaterialIcon } from "../dashboard/material-icon";
 import { MetricCard } from "./metric-card";
 import { DrawdownRecovery } from "./drawdown-recovery";
@@ -42,16 +43,6 @@ function formatSymbol(symbol: string): string {
   return symbolNames[symbol] ?? ticker;
 }
 
-type SharpeBand = { label: string; colorClass: string; pillClass: string };
-
-function getSharpeBand(sharpe: number): SharpeBand {
-  if (sharpe >= 2.0) return { label: "Excellent", colorClass: "text-success", pillClass: "status-pill-positive" };
-  if (sharpe >= 1.0) return { label: "Good",      colorClass: "text-success", pillClass: "status-pill-positive" };
-  if (sharpe >= 0.5) return { label: "Average",   colorClass: "text-muted",   pillClass: "status-pill-neutral"  };
-  if (sharpe >= 0)   return { label: "Below Avg", colorClass: "text-warning", pillClass: "status-pill-neutral"  };
-  return               { label: "Poor",      colorClass: "text-danger",  pillClass: "status-pill-negative" };
-}
-
 function getSharpeQuality(sharpe: number | null | undefined): { label: string; colorClass: string } {
   if (sharpe === null || sharpe === undefined) {
     return { label: "—", colorClass: "text-muted" };
@@ -60,12 +51,6 @@ function getSharpeQuality(sharpe: number | null | undefined): { label: string; c
   if (sharpe >= 1.0) return { label: "Good",   colorClass: "text-success" };
   if (sharpe >= 0.0) return { label: "Weak",   colorClass: "text-warning" };
   return                    { label: "Poor",   colorClass: "text-danger"  };
-}
-
-function getRiskScoreBand(score: number): SharpeBand {
-  if (score >= 75) return { label: "High Risk", colorClass: "text-danger", pillClass: "status-pill-negative" };
-  if (score >= 50) return { label: "Medium Risk", colorClass: "text-warning", pillClass: "bg-warning/10 text-warning border border-warning/10 px-2.5 py-1" };
-  return { label: "Low Risk", colorClass: "text-success", pillClass: "status-pill-positive" };
 }
 
 function getConcentrationLabel(hhi: number): { label: string; colorClass: string } {
@@ -85,7 +70,6 @@ export function PortfolioMetrics({ metrics }: PortfolioMetricsProps) {
 
   const best = metrics.bestPerformerAllTime;
   const worst = metrics.worstPerformerAllTime;
-  const sharpe = metrics.sharpeRatio30d;
   const mdd = metrics.maxDrawdownDetail;
   const mddPercent = mdd
     ? (((mdd.peakValueUsd - mdd.troughValueUsd) / mdd.peakValueUsd) * 100).toFixed(2)
@@ -93,9 +77,9 @@ export function PortfolioMetrics({ metrics }: PortfolioMetricsProps) {
 
   // Page 2 metrics
   const riskScore = metrics.riskScore ?? 0;
+  const riskScoreBand = getRiskScoreBand(riskScore);
   const volatility = metrics.volatilityPercent;
   const concentration = metrics.concentrationIndex;
-  const activeAssets = metrics.activeAssets;
   const downsideRisk = metrics.downsideRiskPercent;
   const violatedRules = metrics.violatedRulesCount ?? 0;
 
@@ -145,6 +129,27 @@ export function PortfolioMetrics({ metrics }: PortfolioMetricsProps) {
         Learn more
         <span className="transition-transform duration-200 group-hover/link:translate-x-0.5">→</span>
       </a>
+    </div>
+  );
+
+  const riskScoreTooltip = (
+    <div className="space-y-3 text-[11px] leading-relaxed">
+      <div className="font-bold text-strong border-b border-white/6 pb-1">How is it calculated?</div>
+      <p className="text-muted">
+        Risk Score is a 0–100 composite portfolio risk index. Higher values indicate higher overall portfolio risk.
+        It is calculated from standardized 0–100 component scores using the weighted formula:
+      </p>
+      <div className="rounded-xl border border-white/6 bg-black/10 px-3 py-2 text-[11px] text-muted">
+        <p className="font-semibold text-strong">Risk Score =</p>
+        <ul className="mt-1.5 space-y-1.5">
+          <li>0.20 × Volatility Score</li>
+          <li>0.25 × Expected Shortfall Score</li>
+          <li>0.20 × Max Drawdown Score</li>
+          <li>0.15 × Concentration Score</li>
+          <li>0.10 × Beta Score</li>
+          <li>0.10 × Stress / Breach Penalty Score</li>
+        </ul>
+      </div>
     </div>
   );
 
@@ -351,18 +356,21 @@ export function PortfolioMetrics({ metrics }: PortfolioMetricsProps) {
             {/* Card 1: Risk Score */}
             <MetricCard
               title="Risk Score"
-              tooltipText="Composite risk index (0-100) combining volatility, asset concentration, and active rule violations."
+              tooltipText={riskScoreTooltip}
               tooltipPosition="left"
+              tooltipWidthClass="w-[22rem] md:w-[26rem]"
               value={
-                <p className={`text-xl font-bold leading-tight ${getRiskScoreBand(riskScore).colorClass}`}>
-                  {riskScore.toFixed(1)}/100
-                </p>
+                <div className="flex items-baseline">
+                  <span className={`text-xl font-bold leading-tight ${riskScoreBand.textClass}`}>
+                    {riskScore.toFixed(1)}
+                  </span>
+                  <span className="text-xs font-normal text-muted ml-0.5">/100</span>
+                </div>
               }
             >
-              <div className={`mt-1.5 status-pill w-max text-xs ${getRiskScoreBand(riskScore).pillClass}`}>
-                {getRiskScoreBand(riskScore).label}
+              <div className={`mt-1.5 text-xs font-semibold ${riskScoreBand.textClass}`}>
+                {riskScoreBand.label}
               </div>
-              <p className="mt-1.5 text-xs text-muted leading-snug">Overall portfolio risk</p>
             </MetricCard>
 
             {/* Card 2: Volatility */}

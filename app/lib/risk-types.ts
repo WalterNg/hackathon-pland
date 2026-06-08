@@ -35,6 +35,9 @@ export type RiskMetricsSnapshot = {
   sharpeRatio90d: number | null;
   downsideRiskPercent: number;
   riskScore: number;
+  expectedShortfallPercent?: number;
+  beta?: number;
+  breachPenaltyScore?: number;
 };
 
 export type RiskViolation = {

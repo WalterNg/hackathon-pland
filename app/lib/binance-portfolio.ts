@@ -447,6 +447,9 @@ export async function buildBinancePortfolioSnapshot(
         sharpeRatio90d: null,
         downsideRiskPercent: 0,
         riskScore: 0,
+        expectedShortfallPercent: 0,
+        beta: 0,
+        breachPenaltyScore: 0,
         violatedRulesCount: 0,
         lastRiskUpdatedAt: new Date().toISOString()
       },
@@ -564,9 +567,8 @@ export async function buildBinancePortfolioSnapshot(
     ? buildChartFromTimeline(klinesMap, prices, holdingsTimeline, effectiveStartMs, firstTransactionMs, costBasisTimeline)
     : buildChartLegacy(heldSymbols, klinesMap, prices, positions);
 
-  const navSeriesUsd = chart.map((point) => point.totalValueUsd);
   const allocationsPercent = assets.map((asset) => asset.allocationPercent);
-  const riskMetrics = calculateRiskMetricsFromPortfolio(navSeriesUsd, allocationsPercent);
+  const riskMetrics = calculateRiskMetricsFromPortfolio(chart, allocationsPercent);
   const maxDrawdownDetail = calculateMaxDrawdownDetail(chart) ?? undefined;
   const riskUpdatedAt = new Date().toISOString();
 
@@ -600,6 +602,9 @@ export async function buildBinancePortfolioSnapshot(
       sharpeRatio90d: riskMetrics.sharpeRatio90d,
       downsideRiskPercent: riskMetrics.downsideRiskPercent,
       riskScore: riskMetrics.riskScore,
+      expectedShortfallPercent: riskMetrics.expectedShortfallPercent,
+      beta: riskMetrics.beta,
+      breachPenaltyScore: riskMetrics.breachPenaltyScore,
       violatedRulesCount: 0,
       lastRiskUpdatedAt: riskUpdatedAt,
     },

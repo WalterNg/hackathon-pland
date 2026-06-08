@@ -64,6 +64,9 @@ export type PortfolioMetrics = {
   sharpeRatio90d?: number | null;
   downsideRiskPercent?: number;
   riskScore?: number;
+  expectedShortfallPercent?: number;
+  beta?: number;
+  breachPenaltyScore?: number;
   violatedRulesCount?: number;
   lastRiskUpdatedAt?: string;
 };
