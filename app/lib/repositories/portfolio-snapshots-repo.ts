@@ -64,3 +64,15 @@ export async function getLatestPortfolioSnapshotCache(
 
   return row.metadata;
 }
+
+export async function deletePortfolioSnapshotCache(
+  supabase: SupabaseClient,
+  userId: string,
+  portfolioId: string
+): Promise<void> {
+  await supabase
+    .from("portfolio_snapshots")
+    .delete()
+    .eq("user_id", userId)
+    .eq("portfolio_id", portfolioId);
+}

@@ -36,7 +36,7 @@ function toReturnSeries(values: number[]): number[] {
   return out;
 }
 
-type ChartSeriesPoint = Pick<PortfolioChartPoint, "totalValueUsd" | "btcPriceUsd">;
+type ChartSeriesPoint = Pick<PortfolioChartPoint, "totalValueUsd" | "btcPriceUsd" | "dailyReturn">;
 
 type RiskScoreInputs = {
   volatilityScore: number;
@@ -49,6 +49,8 @@ type RiskScoreInputs = {
 
 type RiskMetricOptions = {
   breachPenaltyScore?: number;
+  topRiskContributorSymbol?: string | null;
+  topRiskContributorPercent?: number | null;
 };
 
 function standardDeviation(values: number[]): number {
@@ -144,8 +146,7 @@ export function calculateMaxDrawdownDetail(
   };
 }
 
-export function calculateVolatilityFromSeries(values: number[]): number {
-  const returns = toReturnSeries(values);
+export function calculateVolatilityFromReturns(returns: number[]): number {
   if (returns.length === 0) {
     return 0;
   }
@@ -154,8 +155,53 @@ export function calculateVolatilityFromSeries(values: number[]): number {
   return round(volatility, 2);
 }
 
-export function calculateExpectedShortfallFromSeries(values: number[]): number {
-  const returns = toReturnSeries(values);
+export function calculateVolatilityFromSeries(values: number[]): number {
+  return calculateVolatilityFromReturns(toReturnSeries(values));
+}
+
+export function calculateVolatilityPercentileFromReturns(
+  returns: number[],
+  currentVolatility: number
+): number {
+  if (returns.length < 35) {
+    return round(estimateVolatilityPercentile(currentVolatility), 1);
+  }
+
+  const historicalVols: number[] = [];
+  for (let i = 30; i <= returns.length; i++) {
+    const slice = returns.slice(i - 30, i);
+    const vol = calculateVolatilityFromReturns(slice);
+    if (vol > 0) {
+      historicalVols.push(vol);
+    }
+  }
+
+  if (historicalVols.length < 5) {
+    return round(estimateVolatilityPercentile(currentVolatility), 1);
+  }
+
+  const count = historicalVols.filter((v) => v <= currentVolatility).length;
+  const pct = (count / historicalVols.length) * 100;
+  return round(pct, 1);
+}
+
+export function calculateVolatilityPercentile(
+  values: number[],
+  currentVolatility: number
+): number {
+  return calculateVolatilityPercentileFromReturns(toReturnSeries(values), currentVolatility);
+}
+
+function estimateVolatilityPercentile(volatility: number): number {
+  if (volatility <= 10) return 5;
+  if (volatility <= 30) return 5 + ((volatility - 10) / 20) * 25;
+  if (volatility <= 60) return 30 + ((volatility - 30) / 30) * 35;
+  if (volatility <= 120) return 65 + ((volatility - 60) / 60) * 20;
+  if (volatility <= 250) return 85 + ((volatility - 120) / 130) * 12;
+  return Math.min(100, 97 + ((volatility - 250) / 250) * 3);
+}
+
+export function calculateExpectedShortfallFromReturns(returns: number[]): number {
   if (returns.length === 0) {
     return 0;
   }
@@ -166,8 +212,11 @@ export function calculateExpectedShortfallFromSeries(values: number[]): number {
   return round(Math.max(0, -expectedShortfall) * 100, 2);
 }
 
-export function calculateDownsideRiskFromSeries(values: number[]): number {
-  const returns = toReturnSeries(values);
+export function calculateExpectedShortfallFromSeries(values: number[]): number {
+  return calculateExpectedShortfallFromReturns(toReturnSeries(values));
+}
+
+export function calculateDownsideRiskFromReturns(returns: number[]): number {
   if (returns.length === 0) {
     return 0;
   }
@@ -175,6 +224,10 @@ export function calculateDownsideRiskFromSeries(values: number[]): number {
   const negativeReturns = returns.map((r) => (r < 0 ? r : 0));
   const downside = standardDeviation(negativeReturns) * Math.sqrt(DAYS_PER_YEAR) * 100;
   return round(downside, 2);
+}
+
+export function calculateDownsideRiskFromSeries(values: number[]): number {
+  return calculateDownsideRiskFromReturns(toReturnSeries(values));
 }
 
 export function calculateConcentrationHerfindahl(allocationsPercent: number[]): number {
@@ -254,7 +307,11 @@ function calculateBetaFromChart(chartPoints: ChartSeriesPoint[]): number {
       continue;
     }
 
-    const portfolioReturn = (currentPortfolioValue - previousPortfolioValue) / previousPortfolioValue;
+    const portfolioReturn =
+      current && (current as any).dailyReturn !== undefined && (current as any).dailyReturn !== null
+        ? (current as any).dailyReturn
+        : (currentPortfolioValue - previousPortfolioValue) / previousPortfolioValue;
+
     const benchmarkReturn = (currentBenchmarkValue - previousBenchmarkValue) / previousBenchmarkValue;
 
     if (Number.isFinite(portfolioReturn) && Number.isFinite(benchmarkReturn)) {
@@ -309,8 +366,8 @@ export function getRiskScoreBand(score: number): { label: string; textClass: str
   return { label: "Extreme Risk", textClass: "text-danger", pillClass: "status-pill-negative" };
 }
 
-export function calculateSharpeRatio(
-  values: number[],
+export function calculateSharpeRatioFromReturns(
+  returns: number[],
   options?: {
     windowDays?: number;
     annualRiskFreeRate?: number;
@@ -320,7 +377,6 @@ export function calculateSharpeRatio(
   const windowDays = options?.windowDays ?? 30;
   const annualRiskFreeRate = options?.annualRiskFreeRate ?? 0;
   const minSample = options?.minSample ?? MIN_SHARPE_SAMPLE;
-  const returns = toReturnSeries(values);
 
   if (returns.length < minSample) {
     return null;
@@ -348,6 +404,124 @@ export function calculateSharpeRatio(
   return round(sharpe, 3);
 }
 
+export function calculateSharpeRatio(
+  values: number[],
+  options?: {
+    windowDays?: number;
+    annualRiskFreeRate?: number;
+    minSample?: number;
+  }
+): number | null {
+  return calculateSharpeRatioFromReturns(toReturnSeries(values), options);
+}
+
+export function calculateSortinoRatioFromReturns(
+  returns: number[],
+  options?: {
+    windowDays?: number;
+    annualRiskFreeRate?: number;
+    minSample?: number;
+  }
+): number | null {
+  const windowDays = options?.windowDays ?? 30;
+  const annualRiskFreeRate = options?.annualRiskFreeRate ?? 0;
+  const minSample = options?.minSample ?? MIN_SHARPE_SAMPLE;
+
+  if (returns.length < minSample) {
+    return null;
+  }
+
+  const slicedReturns = returns.slice(-windowDays);
+  if (slicedReturns.length < minSample) {
+    return null;
+  }
+
+  const dailyRiskFreeRate = annualRiskFreeRate / DAYS_PER_YEAR;
+  const excessReturns = slicedReturns.map((dailyReturn) => dailyReturn - dailyRiskFreeRate);
+  const meanExcessReturn = excessReturns.reduce((sum, value) => sum + value, 0) / excessReturns.length;
+
+  const negativeReturns = slicedReturns.map((r) => (r < 0 ? r : 0));
+  const dailyDownsideVolatility = standardDeviation(negativeReturns);
+
+  if (!Number.isFinite(dailyDownsideVolatility) || dailyDownsideVolatility <= 0) {
+    return null;
+  }
+
+  const sortino = (meanExcessReturn / dailyDownsideVolatility) * Math.sqrt(DAYS_PER_YEAR);
+  if (!Number.isFinite(sortino)) {
+    return null;
+  }
+
+  return round(sortino, 3);
+}
+
+export function calculateCalmarRatioFromReturns(
+  returns: number[],
+  maxDrawdownPercent: number,
+  options?: {
+    windowDays?: number;
+    minSample?: number;
+  }
+): number | null {
+  const windowDays = options?.windowDays ?? 30;
+  const minSample = options?.minSample ?? MIN_SHARPE_SAMPLE;
+
+  if (returns.length < minSample) {
+    return null;
+  }
+
+  const slicedReturns = returns.slice(-windowDays);
+  if (slicedReturns.length < minSample) {
+    return null;
+  }
+
+  if (maxDrawdownPercent <= 0) {
+    return null;
+  }
+
+  let cumProd = 1;
+  for (const r of slicedReturns) {
+    cumProd *= (1 + r);
+  }
+  const cumulativeReturn = cumProd - 1;
+  const compoundRatio = Math.max(0.0001, cumProd);
+  const annualizedReturn = (compoundRatio) ** (DAYS_PER_YEAR / slicedReturns.length) - 1;
+  const annualizedReturnPercent = annualizedReturn * 100;
+
+  const calmar = annualizedReturnPercent / maxDrawdownPercent;
+  if (!Number.isFinite(calmar)) {
+    return null;
+  }
+
+  return round(calmar, 3);
+}
+
+export function calculateVaR95FromReturns(
+  returns: number[],
+  options?: {
+    windowDays?: number;
+    minSample?: number;
+  }
+): number | null {
+  const windowDays = options?.windowDays ?? 30;
+  const minSample = options?.minSample ?? MIN_SHARPE_SAMPLE;
+
+  if (returns.length < minSample) {
+    return null;
+  }
+
+  const slicedReturns = returns.slice(-windowDays);
+  if (slicedReturns.length < minSample) {
+    return null;
+  }
+
+  const sorted = [...slicedReturns].sort((left, right) => left - right);
+  const index = Math.floor(sorted.length * 0.05);
+  const varVal = sorted[index] ?? 0;
+  
+  return round(Math.max(0, -varVal) * 100, 2);
+}
+
 export function calculateCompositeRiskScore(inputs: RiskScoreInputs): number {
   const score =
     inputs.volatilityScore * 0.20 +
@@ -367,16 +541,30 @@ export function calculateRiskMetricsFromPortfolio(
 ): RiskMetricsSnapshot {
   const navSeriesUsd = chartPoints.map((point) => point.totalValueUsd);
   const maxDrawdownPercent = calculateMaxDrawdownFromSeries(navSeriesUsd);
-  const volatilityPercent = calculateVolatilityFromSeries(navSeriesUsd);
+
+  const hasDailyReturns = chartPoints.some(
+    (point) => point.dailyReturn !== undefined && point.dailyReturn !== null
+  );
+
+  const returns = hasDailyReturns
+    ? chartPoints
+        .map((point) => point.dailyReturn)
+        .filter((r): r is number => r !== undefined && r !== null)
+    : toReturnSeries(navSeriesUsd);
+
+  // Filter extreme outliers (e.g. daily returns > 300% or < -90% are pricing glitches or unadjusted cash flows)
+  const filteredReturns = returns.filter((r) => r >= -0.9 && r <= 3.0);
+
+  const volatilityPercent = calculateVolatilityFromReturns(filteredReturns);
   const concentrationIndex = calculateConcentrationHerfindahl(allocationsPercent);
-  const expectedShortfallPercent = calculateExpectedShortfallFromSeries(navSeriesUsd);
+  const expectedShortfallPercent = calculateExpectedShortfallFromReturns(filteredReturns);
   const concentrationEffectiveNumber = calculateConcentrationEffectiveNumber(allocationsPercent);
   const beta = calculateBetaFromChart(chartPoints);
   const breachPenaltyScore = calculateStressPenaltyScore(options.breachPenaltyScore ?? 0);
 
-  const sharpeRatio7dRaw = calculateSharpeRatio(navSeriesUsd, { windowDays: 7, annualRiskFreeRate: 0, minSample: 4 });
-  const sharpeRatio30dRaw = calculateSharpeRatio(navSeriesUsd, { windowDays: 30, annualRiskFreeRate: 0, minSample: 14 });
-  const sharpeRatio90dRaw = calculateSharpeRatio(navSeriesUsd, { windowDays: 90, annualRiskFreeRate: 0, minSample: 30 });
+  const sharpeRatio7dRaw = calculateSharpeRatioFromReturns(filteredReturns, { windowDays: 7, annualRiskFreeRate: 0, minSample: 4 });
+  const sharpeRatio30dRaw = calculateSharpeRatioFromReturns(filteredReturns, { windowDays: 30, annualRiskFreeRate: 0, minSample: 14 });
+  const sharpeRatio90dRaw = calculateSharpeRatioFromReturns(filteredReturns, { windowDays: 90, annualRiskFreeRate: 0, minSample: 30 });
 
   let sharpeRatio7d = sharpeRatio7dRaw;
   let sharpeRatio30d = sharpeRatio30dRaw;
@@ -394,15 +582,21 @@ export function calculateRiskMetricsFromPortfolio(
     if (sharpeRatio7d === null) sharpeRatio7d = round(sharpeRatio90d * 0.9, 3);
   }
 
-  const downsideRiskPercent = calculateDownsideRiskFromSeries(navSeriesUsd);
+  const downsideRiskPercent = calculateDownsideRiskFromReturns(filteredReturns);
+  const volatilityPercentile = calculateVolatilityPercentileFromReturns(filteredReturns, volatilityPercent);
+
   const riskScore = calculateCompositeRiskScore({
     volatilityScore: calculateVolatilityScore(volatilityPercent),
-    expectedShortfallScore: calculateExpectedShortfallScore(expectedShortfallPercent),
+    expectedShortfallScore: calculateExpectedShortfallFromSeries(navSeriesUsd),
     maxDrawdownScore: calculateMaxDrawdownScore(maxDrawdownPercent),
     concentrationScore: calculateConcentrationScore(concentrationEffectiveNumber),
     betaScore: calculateBetaScore(beta),
     stressPenaltyScore: breachPenaltyScore,
   });
+
+  const sortinoRatio30d = calculateSortinoRatioFromReturns(filteredReturns, { windowDays: 30, annualRiskFreeRate: 0, minSample: 14 });
+  const calmarRatio30d = calculateCalmarRatioFromReturns(filteredReturns, maxDrawdownPercent, { windowDays: 30, minSample: 14 });
+  const var95Percent = calculateVaR95FromReturns(filteredReturns, { windowDays: 30, minSample: 14 });
 
   return {
     maxDrawdownPercent,
@@ -413,8 +607,14 @@ export function calculateRiskMetricsFromPortfolio(
     sharpeRatio90d,
     downsideRiskPercent,
     riskScore,
+    volatilityPercentile,
     expectedShortfallPercent,
     beta,
     breachPenaltyScore,
+    sortinoRatio30d,
+    calmarRatio30d,
+    var95Percent,
+    topRiskContributorSymbol: options.topRiskContributorSymbol ?? null,
+    topRiskContributorPercent: options.topRiskContributorPercent ?? null,
   };
 }

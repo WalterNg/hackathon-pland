@@ -53,10 +53,50 @@ function getSharpeQuality(sharpe: number | null | undefined): { label: string; c
   return                    { label: "Poor",   colorClass: "text-danger"  };
 }
 
+function getRatioQuality(val: number | null | undefined): { label: string; colorClass: string } {
+  if (val === null || val === undefined) {
+    return { label: "—", colorClass: "text-muted" };
+  }
+  if (val >= 2.0) return { label: "Strong", colorClass: "text-success" };
+  if (val >= 1.0) return { label: "Good",   colorClass: "text-success" };
+  if (val >= 0.0) return { label: "Weak",   colorClass: "text-warning" };
+  return                    { label: "Poor",   colorClass: "text-danger"  };
+}
+
 function getConcentrationLabel(hhi: number): { label: string; colorClass: string } {
   if (hhi >= 4000) return { label: "Very Concentrated", colorClass: "text-danger" };
   if (hhi >= 2000) return { label: "Moderately Concentrated", colorClass: "text-warning" };
   return { label: "Well Diversified", colorClass: "text-success" };
+}
+
+function getVolatilityRiskBand(pct: number): { label: string; colorClass: string } {
+  if (pct <= 40) return { label: "Low", colorClass: "text-success" };
+  if (pct <= 70) return { label: "Moderate", colorClass: "text-warning" };
+  if (pct <= 90) return { label: "High", colorClass: "text-orange-300" };
+  if (pct <= 97) return { label: "Very High", colorClass: "text-danger" };
+  return { label: "Extreme", colorClass: "text-danger font-bold" };
+}
+
+function getBetaLabel(beta: number | null | undefined): { label: string; colorClass: string } {
+  if (beta === null || beta === undefined) {
+    return { label: "—", colorClass: "text-muted" };
+  }
+  if (beta < 0) return { label: "Inverse Correlation", colorClass: "text-indigo-400" };
+  if (beta < 0.5) return { label: "Low Sensitivity", colorClass: "text-success" };
+  if (beta < 1.0) return { label: "Moderate Sensitivity", colorClass: "text-success" };
+  if (beta === 1.0) return { label: "Market Lockstep", colorClass: "text-success" };
+  if (beta <= 1.5) return { label: "High Sensitivity", colorClass: "text-warning" };
+  return { label: "Extreme Sensitivity", colorClass: "text-danger" };
+}
+
+function getOrdinalSuffix(num: number): string {
+  const rounded = Math.round(num);
+  const j = rounded % 10;
+  const k = rounded % 100;
+  if (j === 1 && k !== 11) return `${rounded}st`;
+  if (j === 2 && k !== 12) return `${rounded}nd`;
+  if (j === 3 && k !== 13) return `${rounded}rd`;
+  return `${rounded}th`;
 }
 
 function formatAbsolutePnl(pnlUsd: number): string {
@@ -66,7 +106,7 @@ function formatAbsolutePnl(pnlUsd: number): string {
 }
 
 export function PortfolioMetrics({ metrics }: PortfolioMetricsProps) {
-  const [page, setPage] = useState<0 | 1>(0);
+  const [page, setPage] = useState<number>(0);
 
   const best = metrics.bestPerformerAllTime;
   const worst = metrics.worstPerformerAllTime;
@@ -79,9 +119,19 @@ export function PortfolioMetrics({ metrics }: PortfolioMetricsProps) {
   const riskScore = metrics.riskScore ?? 0;
   const riskScoreBand = getRiskScoreBand(riskScore);
   const volatility = metrics.volatilityPercent;
+  const volatilityPercentile = metrics.volatilityPercentile ?? 50;
   const concentration = metrics.concentrationIndex;
   const downsideRisk = metrics.downsideRiskPercent;
   const violatedRules = metrics.violatedRulesCount ?? 0;
+
+  // Page 3 metrics
+  const sortino = metrics.sortinoRatio30d;
+  const calmar = metrics.calmarRatio30d;
+  const var95 = metrics.var95Percent;
+  const expectedShortfall = metrics.expectedShortfallPercent;
+  const beta = metrics.beta;
+  const topRiskSymbol = metrics.topRiskContributorSymbol;
+  const topRiskPercent = metrics.topRiskContributorPercent;
 
   const allTimeProfitTooltip = (
     <div className="space-y-2 text-[11px] leading-relaxed">
@@ -153,8 +203,8 @@ export function PortfolioMetrics({ metrics }: PortfolioMetricsProps) {
     </div>
   );
 
-  const handlePrev = () => setPage((p) => (p === 1 ? 0 : 1));
-  const handleNext = () => setPage((p) => (p === 0 ? 1 : 0));
+  const handlePrev = () => setPage((p) => (p === 0 ? 2 : p === 1 ? 0 : 1));
+  const handleNext = () => setPage((p) => (p === 0 ? 1 : p === 1 ? 2 : 0));
 
   return (
     <section className="mb-6 relative group/metrics lg:mb-8 w-full">
@@ -351,7 +401,7 @@ export function PortfolioMetrics({ metrics }: PortfolioMetricsProps) {
               )}
             </MetricCard>
           </>
-        ) : (
+        ) : page === 1 ? (
           <>
             {/* Card 1: Risk Score */}
             <MetricCard
@@ -373,10 +423,10 @@ export function PortfolioMetrics({ metrics }: PortfolioMetricsProps) {
               </div>
             </MetricCard>
 
-            {/* Card 2: Volatility */}
+            {/* Card 2: Realized Volatility */}
             <MetricCard
-              title="Volatility"
-              tooltipText="Standard deviation of daily portfolio returns over the last 30 days, annualized. Shows price fluctuation intensity."
+              title="Realized Volatility"
+              tooltipText="Realized Volatility is the annualized standard deviation of daily portfolio returns over a 30-day rolling window. The percentile compares current volatility with the selected historical or benchmark distribution."
               tooltipPosition="center"
               value={
                 <p className="text-xl font-bold leading-tight text-strong">
@@ -384,7 +434,18 @@ export function PortfolioMetrics({ metrics }: PortfolioMetricsProps) {
                 </p>
               }
             >
-              <p className="mt-1.5 text-xs text-muted leading-snug">30d Daily Volatility</p>
+              {volatility !== undefined && volatility !== null ? (
+                <div className="mt-1.5 space-y-0.5">
+                  <div className={`text-xs font-semibold ${getVolatilityRiskBand(volatilityPercentile).colorClass}`}>
+                    {getVolatilityRiskBand(volatilityPercentile).label}
+                  </div>
+                  <p className="text-[10px] text-muted leading-none">
+                    {getOrdinalSuffix(volatilityPercentile)} pct. · 30D annualized
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-1.5 text-xs text-muted leading-snug">Volatility diagnostics</p>
+              )}
             </MetricCard>
 
             {/* Card 3: Concentration (HHI) */}
@@ -446,6 +507,119 @@ export function PortfolioMetrics({ metrics }: PortfolioMetricsProps) {
               <p className="mt-1.5 text-xs text-muted leading-snug">Active rules breached</p>
             </MetricCard>
           </>
+        ) : (
+          <>
+            {/* Page 3: Advanced Portfolio Analytics */}
+            <MetricCard
+              title="Sortino Ratio"
+              tooltipText="Sortino Ratio measures the risk-adjusted return of a portfolio relative to its downside volatility. It ignores upside volatility, making it more suitable for asymmetrical return profiles."
+              tooltipPosition="left"
+              value={
+                <p className="text-xl font-bold leading-tight text-strong">
+                  {sortino !== null && sortino !== undefined ? sortino.toFixed(2) : "—"}
+                </p>
+              }
+            >
+              {sortino !== null && sortino !== undefined ? (
+                <div className="mt-1.5">
+                  <div className={`text-xs font-semibold ${getRatioQuality(sortino).colorClass}`}>
+                    {getRatioQuality(sortino).label}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-1.5 text-xs text-muted leading-snug">Risk-adjusted return</p>
+              )}
+            </MetricCard>
+
+            {/* Card 2: Calmar Ratio */}
+            <MetricCard
+              title="Calmar Ratio"
+              tooltipText="Calmar Ratio measures the annualized return of the portfolio relative to its maximum drawdown over the same period. Higher values indicate better return per unit of tail risk."
+              tooltipPosition="center"
+              value={
+                <p className="text-xl font-bold leading-tight text-strong">
+                  {calmar !== null && calmar !== undefined ? calmar.toFixed(2) : "—"}
+                </p>
+              }
+            >
+              {calmar !== null && calmar !== undefined ? (
+                <div className="mt-1.5">
+                  <div className={`text-xs font-semibold ${getRatioQuality(calmar).colorClass}`}>
+                    {getRatioQuality(calmar).label}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-1.5 text-xs text-muted leading-snug">Return vs drawdown</p>
+              )}
+            </MetricCard>
+
+            {/* Card 3: VaR / Expected Shortfall */}
+            <MetricCard
+              title="VaR / Expected Shortfall"
+              tooltipText="Value at Risk (VaR 95%) represents the maximum expected loss over a 1-day horizon at a 95% confidence level. Expected Shortfall (ES 95%) measures the average loss on days when the VaR threshold is breached."
+              tooltipPosition="center"
+              value={
+                <div className="flex flex-col gap-1.5 pt-0.5">
+                  <div className="flex items-baseline justify-between w-full">
+                    <span className="text-[10px] font-bold text-muted/70 tracking-wider uppercase leading-none">VaR (95%)</span>
+                    <span className="text-sm font-bold text-strong leading-none">
+                      {var95 !== null && var95 !== undefined ? `-${var95.toFixed(2)}%` : "—"}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between w-full border-t border-white/5 pt-1 mt-0.5">
+                    <span className="text-[10px] font-bold text-muted/70 tracking-wider uppercase leading-none">ES (95%)</span>
+                    <span className="text-sm font-bold text-danger leading-none">
+                      {expectedShortfall !== null && expectedShortfall !== undefined ? `-${expectedShortfall.toFixed(2)}%` : "—"}
+                    </span>
+                  </div>
+                </div>
+              }
+            />
+
+            {/* Card 4: Beta vs Benchmark */}
+            <MetricCard
+              title="Beta vs Benchmark"
+              tooltipText="Beta measures the volatility sensitivity of the portfolio relative to a benchmark (BTCUSDT). A beta of 1.0 indicates moving in lockstep with the market, while >1.0 indicates amplified sensitivity."
+              tooltipPosition="center"
+              value={
+                <p className="text-xl font-bold leading-tight text-strong">
+                  {beta !== null && beta !== undefined ? beta.toFixed(2) : "—"}
+                </p>
+              }
+            >
+              {beta !== null && beta !== undefined ? (
+                <div className="mt-1.5">
+                  <div className={`text-xs font-semibold ${getBetaLabel(beta).colorClass}`}>
+                    {getBetaLabel(beta).label}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-1.5 text-xs text-muted leading-snug">Market sensitivity</p>
+              )}
+            </MetricCard>
+
+            {/* Card 5: Risk Contribution */}
+            <MetricCard
+              title="Risk Contribution"
+              tooltipText="Risk Contribution shows how much of the total portfolio risk is driven by each asset, computed as the weight-adjusted standalone volatility of the asset relative to the portfolio total."
+              tooltipPosition="right"
+              value={
+                <p className="text-xl font-bold leading-tight text-strong">
+                  {topRiskPercent !== null && topRiskPercent !== undefined ? `${topRiskPercent.toFixed(1)}%` : "—"}
+                </p>
+              }
+            >
+              {topRiskSymbol ? (
+                <div className="mt-1.5">
+                  <div className="text-xs font-semibold text-warning">
+                    {formatSymbol(topRiskSymbol)}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-1.5 text-xs text-muted leading-snug">Largest risk driver</p>
+              )}
+            </MetricCard>
+          </>
         )}
       </div>
 
@@ -458,6 +632,7 @@ export function PortfolioMetrics({ metrics }: PortfolioMetricsProps) {
       >
         <MaterialIcon name="chevron_right" />
       </button>
+
     </section>
   );
 }

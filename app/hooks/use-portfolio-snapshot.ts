@@ -177,9 +177,14 @@ function applyRealtimeTicker(
     chartWindow.map((point) => ({
       totalValueUsd: point.totalValueUsd,
       btcPriceUsd: point.btcPriceUsd,
+      dailyReturn: point.dailyReturn,
     })),
     assetsWithAllocation.map((asset) => asset.allocationPercent),
-    { breachPenaltyScore }
+    {
+      breachPenaltyScore,
+      topRiskContributorSymbol: currentSnapshot.metrics.topRiskContributorSymbol,
+      topRiskContributorPercent: currentSnapshot.metrics.topRiskContributorPercent,
+    }
   );
 
   return {
@@ -211,9 +216,15 @@ function applyRealtimeTicker(
       sharpeRatio90d: riskMetrics.sharpeRatio90d,
       downsideRiskPercent: riskMetrics.downsideRiskPercent,
       riskScore: riskMetrics.riskScore,
+      volatilityPercentile: riskMetrics.volatilityPercentile,
       expectedShortfallPercent: riskMetrics.expectedShortfallPercent,
       beta: riskMetrics.beta,
       breachPenaltyScore: riskMetrics.breachPenaltyScore,
+      sortinoRatio30d: riskMetrics.sortinoRatio30d,
+      calmarRatio30d: riskMetrics.calmarRatio30d,
+      var95Percent: riskMetrics.var95Percent,
+      topRiskContributorSymbol: riskMetrics.topRiskContributorSymbol,
+      topRiskContributorPercent: riskMetrics.topRiskContributorPercent,
       lastRiskUpdatedAt: nowIso
     },
     chart: chartWindow,

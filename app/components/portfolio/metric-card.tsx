@@ -25,7 +25,7 @@ export function MetricCard({
   const colSpanClass = colSpan === 2 ? "col-span-2 lg:col-span-1" : "";
   const hasHeader = !!title || !!tooltipText;
   return (
-    <article className={`panel-base px-4 py-3.5 relative ${colSpanClass}`}>
+    <article className={`panel-base px-4 py-3.5 relative min-h-35 md:min-h-37 ${colSpanClass}`}>
       {hasHeader && (
         <div className={`flex justify-between mb-1.5 ${headerAlignClass ?? "items-center"}`}>
           <div className="text-xs font-medium text-muted">{title}</div>

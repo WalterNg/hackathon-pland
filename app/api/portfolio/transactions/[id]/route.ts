@@ -4,6 +4,20 @@ import {
   updatePortfolioTransaction,
 } from "@/app/lib/repositories/portfolio-transactions-repo";
 import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
+import { resolveUserPortfolioByName } from "@/app/lib/repositories/portfolios-repo";
+import { deletePortfolioSnapshotCache } from "@/app/lib/repositories/portfolio-snapshots-repo";
+
+async function invalidateSnapshotCache(
+  supabase: any,
+  userId: string,
+  portfolioName: string | null
+): Promise<void> {
+  if (!portfolioName) return;
+  const portfolio = await resolveUserPortfolioByName(supabase, userId, portfolioName);
+  if (portfolio?.id) {
+    await deletePortfolioSnapshotCache(supabase, userId, portfolio.id);
+  }
+}
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -38,6 +52,7 @@ export async function DELETE(request: Request, context: RouteContext) {
   }
 
   const portfolioName = new URL(request.url).searchParams.get("portfolioName");
+  await invalidateSnapshotCache(supabase, user.id, portfolioName);
   triggerPortfolioRiskRefresh(request, portfolioName);
 
   return NextResponse.json({ ok: true }, { status: 200 });
@@ -79,6 +94,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   const portfolioName = new URL(request.url).searchParams.get("portfolioName");
+  await invalidateSnapshotCache(supabase, user.id, portfolioName);
   triggerPortfolioRiskRefresh(request, portfolioName);
 
   return NextResponse.json({ ok: true }, { status: 200 });

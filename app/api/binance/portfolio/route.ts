@@ -150,7 +150,11 @@ async function buildAndCachePortfolioSnapshot(
       btcPriceUsd: point.btcPriceUsd,
     })),
     snapshot.assets.map((asset) => asset.allocationPercent),
-    { breachPenaltyScore }
+    {
+      breachPenaltyScore,
+      topRiskContributorSymbol: snapshot.metrics.topRiskContributorSymbol,
+      topRiskContributorPercent: snapshot.metrics.topRiskContributorPercent,
+    }
   );
 
   const snapshotWithRisk = {
