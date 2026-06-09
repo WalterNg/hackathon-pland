@@ -24,7 +24,8 @@ export type Binance24hrTicker = {
 
 export type PortfolioPerformer = {
   symbol: string;
-  change24hPercent: number;
+  pnlUsd: number;
+  pnlPercent: number;
 };
 
 export type PortfolioSummary = {
@@ -52,16 +53,28 @@ export type PortfolioMetrics = {
   totalCostBasisUsd: number;
   allTimeProfitUsd: number;
   allTimeProfitPercent: number;
-  bestPerformer24h: PortfolioPerformer | null;
-  worstPerformer24h: PortfolioPerformer | null;
+  bestPerformerAllTime: PortfolioPerformer | null;
+  worstPerformerAllTime: PortfolioPerformer | null;
   maxDrawdownPercent?: number;
   maxDrawdownDetail?: MaxDrawdownDetail;
   volatilityPercent?: number;
   concentrationIndex?: number;
+  sharpeRatio7d?: number | null;
   sharpeRatio30d?: number | null;
+  sharpeRatio90d?: number | null;
+  downsideRiskPercent?: number;
   riskScore?: number;
+  volatilityPercentile?: number;
+  expectedShortfallPercent?: number;
+  beta?: number;
+  breachPenaltyScore?: number;
   violatedRulesCount?: number;
   lastRiskUpdatedAt?: string;
+  sortinoRatio30d?: number | null;
+  calmarRatio30d?: number | null;
+  var95Percent?: number | null;
+  topRiskContributorSymbol?: string | null;
+  topRiskContributorPercent?: number | null;
 };
 
 export type PortfolioRiskViolation = {
@@ -80,6 +93,7 @@ export type PortfolioChartPoint = {
   totalValueUsd: number;
   btcPriceUsd: number | null;
   costBasisUsd: number | null; // running invested capital at this point in time
+  dailyReturn?: number | null;
 };
 
 export type PortfolioTransaction = {

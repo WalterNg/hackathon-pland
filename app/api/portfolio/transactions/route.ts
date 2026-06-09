@@ -9,6 +9,7 @@ import {
   resolveUserPortfolioByName
 } from "@/app/lib/repositories/portfolios-repo";
 import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
+import { deletePortfolioSnapshotCache } from "@/app/lib/repositories/portfolio-snapshots-repo";
 
 type TransactionAction = "buy" | "sell" | "transfer";
 type TransferDirection = "in" | "out";
@@ -150,6 +151,9 @@ export async function POST(request: Request) {
       { status: 403 }
     );
   }
+
+  // Invalidate snapshot cache so volatility is calculated freshly with the new transaction
+  await deletePortfolioSnapshotCache(supabase, user.id, portfolio.id);
 
   const created = await createPortfolioTransaction(supabase, {
     userId: user.id,

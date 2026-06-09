@@ -6,7 +6,7 @@ import {
   type PortfolioSnapshot,
   type PortfolioTransaction,
 } from "./portfolio-types";
-import { calculateMaxDrawdownDetail, calculateRiskMetricsFromPortfolio } from "./risk-calculator";
+import { calculateMaxDrawdownDetail, calculateRiskMetricsFromPortfolio, calculateVolatilityFromSeries } from "./risk-calculator";
 import { backendBaseUrl } from "./backend-base-url";
 
 // demo-api.binance.com returns HTTP 451 (geo-blocked) from Vercel/AWS IPs.
@@ -336,7 +336,18 @@ function buildChartLegacy(
       if (kline) { pointTime = new Date(kline.openTime).toISOString(); pointTimeMs = kline.openTime; }
     }
     const btcPriceUsd = btcByTime.get(pointTimeMs) ?? prices[BTC_USDT_SYMBOL] ?? null;
-    points.push({ time: pointTime, totalValueUsd: round(total), btcPriceUsd: btcPriceUsd ? round(btcPriceUsd, 2) : null, costBasisUsd: null });
+
+    const dailyReturn = i > 0 && points[i - 1] && points[i - 1].totalValueUsd > 0
+      ? (total - points[i - 1].totalValueUsd) / points[i - 1].totalValueUsd
+      : null;
+
+    points.push({
+      time: pointTime,
+      totalValueUsd: round(total),
+      btcPriceUsd: btcPriceUsd ? round(btcPriceUsd, 2) : null,
+      costBasisUsd: null,
+      dailyReturn: dailyReturn !== null ? round(dailyReturn, 6) : null,
+    });
   }
   return points;
 }
@@ -388,6 +399,9 @@ function buildChartFromTimeline(
 
   const points: PortfolioChartPoint[] = [];
 
+  let prevHoldings: HoldingsEntry[] = [];
+  let prevTotalValueUsd = 0;
+
   for (const ts of [...tsSet].sort((a, b) => a - b)) {
     const isBackfill = ts < firstTransactionMs;
     const holdings = isBackfill ? firstHoldings : getHoldingsAt(holdingsTimeline, ts);
@@ -400,6 +414,16 @@ function buildChartFromTimeline(
     }
 
     if (total > 0) {
+      let dailyReturn: number | null = null;
+      if (prevTotalValueUsd > 0 && prevHoldings.length > 0) {
+        let prevValueAtCurrentPrices = 0;
+        for (const { symbol, quantity } of prevHoldings) {
+          const price = priceLookup.get(symbol)?.get(ts) ?? prices[symbol] ?? 0;
+          prevValueAtCurrentPrices += quantity * price;
+        }
+        dailyReturn = (prevValueAtCurrentPrices - prevTotalValueUsd) / prevTotalValueUsd;
+      }
+
       const btcPriceUsd = btcByTime.get(ts) ?? prices[BTC_USDT_SYMBOL] ?? null;
       const costBasisUsd = isBackfill ? null : getCostBasisAt(costBasisTimeline, ts);
       points.push({
@@ -407,7 +431,11 @@ function buildChartFromTimeline(
         totalValueUsd: round(total),
         btcPriceUsd: btcPriceUsd ? round(btcPriceUsd, 2) : null,
         costBasisUsd: costBasisUsd !== null ? round(costBasisUsd) : null,
+        dailyReturn: dailyReturn !== null ? round(dailyReturn, 6) : null,
       });
+
+      prevHoldings = holdings;
+      prevTotalValueUsd = total;
     }
   }
 
@@ -437,13 +465,20 @@ export async function buildBinancePortfolioSnapshot(
         totalCostBasisUsd: 0,
         allTimeProfitUsd: 0,
         allTimeProfitPercent: 0,
-        bestPerformer24h: null,
-        worstPerformer24h: null,
+        bestPerformerAllTime: null,
+        worstPerformerAllTime: null,
         maxDrawdownPercent: 0,
         volatilityPercent: 0,
         concentrationIndex: 0,
+        sharpeRatio7d: null,
         sharpeRatio30d: null,
+        sharpeRatio90d: null,
+        downsideRiskPercent: 0,
         riskScore: 0,
+        volatilityPercentile: 0,
+        expectedShortfallPercent: 0,
+        beta: 0,
+        breachPenaltyScore: 0,
         violatedRulesCount: 0,
         lastRiskUpdatedAt: new Date().toISOString()
       },
@@ -533,8 +568,8 @@ export async function buildBinancePortfolioSnapshot(
     return {
       symbol,
       quantity: position.quantity,
-      avgBuyPriceUsd: round(position.avgBuyPriceUsd),
-      priceUsd: round(priceUsd),
+      avgBuyPriceUsd: round(position.avgBuyPriceUsd, 8),
+      priceUsd: round(priceUsd, 8),
       valueUsd: round(valueUsd),
       change24hPercent: round(changes24h[symbol] ?? 0),
       change7dPercent: round(get7dChangePercent(dailyKlinesMap[symbol] ?? [])),
@@ -551,19 +586,46 @@ export async function buildBinancePortfolioSnapshot(
     allocationPercent: totalValueUsdRaw > 0 ? round((asset.valueUsd / totalValueUsdRaw) * 100) : 0,
   }));
 
-  const sortedBy24h = [...assets]
+  const sortedByAllTime = [...assets]
     .filter((asset) => isPerformerCandidate(asset.symbol))
-    .sort((a, b) => b.change24hPercent - a.change24hPercent);
-  const best = sortedBy24h[0] ?? null;
-  const worst = sortedBy24h[sortedBy24h.length - 1] ?? null;
+    .sort((a, b) => b.pnlPercent - a.pnlPercent);
+  const best = sortedByAllTime[0] ?? null;
+  const worst = sortedByAllTime[sortedByAllTime.length - 1] ?? null;
   const costBasisTimeline = buildCostBasisTimeline(transactions);
   const chart = holdingsTimeline.length > 0
     ? buildChartFromTimeline(klinesMap, prices, holdingsTimeline, effectiveStartMs, firstTransactionMs, costBasisTimeline)
     : buildChartLegacy(heldSymbols, klinesMap, prices, positions);
 
-  const navSeriesUsd = chart.map((point) => point.totalValueUsd);
+  // Calculate top risk contributor based on weight * standalone volatility
+  let topRiskContributorSymbol: string | null = null;
+  let topRiskContributorPercent: number | null = null;
+  if (assets.length > 0) {
+    let totalWeightedVol = 0;
+    const weightedVols = assets.map((asset) => {
+      const klines = dailyKlinesMap[asset.symbol] ?? [];
+      const closePrices = klines.map((k) => k.closePrice);
+      const assetVol = calculateVolatilityFromSeries(closePrices);
+      const weightedVol = (asset.allocationPercent / 100) * assetVol;
+      totalWeightedVol += weightedVol;
+      return { symbol: asset.symbol, weightedVol };
+    });
+
+    const contributors = weightedVols.map((w) => ({
+      symbol: w.symbol,
+      percent: totalWeightedVol > 0 ? (w.weightedVol / totalWeightedVol) * 100 : 0,
+    })).sort((a, b) => b.percent - a.percent);
+
+    if (contributors[0]) {
+      topRiskContributorSymbol = contributors[0].symbol;
+      topRiskContributorPercent = round(contributors[0].percent, 2);
+    }
+  }
+
   const allocationsPercent = assets.map((asset) => asset.allocationPercent);
-  const riskMetrics = calculateRiskMetricsFromPortfolio(navSeriesUsd, allocationsPercent);
+  const riskMetrics = calculateRiskMetricsFromPortfolio(chart, allocationsPercent, {
+    topRiskContributorSymbol,
+    topRiskContributorPercent,
+  });
   const maxDrawdownDetail = calculateMaxDrawdownDetail(chart) ?? undefined;
   const riskUpdatedAt = new Date().toISOString();
 
@@ -582,18 +644,30 @@ export async function buildBinancePortfolioSnapshot(
       totalCostBasisUsd: round(totalCostBasisUsd),
       allTimeProfitUsd: round(allTimeProfitUsdRaw),
       allTimeProfitPercent: round(allTimeProfitPercentRaw),
-      bestPerformer24h: best
-        ? { symbol: best.symbol, change24hPercent: best.change24hPercent }
+      bestPerformerAllTime: best
+        ? { symbol: best.symbol, pnlUsd: best.pnlUsd, pnlPercent: best.pnlPercent }
         : null,
-      worstPerformer24h: worst
-        ? { symbol: worst.symbol, change24hPercent: worst.change24hPercent }
+      worstPerformerAllTime: worst
+        ? { symbol: worst.symbol, pnlUsd: worst.pnlUsd, pnlPercent: worst.pnlPercent }
         : null,
       maxDrawdownPercent: riskMetrics.maxDrawdownPercent,
       maxDrawdownDetail,
       volatilityPercent: riskMetrics.volatilityPercent,
       concentrationIndex: riskMetrics.concentrationIndex,
+      sharpeRatio7d: riskMetrics.sharpeRatio7d,
       sharpeRatio30d: riskMetrics.sharpeRatio30d,
+      sharpeRatio90d: riskMetrics.sharpeRatio90d,
+      downsideRiskPercent: riskMetrics.downsideRiskPercent,
       riskScore: riskMetrics.riskScore,
+      volatilityPercentile: riskMetrics.volatilityPercentile,
+      expectedShortfallPercent: riskMetrics.expectedShortfallPercent,
+      beta: riskMetrics.beta,
+      breachPenaltyScore: riskMetrics.breachPenaltyScore,
+      sortinoRatio30d: riskMetrics.sortinoRatio30d,
+      calmarRatio30d: riskMetrics.calmarRatio30d,
+      var95Percent: riskMetrics.var95Percent,
+      topRiskContributorSymbol: riskMetrics.topRiskContributorSymbol,
+      topRiskContributorPercent: riskMetrics.topRiskContributorPercent,
       violatedRulesCount: 0,
       lastRiskUpdatedAt: riskUpdatedAt,
     },

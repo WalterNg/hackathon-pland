@@ -30,8 +30,20 @@ export type RiskMetricsSnapshot = {
   maxDrawdownPercent: number;
   volatilityPercent: number;
   concentrationIndex: number;
+  sharpeRatio7d: number | null;
   sharpeRatio30d: number | null;
+  sharpeRatio90d: number | null;
+  downsideRiskPercent: number;
   riskScore: number;
+  volatilityPercentile: number;
+  expectedShortfallPercent?: number;
+  beta?: number;
+  breachPenaltyScore?: number;
+  sortinoRatio30d?: number | null;
+  calmarRatio30d?: number | null;
+  var95Percent?: number | null;
+  topRiskContributorSymbol?: string | null;
+  topRiskContributorPercent?: number | null;
 };
 
 export type RiskViolation = {

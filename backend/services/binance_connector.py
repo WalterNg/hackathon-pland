@@ -202,19 +202,39 @@ class BinanceConnector:
         if not unique_assets:
             return price_map
 
-        # 2. Map Binance symbols to CoinGecko IDs using the dynamic mapping
-        cg_id_map = await self._fetch_coingecko_id_map()
-        
-        asset_to_id = {
-            asset: cg_id_map[asset] 
-            for asset in unique_assets 
-            if asset in cg_id_map
+        # 2. Map Binance symbols to CoinGecko IDs using database mappings
+        base_url = settings.supabase_url
+        if base_url and not base_url.startswith("http"):
+            base_url = f"https://{base_url}"
+        base_url = base_url.rstrip("/")
+
+        symbols_param = ",".join(f'"{s}"' for s in unique_assets)
+        url = f"{base_url}/rest/v1/market_symbols?select=symbol,base_asset,coingecko_id&coingecko_id=not.is.null&or=(symbol.in.({symbols_param}),base_asset.in.({symbols_param}))"
+        headers = {
+            "apikey": settings.supabase_service_role_key,
+            "Authorization": f"Bearer {settings.supabase_service_role_key}"
         }
-        
+
+        asset_to_id = {}
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+                for item in data:
+                    sym = item.get("symbol")
+                    base = item.get("base_asset")
+                    cg_id = item.get("coingecko_id")
+                    if sym in unique_assets and cg_id:
+                        asset_to_id[sym] = cg_id
+                    elif base in unique_assets and cg_id:
+                        asset_to_id[base] = cg_id
+        except Exception as e:
+            logger.error("Failed to fetch CoinGecko mapping from Supabase market_symbols: %s", str(e))
+
         coingecko_ids = list(asset_to_id.values())
 
         if not coingecko_ids:
-            # If no mapping found, return empty map (will result in $0 price warnings)
             return price_map
 
         # 3. Perform batch request to CoinGecko
