@@ -44,6 +44,7 @@ type UsePortfoliosResult = {
     name: string,
     assets: BinanceImportAsset[]
   ) => Promise<{ ok: boolean; message?: string; adjustmentCount?: number }>;
+  renamePortfolio: (name: string, newName: string) => Promise<{ ok: boolean; message?: string }>;
   removePortfolio: (name: string) => Promise<{ ok: boolean; message?: string }>;
   reload: () => Promise<void>;
 };
@@ -154,6 +155,22 @@ export function usePortfolios(options?: UsePortfoliosOptions): UsePortfoliosResu
     return { ok: true, adjustmentCount: payload.adjustmentCount };
   }, [loadPortfolios]);
 
+  const renamePortfolio = useCallback(async (name: string, newName: string) => {
+    const response = await fetchWithSupabaseAuth("/api/portfolios", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, newName })
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      return { ok: false, message: payload?.error ?? "Unable to rename portfolio." };
+    }
+
+    await loadPortfolios();
+    return { ok: true };
+  }, [loadPortfolios]);
+
   const removePortfolio = useCallback(async (name: string) => {
     const response = await fetchWithSupabaseAuth("/api/portfolios", {
       method: "DELETE",
@@ -176,6 +193,7 @@ export function usePortfolios(options?: UsePortfoliosOptions): UsePortfoliosResu
     error,
     createPortfolio,
     syncPortfolio,
+    renamePortfolio,
     removePortfolio,
     reload: loadPortfolios
   };
