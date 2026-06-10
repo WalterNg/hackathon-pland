@@ -23,6 +23,8 @@ type PortfolioHeaderProps = {
   isCertifyingSnapshot?: boolean;
   isCertifySnapshotDisabled?: boolean;
   hideActions?: boolean;
+  onRenamePortfolio?: (newName: string) => Promise<{ ok: boolean; message?: string }>;
+  portfolioMode?: "manual" | "binance_connected";
 };
 
 export function PortfolioHeader({
@@ -44,10 +46,17 @@ export function PortfolioHeader({
   isCertifyingSnapshot = false,
   isCertifySnapshotDisabled = false,
   hideActions = false,
+  onRenamePortfolio,
+  portfolioMode,
 }: PortfolioHeaderProps) {
   const isReadOnlyStatus = isPrimaryActionDisabled && primaryActionLabel === "Read-only";
   const [menuOpen, setMenuOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -62,13 +71,48 @@ export function PortfolioHeader({
   const hasMenuItems =
     (showCharts !== undefined && onToggleShowCharts !== undefined) ||
     (isConnectedPortfolio && onSync) ||
+    !!onRenamePortfolio ||
     (showRemovePortfolio && onRemovePortfolio);
+
+  const openRename = () => {
+    setRenameValue(portfolioName);
+    setRenameError(null);
+    setMenuOpen(false);
+    setRenameOpen(true);
+    setTimeout(() => renameInputRef.current?.select(), 50);
+  };
+
+  const handleRenameSubmit = async () => {
+    const trimmed = renameValue.trim();
+    if (!trimmed) { setRenameError("Name is required."); return; }
+    if (trimmed === portfolioName) { setRenameOpen(false); return; }
+    setIsRenaming(true);
+    setRenameError(null);
+    const result = await onRenamePortfolio!(trimmed);
+    setIsRenaming(false);
+    if (result.ok) {
+      setRenameOpen(false);
+    } else {
+      setRenameError(result.message ?? "Unable to rename.");
+    }
+  };
 
   return (
     <section className="mb-6 flex min-h-[44px] flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
       <div>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="typo-h1 text-strong">{portfolioName}</h1>
+          {portfolioMode === "binance_connected" && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#F0B90B]/15 px-2 py-0.5 text-[0.65rem] font-bold tracking-wide text-[#F0B90B]">
+              <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#F0B90B] text-[0.5rem] font-black text-black">B</span>
+              Binance
+            </span>
+          )}
+          {portfolioMode === "manual" && !statusLabel && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-(--surface-outline) px-2 py-0.5 text-[0.65rem] font-semibold text-subtle">
+              Manual
+            </span>
+          )}
           {statusLabel ? (
             <span className="inline-flex items-center rounded-full border border-(--surface-outline) bg-(--surface-container-low) px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">
               {statusLabel}
@@ -81,7 +125,7 @@ export function PortfolioHeader({
       {!hideActions && (
         <div className="flex flex-wrap items-center gap-3">
           {isReadOnlyStatus ? (
-            <span className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-(--surface-outline) bg-(--surface-container-low) px-4 text-[0.8rem] font-semibold tracking-wide text-muted">
+            <span className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-(--surface-outline) bg-(--surface-container-low) px-3.5 text-[0.75rem] font-semibold tracking-wide text-muted">
               <MaterialIcon name="lock" outlined={false} className="text-[1rem]" />
               {primaryActionLabel}
             </span>
@@ -138,6 +182,17 @@ export function PortfolioHeader({
                     </div>
                   )}
 
+                  {onRenamePortfolio && (
+                    <button
+                      type="button"
+                      onClick={openRename}
+                      className="flex w-full items-center gap-2.5 px-4 py-3 text-sm text-muted hover:bg-(--surface-container)"
+                    >
+                      <MaterialIcon name="edit" outlined={false} className="text-base" />
+                      Rename
+                    </button>
+                  )}
+
                   {isConnectedPortfolio && onSync && (
                     <button
                       type="button"
@@ -168,6 +223,53 @@ export function PortfolioHeader({
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {renameOpen && (
+        <div className="modal-backdrop z-90">
+          <div className="modal-shell max-w-sm p-4 sm:p-5">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <h2 className="text-base font-bold text-strong">Rename portfolio</h2>
+              <button
+                type="button"
+                onClick={() => setRenameOpen(false)}
+                className="icon-button h-8 w-8"
+                disabled={isRenaming}
+              >
+                <MaterialIcon name="close" outlined={false} className="text-lg" />
+              </button>
+            </div>
+            <input
+              ref={renameInputRef}
+              type="text"
+              value={renameValue}
+              onChange={(e) => { setRenameValue(e.target.value); setRenameError(null); }}
+              onKeyDown={(e) => { if (e.key === "Enter") void handleRenameSubmit(); if (e.key === "Escape") setRenameOpen(false); }}
+              className="field-input w-full"
+              maxLength={80}
+              disabled={isRenaming}
+            />
+            {renameError && <p className="mt-1.5 text-xs text-danger">{renameError}</p>}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRenameOpen(false)}
+                disabled={isRenaming}
+                className="ui-button-secondary px-4 py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleRenameSubmit()}
+                disabled={isRenaming || !renameValue.trim()}
+                className="ui-button-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isRenaming ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>

@@ -142,6 +142,8 @@ function SidebarContent({
                     ? livePortfolioValuesByName[portfolioName]
                     : portfolio.totalValueUsd;
 
+                const isBinance = portfolio.mode === "binance_connected";
+
                 return (
                   <Link
                     key={portfolioName}
@@ -152,8 +154,15 @@ function SidebarContent({
                         : "flex items-center gap-3 rounded-2xl px-3 py-3 text-subtle transition-colors hover:bg-(--surface-container) hover:text-inverse"
                     }
                   >
-                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-on-primary">
-                      <span className="text-sm font-semibold uppercase">{portfolioName.slice(0, 2)}</span>
+                    <div className="relative shrink-0">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-on-primary">
+                        <span className="text-sm font-semibold uppercase">{portfolioName.slice(0, 2)}</span>
+                      </div>
+                      {isBinance && (
+                        <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#F0B90B] text-[0.55rem] font-black text-black shadow-sm">
+                          B
+                        </span>
+                      )}
                     </div>
                     <div className="min-w-0">
                       <div className="typo-body truncate font-semibold text-current">{portfolioName}</div>

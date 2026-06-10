@@ -3,6 +3,7 @@ import {
   createUserPortfolio,
   deleteUserPortfolio,
   listUserPortfolios,
+  renameUserPortfolio,
   type BinanceImportAsset
 } from "@/app/lib/repositories/portfolios-repo";
 import { getSupabaseAuthContext } from "@/app/lib/supabase/request-auth";
@@ -83,6 +84,27 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ portfolio }, { status: isReplay ? 200 : 201 });
+}
+
+export async function PATCH(request: Request) {
+  const { supabase, user } = await getAuthContext(request);
+  if (!user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const payload = (await request.json().catch(() => null)) as { name?: string; newName?: string } | null;
+  const currentName = payload?.name ?? "";
+  const newName = payload?.newName ?? "";
+
+  const { success, errorCode } = await renameUserPortfolio(supabase, user.id, currentName, newName);
+
+  if (errorCode === "invalid-name") return NextResponse.json({ error: "Portfolio name is required." }, { status: 400 });
+  if (errorCode === "default-portfolio") return NextResponse.json({ error: "Main Portfolio cannot be renamed." }, { status: 400 });
+  if (errorCode === "not-found") return NextResponse.json({ error: "Portfolio not found." }, { status: 404 });
+  if (errorCode === "duplicate") return NextResponse.json({ error: "Portfolio name already exists." }, { status: 409 });
+  if (!success || errorCode) return NextResponse.json({ error: "Unable to rename portfolio." }, { status: 500 });
+
+  return NextResponse.json({ ok: true, newName });
 }
 
 export async function DELETE(request: Request) {

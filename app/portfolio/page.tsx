@@ -100,7 +100,7 @@ function PortfolioContent() {
   const shouldOpenCreatePortfolio = searchParams.get("createPortfolio") === "1";
   const isMainPortfolio = useMemo(() => portfolioName === DEFAULT_PORTFOLIO_NAME, [portfolioName]);
   const activeTab = parseTab(searchParams.get("tab"), isMainPortfolio);
-  const { createPortfolio, removePortfolio, syncPortfolio, portfolios } = usePortfolios();
+  const { createPortfolio, removePortfolio, syncPortfolio, renamePortfolio, portfolios } = usePortfolios();
   const [isSelectCoinOpen, setSelectCoinOpen] = useState(false);
   const [isAddDialogOpen, setAddDialogOpen] = useState(false);
   const [isCreatePortfolioOpen, setCreatePortfolioOpen] = useState(false);
@@ -390,8 +390,9 @@ function PortfolioContent() {
             {/* ── Portfolio Title and Actions Area ── */}
             <PortfolioHeader
               portfolioName={portfolioName}
-              statusLabel={isConnectedPortfolio ? "Connected to Binance" : undefined}
-              statusDescription={connectedStatusDescription}
+              portfolioMode={currentPortfolio?.mode}
+              statusLabel={undefined}
+              statusDescription={undefined}
               primaryActionLabel={primaryActionLabel}
               onPrimaryAction={openTransactionFlow}
               isPrimaryActionDisabled={isConnectedPortfolio}
@@ -407,6 +408,15 @@ function PortfolioContent() {
               isCertifyingSnapshot={isCreatingCertificate}
               isCertifySnapshotDisabled={!effectiveSnapshot || isLoading}
               hideActions={activeTab !== "holdings"}
+              onRenamePortfolio={!isMainPortfolio ? async (newName) => {
+                const result = await renamePortfolio(portfolioName, newName);
+                if (result.ok) {
+                  const params = new URLSearchParams(searchParams.toString());
+                  params.set("name", newName);
+                  router.replace(`/portfolio?${params.toString()}`);
+                }
+                return result;
+              } : undefined}
             />
 
             {/* ── Tabs Navigation (always under the title/actions) ── */}

@@ -599,6 +599,50 @@ export async function createUserPortfolio(
   return { portfolio, errorCode: null, isReplay: false };
 }
 
+export async function renameUserPortfolio(
+  supabase: SupabaseClient,
+  userId: string,
+  currentName: string,
+  newName: string
+): Promise<{ success: boolean; errorCode: "invalid-name" | "default-portfolio" | "not-found" | "duplicate" | "unknown" | null }> {
+  const trimmedCurrent = currentName.trim();
+  const trimmedNew = newName.trim();
+
+  if (!trimmedCurrent || !trimmedNew) {
+    return { success: false, errorCode: "invalid-name" };
+  }
+
+  if (trimmedCurrent === MAIN_PORTFOLIO_NAME) {
+    return { success: false, errorCode: "default-portfolio" };
+  }
+
+  const { data: target, error: selectError } = await supabase
+    .from("portfolios")
+    .select("id, is_default")
+    .eq("user_id", userId)
+    .eq("name", trimmedCurrent)
+    .maybeSingle();
+
+  if (selectError) return { success: false, errorCode: "unknown" };
+  if (!target?.id) return { success: false, errorCode: "not-found" };
+
+  const { error: updateError } = await supabase
+    .from("portfolios")
+    .update({ name: trimmedNew })
+    .eq("id", target.id)
+    .eq("user_id", userId);
+
+  if (updateError) {
+    const msg = `${(updateError as { message?: string }).message ?? ""}`.toLowerCase();
+    if (msg.includes("duplicate") || msg.includes("unique")) {
+      return { success: false, errorCode: "duplicate" };
+    }
+    return { success: false, errorCode: "unknown" };
+  }
+
+  return { success: true, errorCode: null };
+}
+
 export async function deleteUserPortfolio(
   supabase: SupabaseClient,
   userId: string,
