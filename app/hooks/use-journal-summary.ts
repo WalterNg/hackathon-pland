@@ -10,7 +10,7 @@ type UseJournalSummaryResult = {
   error: string | null;
 };
 
-export function useJournalSummary(days = 30): UseJournalSummaryResult {
+export function useJournalSummary(days = 30, portfolioName?: string): UseJournalSummaryResult {
   const [summary, setSummary] = useState<JournalSummaryPayload | null>(null);
   const [isLoading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +24,10 @@ export function useJournalSummary(days = 30): UseJournalSummaryResult {
       setError(null);
 
       try {
-        const response = await fetchWithSupabaseAuth(`/api/journal/summary?days=${days}`, {
+        const query = portfolioName
+          ? `&portfolioName=${encodeURIComponent(portfolioName)}`
+          : "";
+        const response = await fetchWithSupabaseAuth(`/api/journal/summary?days=${days}${query}`, {
           cache: "no-store",
           signal: controller.signal
         });
@@ -55,7 +58,7 @@ export function useJournalSummary(days = 30): UseJournalSummaryResult {
       isDisposed = true;
       controller.abort();
     };
-  }, [days]);
+  }, [days, portfolioName]);
 
   return { summary, isLoading, error };
 }

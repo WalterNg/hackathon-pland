@@ -287,7 +287,7 @@ export function PortfolioSummary({
   const hasRecommendation = !!tradingAgentRecommendation && !tradingAgentIsAnalyzing;
 
   return (
-    <section className="mb-5 border-t border-white/10 pt-4 text-inverse sm:pt-5 lg:mb-6 lg:pt-6">
+    <section className="mb-5 pt-4 text-inverse sm:pt-5 lg:mb-6 lg:pt-6">
       {/* Content Container (no outer visual frame) */}
       <div className="p-0">
         

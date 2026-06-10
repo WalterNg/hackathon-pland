@@ -36,7 +36,7 @@ function normalizePath(path: string): string {
 type SidebarProps = {
   portfolios?: PortfolioItem[];
   livePortfolioValuesByName?: Record<string, number>;
-  sectionPath?: "/portfolio" | "/ai-history" | "/risk" | "/risk-rules" | "/milestones";
+  sectionPath?: "/portfolio" | "/ai-history" | "/risk" | "/risk-rules" | "/milestones" | "/journal";
 };
 
 export function Sidebar({ portfolios, livePortfolioValuesByName = {}, sectionPath = "/portfolio" }: SidebarProps) {
@@ -53,7 +53,7 @@ export function Sidebar({ portfolios, livePortfolioValuesByName = {}, sectionPat
   );
 }
 
-function SidebarContentWithAutoLoad({ sectionPath }: { sectionPath: "/portfolio" | "/ai-history" | "/risk" | "/risk-rules" | "/milestones" }) {
+function SidebarContentWithAutoLoad({ sectionPath }: { sectionPath: "/portfolio" | "/ai-history" | "/risk" | "/risk-rules" | "/milestones" | "/journal" }) {
   const { portfolios } = usePortfolios({
     refreshIntervalMs: RefreshIntervals.SIDEBAR_PORTFOLIOS_REFRESH_MS,
   });
@@ -68,7 +68,7 @@ function SidebarContent({
 }: {
   portfolios: PortfolioItem[];
   livePortfolioValuesByName: Record<string, number>;
-  sectionPath: "/portfolio" | "/ai-history" | "/risk" | "/risk-rules" | "/milestones";
+  sectionPath: "/portfolio" | "/ai-history" | "/risk" | "/risk-rules" | "/milestones" | "/journal";
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();

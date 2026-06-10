@@ -16,14 +16,15 @@ export function CertifySnapshotButton({
       type="button"
       onClick={onClick}
       disabled={disabled || isLoading}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-[0.72rem] font-semibold text-primary transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/18 hover:shadow-success-soft disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+      className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-(--color-primary-border) bg-transparent px-3.5 text-[0.75rem] font-semibold tracking-wide text-(--color-primary) transition-all duration-200 ease-out hover:-translate-y-px hover:border-(--color-primary-border-strong) hover:bg-(--color-primary-soft) disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+      title="Anchor the current portfolio state on-chain as a checkpoint"
     >
       <MaterialIcon
-        name={isLoading ? "hourglass_top" : "verified"}
+        name={isLoading ? "hourglass_top" : "link"}
         outlined={false}
-        className="text-[0.9rem]"
+        className="text-[1rem]"
       />
-      {isLoading ? "Certifying..." : "Certify Snapshot"}
+      {isLoading ? "Anchoring…" : "Checkpoint"}
     </button>
   );
 }

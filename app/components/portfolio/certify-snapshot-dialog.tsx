@@ -49,8 +49,8 @@ export function CertifySnapshotDialog({
       <div className="modal-shell max-w-lg p-4 sm:p-5">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-bold text-strong sm:text-xl">Certify Snapshot</h2>
-            <p className="mt-1 text-sm text-muted">Add a title and note for this manual milestone.</p>
+            <h2 className="text-lg font-bold text-strong sm:text-xl">New Checkpoint</h2>
+            <p className="mt-1 text-sm text-muted">Add a title and note — this will be anchored on-chain.</p>
           </div>
           <button
             type="button"
@@ -83,7 +83,7 @@ export function CertifySnapshotDialog({
             <textarea
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              placeholder="Why are you certifying this moment?"
+              placeholder="Why are you creating this checkpoint?"
               className="field-input min-h-[120px] resize-y"
               maxLength={1000}
             />
@@ -108,7 +108,7 @@ export function CertifySnapshotDialog({
             disabled={!canSubmit}
             className="ui-button-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting ? "Certifying..." : "Certify"}
+            {isSubmitting ? "Anchoring…" : "Anchor Checkpoint"}
           </button>
         </div>
       </div>

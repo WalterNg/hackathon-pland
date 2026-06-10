@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { MaterialIcon } from "../components/dashboard/material-icon";
 import { AppTopNavigation } from "../components/ui/app-top-navigation";
 import { AddTransactionDialog } from "../components/portfolio/add-transaction-dialog";
@@ -13,6 +13,7 @@ import { PortfolioAssetsTable } from "../components/portfolio/portfolio-assets-t
 import { PortfolioTransactionsList } from "../components/portfolio/portfolio-transactions-list";
 import { PortfolioCharts } from "@/app/components/portfolio/portfolio-charts";
 import { PortfolioHeader } from "../components/portfolio/portfolio-header";
+import { PortfolioSubNavigation } from "../components/portfolio/portfolio-sub-navigation";
 import { PortfolioMetrics } from "../components/portfolio/portfolio-metrics";
 import { PortfolioSummary } from "../components/portfolio/portfolio-summary";
 import { SelectCoinModal } from "../components/portfolio/select-coin-modal";
@@ -25,7 +26,21 @@ import { usePortfolios } from "../hooks/use-portfolios";
 import { usePortfolioSnapshotCertificates } from "../hooks/use-portfolio-snapshot-certificates";
 import { usePortfolioSnapshot } from "../hooks/use-portfolio-snapshot";
 import { RefreshIntervals } from "@/app/lib/refresh-intervals";
+import { TabAiHistory } from "../components/portfolio/tabs/tab-ai-history";
+import { TabRiskRules } from "../components/portfolio/tabs/tab-risk-rules";
+import { TabMilestones } from "../components/portfolio/tabs/tab-milestones";
+import { TabJournal } from "../components/portfolio/tabs/tab-journal";
 import type { PortfolioMode, PortfolioSnapshot } from "@/app/lib/portfolio-types";
+
+type PortfolioTab = "holdings" | "ai-history" | "risk-rules" | "journal" | "milestones";
+
+function parseTab(value: string | null, isMainPortfolio: boolean): PortfolioTab {
+  if (value === "ai-history" && !isMainPortfolio) return "ai-history";
+  if (value === "risk-rules") return "risk-rules";
+  if (value === "journal") return "journal";
+  if (value === "milestones" && !isMainPortfolio) return "milestones";
+  return "holdings";
+}
 
 const DEFAULT_PORTFOLIO_NAME = "Main Portfolio";
 const SUMMARY_RENDER_INTERVAL_MS = RefreshIntervals.PORTFOLIO_SUMMARY_RENDER_MS;
@@ -79,11 +94,12 @@ function useThrottledValue<T>(value: T, intervalMs: number, resetKey?: string | 
 }
 
 function PortfolioContent() {
-  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const portfolioName = searchParams.get("name")?.trim() || DEFAULT_PORTFOLIO_NAME;
   const shouldOpenCreatePortfolio = searchParams.get("createPortfolio") === "1";
+  const isMainPortfolio = useMemo(() => portfolioName === DEFAULT_PORTFOLIO_NAME, [portfolioName]);
+  const activeTab = parseTab(searchParams.get("tab"), isMainPortfolio);
   const { createPortfolio, removePortfolio, syncPortfolio, portfolios } = usePortfolios();
   const [isSelectCoinOpen, setSelectCoinOpen] = useState(false);
   const [isAddDialogOpen, setAddDialogOpen] = useState(false);
@@ -102,9 +118,7 @@ function PortfolioContent() {
     action: "buy",
     note: "",
   });
-  const isMainPortfolio = useMemo(() => portfolioName === DEFAULT_PORTFOLIO_NAME, [portfolioName]);
   const tradingAgentScopeKey = isMainPortfolio ? null : portfolioName;
-  const aiHistoryHref = isMainPortfolio ? null : `/ai-history?name=${encodeURIComponent(portfolioName)}`;
 
   const currentPortfolio = useMemo(
     () => portfolios.find((portfolio) => portfolio.name === portfolioName) ?? null,
@@ -238,7 +252,7 @@ function PortfolioContent() {
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.delete("createPortfolio");
     const nextQuery = nextParams.toString();
-    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
+    router.replace(nextQuery ? `/portfolio?${nextQuery}` : "/portfolio");
   };
 
   const handleSyncPortfolio = async (assets: Array<{ asset: string; quantity: number; price_usd: number }>) => {
@@ -361,10 +375,6 @@ function PortfolioContent() {
         <div className="w-full">
           <AppTopNavigation
             portfolioHref={`/portfolio?name=${encodeURIComponent(portfolioName)}`}
-            aiHistoryHref={aiHistoryHref}
-            riskHref={riskManagementHref}
-            riskRulesHref={riskRulesHref}
-            milestonesHref={isMainPortfolio ? null : `/milestones?name=${encodeURIComponent(portfolioName)}`}
           />
         </div>
       </header>
@@ -377,6 +387,7 @@ function PortfolioContent() {
 
         <main className="app-main overflow-y-auto px-4 pb-6 pt-5 sm:px-6 sm:pb-8 lg:px-8">
           <div className="content-shell max-w-7xl pb-6">
+            {/* ── Portfolio Title and Actions Area ── */}
             <PortfolioHeader
               portfolioName={portfolioName}
               statusLabel={isConnectedPortfolio ? "Connected to Binance" : undefined}
@@ -395,84 +406,113 @@ function PortfolioContent() {
               onCertifySnapshot={handleCreateCertificate}
               isCertifyingSnapshot={isCreatingCertificate}
               isCertifySnapshotDisabled={!effectiveSnapshot || isLoading}
+              hideActions={activeTab !== "holdings"}
             />
 
-            {isLoading && !effectiveSnapshot && (
-              <div className="panel-low mb-6 p-5 text-sm text-muted">Loading portfolio snapshot...</div>
-            )}
+            {/* ── Tabs Navigation (always under the title/actions) ── */}
+            <PortfolioSubNavigation portfolioName={portfolioName} activeTab={activeTab} />
 
-            {error && (
-              <div className="panel-low mb-6 p-5 text-sm text-danger">
-                Unable to load live data: {error}
-              </div>
-            )}
-
-            {effectiveSnapshot && (
+            {/* ── Tab: Holdings (default) ── */}
+            {activeTab === "holdings" && (
               <>
-                {throttledSummary && throttledMetrics ? (
-                  <PortfolioSummary
-                    portfolioName={portfolioName}
-                    summary={throttledSummary}
-                    metrics={throttledMetrics}
-                    tradingAgentRecommendation={tradingAgentRecommendation}
-                    tradingAgentResult={tradingAgentResult}
-                    tradingAgentPreparedContext={tradingAgentPreparedContext}
-                    tradingAgentTrace={tradingAgentTrace}
-                    tradingAgentWarnings={tradingAgentWarnings}
-                    tradingAgentIsAnalyzing={isTradingAgentAnalyzing}
-                    tradingAgentProgressLabel={tradingAgentProgressLabel}
-                    tradingAgentActiveNodes={tradingAgentActiveNodes}
-                    tradingAgentError={tradingAgentError}
-                    showTradingAgentControls={!isMainPortfolio}
-                    onAnalyzeTradingAgent={handleAnalyzeTradingAgent}
-                    isAnalyzeDisabled={
-                      isMainPortfolio ||
-                      !effectiveSnapshot ||
-                      isLoading ||
-                      !isPortfolioUiSessionReady
-                    }
-                  />
-                ) : null}
-                <PortfolioMetrics metrics={throttledMetrics ?? scopedMetrics} />
-                {showCharts && (
-                  <PortfolioCharts
-                    chart={throttledChart}
-                    assets={throttledAssets}
-                    isLoading={isLoading || isRefreshing || throttledChart.length === 0}
-                  />
+                {isLoading && !effectiveSnapshot && (
+                  <div className="panel-low mb-6 p-5 text-sm text-muted">Loading portfolio snapshot...</div>
                 )}
-                {/* Assets / Transactions tab switcher */}
-                <div className="mb-4 flex items-center gap-1 rounded-xl bg-(--surface-container-highest) p-1 w-fit">
-                  <button
-                    type="button"
-                    onClick={() => setHoldingsTab("assets")}
-                    className={holdingsTab === "assets"
-                      ? "rounded-lg bg-(--surface-bright) px-4 py-1.5 text-xs font-semibold text-strong"
-                      : "px-4 py-1.5 text-xs font-medium text-muted hover:text-strong transition-colors"}
-                  >
-                    Assets
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setHoldingsTab("transactions")}
-                    className={holdingsTab === "transactions"
-                      ? "rounded-lg bg-(--surface-bright) px-4 py-1.5 text-xs font-semibold text-strong"
-                      : "px-4 py-1.5 text-xs font-medium text-muted hover:text-strong transition-colors"}
-                  >
-                    Transactions
-                  </button>
-                </div>
 
-                {holdingsTab === "assets" ? (
-                  <PortfolioAssetsTable assets={throttledAssets} />
-                ) : (
-                  <PortfolioTransactionsList
-                    portfolioName={portfolioName}
-                    isConnected={isConnectedPortfolio}
-                    onTransactionChanged={handleTransactionCreated}
-                  />
+                {error && (
+                  <div className="panel-low mb-6 p-5 text-sm text-danger">
+                    Unable to load live data: {error}
+                  </div>
+                )}
+
+                {effectiveSnapshot && (
+                  <>
+                    {throttledSummary && throttledMetrics ? (
+                      <PortfolioSummary
+                        portfolioName={portfolioName}
+                        summary={throttledSummary}
+                        metrics={throttledMetrics}
+                        tradingAgentRecommendation={tradingAgentRecommendation}
+                        tradingAgentResult={tradingAgentResult}
+                        tradingAgentPreparedContext={tradingAgentPreparedContext}
+                        tradingAgentTrace={tradingAgentTrace}
+                        tradingAgentWarnings={tradingAgentWarnings}
+                        tradingAgentIsAnalyzing={isTradingAgentAnalyzing}
+                        tradingAgentProgressLabel={tradingAgentProgressLabel}
+                        tradingAgentActiveNodes={tradingAgentActiveNodes}
+                        tradingAgentError={tradingAgentError}
+                        showTradingAgentControls={!isMainPortfolio}
+                        onAnalyzeTradingAgent={handleAnalyzeTradingAgent}
+                        isAnalyzeDisabled={
+                          isMainPortfolio ||
+                          !effectiveSnapshot ||
+                          isLoading ||
+                          !isPortfolioUiSessionReady
+                        }
+                      />
+                    ) : null}
+                    <PortfolioMetrics metrics={throttledMetrics ?? scopedMetrics} />
+                    {showCharts && (
+                      <PortfolioCharts
+                        chart={throttledChart}
+                        assets={throttledAssets}
+                        isLoading={isLoading || isRefreshing || throttledChart.length === 0}
+                      />
+                    )}
+                    {/* Assets / Transactions inner tab switcher */}
+                    <div className="mb-4 flex items-center gap-1 rounded-xl bg-(--surface-container-highest) p-1 w-fit">
+                      <button
+                        type="button"
+                        onClick={() => setHoldingsTab("assets")}
+                        className={holdingsTab === "assets"
+                          ? "rounded-lg bg-(--surface-bright) px-4 py-1.5 text-xs font-semibold text-strong"
+                          : "px-4 py-1.5 text-xs font-medium text-muted hover:text-strong transition-colors"}
+                      >
+                        Assets
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setHoldingsTab("transactions")}
+                        className={holdingsTab === "transactions"
+                          ? "rounded-lg bg-(--surface-bright) px-4 py-1.5 text-xs font-semibold text-strong"
+                          : "px-4 py-1.5 text-xs font-medium text-muted hover:text-strong transition-colors"}
+                      >
+                        Transactions
+                      </button>
+                    </div>
+
+                    {holdingsTab === "assets" ? (
+                      <PortfolioAssetsTable assets={throttledAssets} />
+                    ) : (
+                      <PortfolioTransactionsList
+                        portfolioName={portfolioName}
+                        isConnected={isConnectedPortfolio}
+                        onTransactionChanged={handleTransactionCreated}
+                      />
+                    )}
+                  </>
                 )}
               </>
+            )}
+
+            {/* ── Tab: AI History ── */}
+            {activeTab === "ai-history" && (
+              <TabAiHistory portfolioName={portfolioName} portfolioId={portfolioId} />
+            )}
+
+            {/* ── Tab: Risk Rules ── */}
+            {activeTab === "risk-rules" && (
+              <TabRiskRules portfolioName={portfolioName} portfolioId={portfolioId} />
+            )}
+
+            {/* ── Tab: Journal ── */}
+            {activeTab === "journal" && (
+              <TabJournal portfolioName={portfolioName} />
+            )}
+
+            {/* ── Tab: Milestones ── */}
+            {activeTab === "milestones" && (
+              <TabMilestones portfolioName={portfolioName} portfolioId={portfolioId} />
             )}
           </div>
         </main>

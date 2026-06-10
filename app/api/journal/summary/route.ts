@@ -217,6 +217,8 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const daysParam = Number(searchParams.get("days") ?? 30);
   const days = Number.isFinite(daysParam) ? Math.min(180, Math.max(7, Math.trunc(daysParam))) : 30;
+  const portfolioName = searchParams.get("portfolioName")?.trim();
+  const isMainPortfolio = !portfolioName || portfolioName === MAIN_PORTFOLIO_NAME;
 
   const now = new Date();
   const nowMs = now.getTime();
@@ -230,13 +232,21 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unable to load journal data." }, { status: 500 });
   }
 
-  const currentEvents = filterByWindow(events, currentStart.getTime(), nowMs, true);
-  const previousEvents = filterByWindow(events, previousStart.getTime(), currentStart.getTime(), false);
+  const targetEvents = isMainPortfolio
+    ? events
+    : events.filter((event) => event.portfolioName === portfolioName);
+
+  const currentEvents = filterByWindow(targetEvents, currentStart.getTime(), nowMs, true);
+  const previousEvents = filterByWindow(targetEvents, previousStart.getTime(), currentStart.getTime(), false);
 
   let sharpeRatio30d: number | null = null;
-  const mainPortfolio = await resolveUserPortfolioByName(supabase, user.id, MAIN_PORTFOLIO_NAME);
-  if (mainPortfolio?.id) {
-    const latestSnapshot = await getLatestPortfolioSnapshotCache(supabase, user.id, mainPortfolio.id);
+  const targetPortfolio = await resolveUserPortfolioByName(
+    supabase,
+    user.id,
+    isMainPortfolio ? MAIN_PORTFOLIO_NAME : portfolioName
+  );
+  if (targetPortfolio?.id) {
+    const latestSnapshot = await getLatestPortfolioSnapshotCache(supabase, user.id, targetPortfolio.id);
     sharpeRatio30d = latestSnapshot?.metrics.sharpeRatio30d ?? null;
   }
 
