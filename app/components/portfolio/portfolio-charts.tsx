@@ -1,11 +1,17 @@
 "use client";
 
 import { useMemo, useState, useCallback, useRef } from "react";
-import type { PortfolioAssetRow, PortfolioChartPoint } from "@/app/lib/portfolio-types";
+import type { PortfolioAssetRow, PortfolioChartPoint, PortfolioForecast } from "@/app/lib/portfolio-types";
+import { MaterialIcon } from "../dashboard/material-icon";
+import { PortfolioForecastDialog } from "./portfolio-forecast-dialog";
 
 type PortfolioChartsProps = {
   chart: PortfolioChartPoint[];
   assets: PortfolioAssetRow[];
+  forecast: PortfolioForecast | null;
+  forecastError: string | null;
+  isForecastLoading?: boolean;
+  onRefreshForecast: () => void;
   isLoading?: boolean;
 };
 
@@ -288,8 +294,17 @@ function ChartWrapper({
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export function PortfolioCharts({ chart, assets, isLoading }: PortfolioChartsProps) {
+export function PortfolioCharts({
+  chart,
+  assets,
+  forecast,
+  forecastError,
+  isForecastLoading,
+  onRefreshForecast,
+  isLoading,
+}: PortfolioChartsProps) {
   const [timeframe, setTimeframe] = useState<Timeframe>("24h");
+  const [isForecastDialogOpen, setForecastDialogOpen] = useState(false);
 
   // ── Filtered chart data ────────────────────────────────────────────────────
   const filteredChart = useMemo(() => {
@@ -498,6 +513,23 @@ export function PortfolioCharts({ chart, assets, isLoading }: PortfolioChartsPro
                   </button>
                 ))}
               </div>
+
+              <button
+                type="button"
+                onClick={() => setForecastDialogOpen(true)}
+                className="group relative inline-flex items-center gap-1.5 rounded-full border border-[#F0B90B]/30 bg-[#F0B90B]/8 px-3 py-[0.38rem] text-[0.92rem] font-medium tracking-[0.01em] text-[#F0B90B] shadow-[inset_0_0_0_1px_rgba(240,185,11,0.04)] transition hover:border-[#F0B90B]/50 hover:bg-[#F0B90B]/12 hover:text-[#FFD86B]"
+                style={{ fontFamily: "var(--font-display)" }}
+                aria-label="Forecast next 48h"
+              >
+                <MaterialIcon name="auto_awesome" outlined={false} className="text-[0.9rem] text-[#F0B90B]" />
+                <span>Forecast</span>
+                <span
+                  className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-[#3B2E0D] bg-[#111418] px-2.5 py-1 text-[0.62rem] tracking-[0.12em] text-[#F0B90B] opacity-0 shadow-lg transition duration-150 group-hover:opacity-100"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  Forecast next 48h
+                </span>
+              </button>
             </div>
 
             {/* Chart */}
@@ -611,6 +643,16 @@ export function PortfolioCharts({ chart, assets, isLoading }: PortfolioChartsPro
 
         </div>
       </article>
+
+      <PortfolioForecastDialog
+        open={isForecastDialogOpen}
+        onClose={() => setForecastDialogOpen(false)}
+        chart={filteredChart}
+        forecast={forecast}
+        forecastError={forecastError}
+        isForecastLoading={!!isForecastLoading}
+        onRefreshForecast={onRefreshForecast}
+      />
     </section>
   );
 }

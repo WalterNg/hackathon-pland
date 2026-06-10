@@ -218,6 +218,35 @@ export type PortfolioAIRecommendation = {
   analysisResult?: import("@/app/lib/trading-agent-types").TradingAgentResult | null;
 };
 
+export type PortfolioForecastAssetProjection = {
+  symbol: string;
+  currentValueUsd: number;
+  predictedReturnPct: number;
+  forecastValueUsd: number;
+  changeAbsUsd: number;
+  contributionPct: number;
+};
+
+export type PortfolioForecast = {
+  status: "ready";
+  horizonHours: number;
+  forecastPortfolioValue: number;
+  forecastLower: number;
+  forecastUpper: number;
+  forecastChangeAbs: number;
+  forecastChangePct: number;
+  confidenceScore: number;
+  artifactTimestamp: string;
+  predictionsBySymbol: Record<string, number>;
+  assetBreakdown: PortfolioForecastAssetProjection[];
+};
+
+export type PortfolioForecastResponse = {
+  status: "success" | "error";
+  data?: PortfolioForecast | null;
+  message?: string | null;
+};
+
 export type PortfolioAIRecommendationHistoryItem = {
   id: string;
   analyzedAt: string;

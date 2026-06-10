@@ -25,6 +25,7 @@ from api.routes import (
     debug_market,
     evaluate,
     portfolio_achievements,
+    portfolio_forecast,
     portfolio_snapshot_certificates,
     risk_agent,
     risk_rules,
@@ -71,6 +72,7 @@ app.include_router(evaluate.router, prefix="/api", tags=["Evaluation"])
 app.include_router(ta_agent.router, prefix="/api", tags=["TA Agent"])
 app.include_router(sentiment_agent.router, prefix="/api", tags=["Sentiment Agent"])
 app.include_router(risk_agent.router, prefix="/api", tags=["Risk Agent"])
+app.include_router(portfolio_forecast.router, prefix="/api", tags=["Portfolio Forecast"])
 app.include_router(debug_market.router, prefix="/api", tags=["Debug"])
 app.include_router(binance_connection.router, prefix="/api", tags=["Binance Connection"])
 app.include_router(binance_market.router, prefix="/api", tags=["Binance Market"])
@@ -82,4 +84,3 @@ app.include_router(risk_rules.router, prefix="/api", tags=["Risk Rules"])
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
-

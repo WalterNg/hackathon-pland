@@ -21,6 +21,7 @@ import { CertifySnapshotDialog } from "../components/portfolio/certify-snapshot-
 import { Sidebar } from "../components/ui/sidebar";
 import { AuthGuard } from "../components/auth/auth-guard";
 import { useTradingAgentAnalysis } from "../hooks/use-trading-agent-analysis";
+import { usePortfolioForecast } from "../hooks/use-portfolio-forecast";
 import { usePortfolioUiSession } from "../hooks/use-portfolio-ui-session";
 import { usePortfolios } from "../hooks/use-portfolios";
 import { usePortfolioSnapshotCertificates } from "../hooks/use-portfolio-snapshot-certificates";
@@ -199,6 +200,12 @@ function PortfolioContent() {
   }, [portfolioName, scopedSnapshot]);
 
   const effectiveSnapshot = scopedSnapshot ?? snapshotCacheByPortfolio[portfolioName] ?? null;
+  const {
+    forecast: portfolioForecast,
+    isLoading: isForecastLoading,
+    error: portfolioForecastError,
+    refresh: refreshPortfolioForecast,
+  } = usePortfolioForecast(effectiveSnapshot);
 
   const isConnectedPortfolio = currentPortfolio?.mode === "binance_connected";
   const primaryActionLabel = isMainPortfolio ? "Create portfolio" : isConnectedPortfolio ? "Read-only" : "Add transaction";
@@ -466,6 +473,10 @@ function PortfolioContent() {
                       <PortfolioCharts
                         chart={throttledChart}
                         assets={throttledAssets}
+                        forecast={portfolioForecast}
+                        forecastError={portfolioForecastError}
+                        isForecastLoading={isForecastLoading}
+                        onRefreshForecast={refreshPortfolioForecast}
                         isLoading={isLoading || isRefreshing || throttledChart.length === 0}
                       />
                     )}
