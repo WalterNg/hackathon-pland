@@ -1,0 +1,26 @@
+{
+  "model_status": "ready",
+  "training_state": "succeeded",
+  "status_message": "FreqAI artifact synced from disk.",
+  "artifact_timestamp": "2026-04-16T12:01:09.123096+00:00",
+  "last_training_completed_at": "2026-04-16T12:01:09.123096+00:00",
+  "last_backtest_completed_at": "2026-04-16T12:01:09.123096+00:00",
+  "universe_symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "BNBUSDT",
+    "SOLUSDT",
+    "DOGEUSDT"
+  ],
+  "horizon_hours": 48,
+  "backtest_summary": null,
+  "predictions_by_symbol": {
+    "BTCUSDT": -0.038030485079195715,
+    "ETHUSDT": -0.0546615767391542,
+    "BNBUSDT": -0.05106516512997248,
+    "SOLUSDT": -0.06970237305270945,
+    "DOGEUSDT": -0.02097198814604413
+  },
+  "forecast_band_error_pct": 0.04688631762941519,
+  "confidence_score": 1
+}
