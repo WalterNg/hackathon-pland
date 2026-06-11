@@ -11,6 +11,14 @@ class PortfolioItem(BaseModel):
     current_price: float
 
 
+class PortfolioForecastItem(BaseModel):
+    """Single portfolio holding used by the forecast endpoint."""
+
+    asset: str
+    amount: float = Field(..., ge=0)
+    current_price: float = Field(..., ge=0)
+
+
 class BinanceConnectionPreviewRequest(BaseModel):
     """Demo preview options for a server-side Binance connection check."""
 
@@ -52,6 +60,21 @@ class EvaluationPayload(BaseModel):
         ge=0,
         le=100,
         description="Portfolio-level market sentiment proxy from 0 to 100.",
+    )
+
+
+class PortfolioForecastPayload(BaseModel):
+    """Public API request used to forecast portfolio value over a fixed horizon."""
+
+    user_id: str = Field(default="forecast-test-user", description="Identifier for logging and traceability.")
+    portfolio: List[PortfolioForecastItem] = Field(
+        default_factory=list,
+        description="List of crypto assets held: symbol, quantity, and current price per asset.",
+    )
+    stablecoin_reserve: float = Field(
+        default=0.0,
+        ge=0,
+        description="Optional reserve amount included in the current portfolio value.",
     )
 
 

@@ -1,4 +1,4 @@
-from typing import List, Literal
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -38,6 +38,41 @@ class PortfolioDecision(BaseModel):
 class EvaluationResponse(BaseModel):
     status: str = "success"
     data: dict
+
+
+class PortfolioForecastAssetProjection(BaseModel):
+    """Per-asset contribution in the portfolio forecast output."""
+
+    symbol: str
+    current_value_usd: float = Field(..., ge=0)
+    predicted_return_pct: float
+    forecast_value_usd: float = Field(..., ge=0)
+    change_abs_usd: float
+    contribution_pct: float
+
+
+class PortfolioForecastData(BaseModel):
+    """Normalized portfolio forecast payload returned by the prediction API."""
+
+    status: Literal["ready"]
+    horizon_hours: int = Field(..., ge=1)
+    forecast_portfolio_value: float = Field(..., ge=0)
+    forecast_lower: float = Field(..., ge=0)
+    forecast_upper: float = Field(..., ge=0)
+    forecast_change_abs: float
+    forecast_change_pct: float
+    confidence_score: int = Field(..., ge=1, le=10)
+    artifact_timestamp: str
+    predictions_by_symbol: Dict[str, float]
+    asset_breakdown: List[PortfolioForecastAssetProjection] = Field(default_factory=list)
+
+
+class PortfolioForecastResponse(BaseModel):
+    """API wrapper for the portfolio forecast endpoint."""
+
+    status: Literal["success", "error"]
+    data: Optional[PortfolioForecastData] = None
+    message: Optional[str] = None
 
 
 class BinanceConnectionAsset(BaseModel):
