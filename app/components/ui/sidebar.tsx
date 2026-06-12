@@ -175,6 +175,7 @@ function SidebarContent({
 
             <Link
               href={createPortfolioHref}
+              data-tour="create-portfolio-btn"
               className="flex items-center justify-center gap-2 rounded-2xl px-3 py-3 text-sm font-semibold text-primary transition-colors hover:bg-(--surface-container-low)"
             >
               <MaterialIcon name="add" outlined={false} className="text-xl" />
