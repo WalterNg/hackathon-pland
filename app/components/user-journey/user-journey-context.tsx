@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 
 export type JourneyStep = {
   id: string;
@@ -170,6 +170,8 @@ export const JOURNEY_STEPS: JourneyStep[] = [
   },
 ];
 
+const JOURNEY_SEEN_KEY = "pland_journey_seen";
+
 // --- Context ---
 
 type UserJourneyContextType = {
@@ -198,13 +200,27 @@ export function UserJourneyProvider({ children }: { children: ReactNode }) {
   const endJourney = useCallback(() => {
     setIsActive(false);
     setCurrentStepIndex(0);
+    localStorage.setItem(JOURNEY_SEEN_KEY, "1");
   }, []);
+
+  // Auto-start for first-time users
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(JOURNEY_SEEN_KEY)) {
+        const id = setTimeout(() => startJourney(), 800);
+        return () => clearTimeout(id);
+      }
+    } catch {
+      // localStorage unavailable (SSR or private mode) — skip
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const nextStep = useCallback(() => {
     setCurrentStepIndex((prev) => {
       const next = prev + 1;
       if (next >= JOURNEY_STEPS.length) {
         setIsActive(false);
+        try { localStorage.setItem(JOURNEY_SEEN_KEY, "1"); } catch { /* ignore */ }
         return 0;
       }
       return next;
