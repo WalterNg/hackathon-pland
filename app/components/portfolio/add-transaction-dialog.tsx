@@ -211,8 +211,8 @@ export function AddTransactionDialog({
   };
 
   return (
-    <div className="modal-backdrop z-90">
-      <div className="modal-shell max-w-lg p-4 sm:p-4">
+    <div className="modal-backdrop z-[10002]">
+      <div className="modal-shell max-w-lg p-4 sm:p-4" data-tour="add-transaction-form">
         <div className="mb-5 flex items-start justify-between gap-4">
           <h2 className="mt-2 text-lg font-bold text-strong sm:text-xl">Add Transaction</h2>
           <button type="button" onClick={onClose} className="icon-button h-10 w-10" aria-label="Close add transaction">
@@ -374,6 +374,7 @@ export function AddTransactionDialog({
           type="button"
           onClick={submit}
           disabled={!canSubmit || isSubmitting}
+          data-tour="submit-add-transaction"
           className="ui-button-primary mt-2 w-full text-base disabled:opacity-60"
         >
           {isSubmitting ? "Saving..." : "Add Transaction"}

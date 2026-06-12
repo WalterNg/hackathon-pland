@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import { PortfolioUiSessionCleanup } from "./components/auth/portfolio-ui-session-cleanup";
 import { RiskAlertToastProvider } from "./components/ui/risk-alert-toast-provider";
+import { UserJourneyProvider } from "./components/user-journey/user-journey-context";
+import { UserJourneyOverlay } from "./components/user-journey/user-journey-overlay";
 
 export const metadata: Metadata = {
   title: "Pland",
@@ -39,7 +41,10 @@ export default function RootLayout({
         <meta name="color-scheme" content="dark" />
       </head>
       <body className="bg-background text-body antialiased transition-colors duration-200">
-        {children}
+        <UserJourneyProvider>
+          {children}
+          <UserJourneyOverlay />
+        </UserJourneyProvider>
         <PortfolioUiSessionCleanup />
         <RiskAlertToastProvider />
       </body>

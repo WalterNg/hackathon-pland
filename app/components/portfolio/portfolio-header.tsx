@@ -134,6 +134,7 @@ export function PortfolioHeader({
               type="button"
               onClick={onPrimaryAction}
               disabled={isPrimaryActionDisabled}
+              data-tour="add-transaction-btn"
               className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-primary px-3.5 text-[0.75rem] font-semibold tracking-wide text-[var(--text-on-primary)] shadow-[0_2px_12px_-3px_rgba(var(--color-primary-rgb,34,197,94)/0.5)] transition-all duration-200 ease-out hover:-translate-y-px hover:brightness-110 hover:shadow-[0_6px_20px_-4px_rgba(var(--color-primary-rgb,34,197,94)/0.55)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
             >
               <MaterialIcon name="add" outlined={false} className="text-[1.1rem]" />
@@ -201,7 +202,7 @@ export function PortfolioHeader({
                       className="flex w-full items-center gap-2.5 px-4 py-3 text-sm text-muted hover:bg-(--surface-container) disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <MaterialIcon name={isSyncing ? "hourglass_top" : "sync"} outlined={false} className="text-base text-primary" />
-                      {isSyncing ? "Syncing…" : "Sync"}
+                      {isSyncing ? "Syncing..." : "Sync"}
                     </button>
                   )}
 
@@ -215,7 +216,7 @@ export function PortfolioHeader({
                         className="flex w-full items-center gap-2.5 px-4 py-3 text-sm text-danger hover:bg-danger-soft/30 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <MaterialIcon name={isRemovingPortfolio ? "hourglass_top" : "delete"} outlined={false} className="text-base" />
-                        {isRemovingPortfolio ? "Removing…" : "Remove portfolio"}
+                        {isRemovingPortfolio ? "Removing..." : "Remove portfolio"}
                       </button>
                     </>
                   )}
@@ -266,7 +267,7 @@ export function PortfolioHeader({
                 disabled={isRenaming || !renameValue.trim()}
                 className="ui-button-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isRenaming ? "Saving…" : "Save"}
+                {isRenaming ? "Saving..." : "Save"}
               </button>
             </div>
           </div>

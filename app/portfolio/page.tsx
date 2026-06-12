@@ -385,6 +385,7 @@ function PortfolioContent() {
           />
         </div>
       </header>
+      {/* data-tour anchor for create portfolio — targets the primary action button rendered in PortfolioHeader */}
 
       <div className="app-shell flex overflow-hidden">
         <Sidebar
@@ -427,7 +428,9 @@ function PortfolioContent() {
             />
 
             {/* ── Tabs Navigation (always under the title/actions) ── */}
-            <PortfolioSubNavigation portfolioName={portfolioName} activeTab={activeTab} />
+            <div data-tour="tab-ai-history">
+              <PortfolioSubNavigation portfolioName={portfolioName} activeTab={activeTab} />
+            </div>
 
             {/* ── Tab: Holdings (default) ── */}
             {activeTab === "holdings" && (
@@ -445,6 +448,7 @@ function PortfolioContent() {
                 {effectiveSnapshot && (
                   <>
                     {throttledSummary && throttledMetrics ? (
+                      <div data-tour="portfolio-summary">
                       <PortfolioSummary
                         portfolioName={portfolioName}
                         summary={throttledSummary}
@@ -467,50 +471,57 @@ function PortfolioContent() {
                           !isPortfolioUiSessionReady
                         }
                       />
+                      </div>
                     ) : null}
-                    <PortfolioMetrics metrics={throttledMetrics ?? scopedMetrics} />
+                    <div data-tour="portfolio-metrics">
+                      <PortfolioMetrics metrics={throttledMetrics ?? scopedMetrics} />
+                    </div>
                     {showCharts && (
-                      <PortfolioCharts
-                        chart={throttledChart}
-                        assets={throttledAssets}
-                        forecast={portfolioForecast}
-                        forecastError={portfolioForecastError}
-                        isForecastLoading={isForecastLoading}
-                        onRefreshForecast={refreshPortfolioForecast}
-                        isLoading={isLoading || isRefreshing || throttledChart.length === 0}
-                      />
+                      <div data-tour="portfolio-charts">
+                        <PortfolioCharts
+                          chart={throttledChart}
+                          assets={throttledAssets}
+                          forecast={portfolioForecast}
+                          forecastError={portfolioForecastError}
+                          isForecastLoading={isForecastLoading}
+                          onRefreshForecast={refreshPortfolioForecast}
+                          isLoading={isLoading || isRefreshing || throttledChart.length === 0}
+                        />
+                      </div>
                     )}
                     {/* Assets / Transactions inner tab switcher */}
-                    <div className="mb-4 flex items-center gap-1 rounded-xl bg-(--surface-container-highest) p-1 w-fit">
-                      <button
-                        type="button"
-                        onClick={() => setHoldingsTab("assets")}
-                        className={holdingsTab === "assets"
-                          ? "rounded-lg bg-(--surface-bright) px-4 py-1.5 text-xs font-semibold text-strong"
-                          : "px-4 py-1.5 text-xs font-medium text-muted hover:text-strong transition-colors"}
-                      >
-                        Assets
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setHoldingsTab("transactions")}
-                        className={holdingsTab === "transactions"
-                          ? "rounded-lg bg-(--surface-bright) px-4 py-1.5 text-xs font-semibold text-strong"
-                          : "px-4 py-1.5 text-xs font-medium text-muted hover:text-strong transition-colors"}
-                      >
-                        Transactions
-                      </button>
-                    </div>
+                    <div data-tour="portfolio-assets">
+                      <div className="mb-4 flex items-center gap-1 rounded-xl bg-(--surface-container-highest) p-1 w-fit">
+                        <button
+                          type="button"
+                          onClick={() => setHoldingsTab("assets")}
+                          className={holdingsTab === "assets"
+                            ? "rounded-lg bg-(--surface-bright) px-4 py-1.5 text-xs font-semibold text-strong"
+                            : "px-4 py-1.5 text-xs font-medium text-muted hover:text-strong transition-colors"}
+                        >
+                          Assets
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setHoldingsTab("transactions")}
+                          className={holdingsTab === "transactions"
+                            ? "rounded-lg bg-(--surface-bright) px-4 py-1.5 text-xs font-semibold text-strong"
+                            : "px-4 py-1.5 text-xs font-medium text-muted hover:text-strong transition-colors"}
+                        >
+                          Transactions
+                        </button>
+                      </div>
 
-                    {holdingsTab === "assets" ? (
-                      <PortfolioAssetsTable assets={throttledAssets} />
-                    ) : (
-                      <PortfolioTransactionsList
-                        portfolioName={portfolioName}
-                        isConnected={isConnectedPortfolio}
-                        onTransactionChanged={handleTransactionCreated}
-                      />
-                    )}
+                      {holdingsTab === "assets" ? (
+                        <PortfolioAssetsTable assets={throttledAssets} />
+                      ) : (
+                        <PortfolioTransactionsList
+                          portfolioName={portfolioName}
+                          isConnected={isConnectedPortfolio}
+                          onTransactionChanged={handleTransactionCreated}
+                        />
+                      )}
+                    </div>
                   </>
                 )}
               </>

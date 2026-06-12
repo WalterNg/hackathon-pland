@@ -52,6 +52,7 @@ export function PortfolioSubNavigation({ portfolioName, activeTab = "holdings" }
           <Link
             key={tab.key}
             href={buildHref(tab.key)}
+            {...(tab.key === "milestones" ? { "data-tour": "tab-milestones" } : {})}
             className={`flex items-center gap-2 border-b-2 px-1 pb-3 pr-5 text-sm font-semibold transition-colors ${
               isActive
                 ? "border-white text-strong"

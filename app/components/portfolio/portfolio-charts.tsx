@@ -517,6 +517,7 @@ export function PortfolioCharts({
               <button
                 type="button"
                 onClick={() => setForecastDialogOpen(true)}
+                data-tour="forecast-btn"
                 className="group relative inline-flex items-center gap-1.5 rounded-full border border-[#F0B90B]/30 bg-[#F0B90B]/8 px-3 py-[0.38rem] text-[0.92rem] font-medium tracking-[0.01em] text-[#F0B90B] shadow-[inset_0_0_0_1px_rgba(240,185,11,0.04)] transition hover:border-[#F0B90B]/50 hover:bg-[#F0B90B]/12 hover:text-[#FFD86B]"
                 style={{ fontFamily: "var(--font-display)" }}
                 aria-label="Forecast next 48h"

@@ -25,8 +25,8 @@ export function SelectCoinModal({ open, onClose, onSelect }: SelectCoinModalProp
   }
 
   return (
-    <div className="modal-backdrop z-80">
-      <div className="modal-shell max-w-lg p-5 sm:p-6">
+    <div className="modal-backdrop z-[10002]">
+      <div className="modal-shell max-w-lg p-5 sm:p-6" data-tour="select-coin-modal">
         <div className="mb-5 flex items-start justify-between gap-4">
           <h2 className="text-xl font-bold text-strong">Select Coin</h2>
           <button type="button" onClick={onClose} className="icon-button h-10 w-10" aria-label="Close coin picker">
