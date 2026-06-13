@@ -37,9 +37,47 @@ export function AppTopNavigation({
 
   return (
     <div className="flex w-full items-center justify-between py-1">
-      <Link href={portfolioHref} className="shrink-0">
-        <img src="/logo-new.png" alt="Pland" className="w-24 h-auto object-contain" />
-      </Link>
+      <div className="flex items-center gap-4">
+        <Link href={portfolioHref} className="shrink-0">
+          <img src="/logo-new.png" alt="Pland" className="w-24 h-auto object-contain" />
+        </Link>
+
+        <a
+          href="https://www.facebook.com/watch/?v=1131263642510876"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm font-bold text-muted hover:text-strong transition-colors px-3 py-1.5 rounded-lg hover:bg-white/6"
+        >
+          Post
+        </a>
+
+        <a
+          href="https://www.daathena.com/vi/hackathon/voting/teams/15"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm font-bold text-muted hover:text-strong transition-colors px-3 py-1.5 rounded-lg hover:bg-white/6"
+        >
+          Vote
+        </a>
+
+        <a
+          href="https://github.com/WalterNg/hackathon-pland"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm font-bold text-muted hover:text-strong transition-colors px-3 py-1.5 rounded-lg hover:bg-white/6"
+        >
+          GitHub
+        </a>
+
+        <a
+          href="https://pland-landing-page.vercel.app/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm font-bold text-muted hover:text-strong transition-colors px-3 py-1.5 rounded-lg hover:bg-white/6"
+        >
+          About
+        </a>
+      </div>
 
       <div className="relative" ref={menuRef}>
         <button
