@@ -1,0 +1,23 @@
+{
+  "name": "onchain",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^7.0.0",
+    "@nomicfoundation/hardhat-verify": "^3.0.20",
+    "@openzeppelin/contracts": "^5.6.1",
+    "@types/node": "^22.19.21",
+    "dotenv": "^17.4.2",
+    "ethers": "^6.16.0",
+    "hardhat": "^3.9.0",
+    "typescript": "~6.0.3"
+  },
+  "type": "module"
+}
