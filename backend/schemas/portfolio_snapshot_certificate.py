@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 AnchorStatus = Literal["pending_anchor", "anchored", "failed"]
+NftMintStatus = Literal["pending_mint", "minted", "failed"]
 VerificationStatus = Literal["unverified", "verified", "mismatch"]
 CertifyMode = Literal["manual", "auto_achievement"]
 
@@ -119,3 +120,8 @@ class PortfolioSnapshotCertificateRecord(BaseModel):
     verification_status: VerificationStatus
     verified_at: datetime | None = None
     created_at: datetime
+    # NFT mint fields (added in migration 202606170001)
+    nft_mint_status: NftMintStatus = "pending_mint"
+    nft_token_id: int | None = None
+    nft_contract_address: str | None = None
+    nft_tx_hash: str | None = None

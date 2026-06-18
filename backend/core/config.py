@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     eth_sepolia_anchor_wallet_address: str = Field(default="", alias="ETH_SEPOLIA_ANCHOR_WALLET_ADDRESS")
     eth_sepolia_explorer_base_url: str = Field(default="https://sepolia.etherscan.io/tx/", alias="ETH_SEPOLIA_EXPLORER_BASE_URL")
 
+    # NFT contract configuration
+    nft_contract_address: str = Field(default="", alias="NFT_CONTRACT_ADDRESS")
+
     model_config = SettingsConfigDict(
         env_file=(
             os.path.join(ROOT_DIR, ".env.local"),

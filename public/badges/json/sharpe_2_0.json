@@ -1,0 +1,13 @@
+{
+  "name": "Sharpe Master II",
+  "description": "Achieve a Sharpe Ratio of 2.0 or higher.",
+  "image": "ipfs://bafybeih64xr5ymvnjb6c2pbvohldvit22d2snufeojizeexbch4gutxsii/sharpe_2_0.png",
+  "attributes": [
+    {"trait_type": "Category", "value": "Performance"},
+    {"trait_type": "Tier", "value": "Gold"},
+    {"trait_type": "Metric", "value": "sharpe_ratio"},
+    {"trait_type": "Threshold", "value": "≥2.0"},
+    {"trait_type": "Chain", "value": "Ethereum Sepolia"},
+    {"trait_type": "Type", "value": "Soulbound"}
+  ]
+}

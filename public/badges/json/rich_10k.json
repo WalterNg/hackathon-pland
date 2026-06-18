@@ -1,0 +1,13 @@
+{
+  "name": "Wealth I",
+  "description": "Achieve a total portfolio value of $10,000 or more.",
+  "image": "ipfs://bafybeih64xr5ymvnjb6c2pbvohldvit22d2snufeojizeexbch4gutxsii/rich_10k.png",
+  "attributes": [
+    {"trait_type": "Category", "value": "Wealth"},
+    {"trait_type": "Tier", "value": "Bronze"},
+    {"trait_type": "Metric", "value": "portfolio_value_usd"},
+    {"trait_type": "Threshold", "value": "≥10,000"},
+    {"trait_type": "Chain", "value": "Ethereum Sepolia"},
+    {"trait_type": "Type", "value": "Soulbound"}
+  ]
+}

@@ -21,7 +21,8 @@ CERTIFICATE_SELECT_COLUMNS = (
     "snapshot_payload,snapshot_hash,hash_algorithm,canonicalization_version,"
     "anchor_chain,anchor_network,anchor_tx_hash,anchor_block_number,anchor_block_hash,"
     "anchor_wallet_address,anchor_explorer_url,anchor_status,anchor_error,certify_mode,achievement_key,title,note,"
-    "verification_status,verified_at,created_at"
+    "verification_status,verified_at,created_at,"
+    "nft_mint_status,nft_token_id,nft_contract_address,nft_tx_hash"
 )
 
 
@@ -133,6 +134,51 @@ async def mark_portfolio_snapshot_certificate_verified(
         updates={
             "verification_status": verification_status,
             "verified_at": verified_at,
+        },
+        single=True,
+    )
+    return _record_from_row(row if isinstance(row, dict) else None)
+
+
+async def mark_portfolio_snapshot_certificate_minted(
+    certificate_id: str,
+    user_id: str,
+    *,
+    token_id: int,
+    contract_address: str,
+    tx_hash: str,
+) -> PortfolioSnapshotCertificateRecord | None:
+    row = await update_rows(
+        "portfolio_snapshot_certificates",
+        params=[
+            build_filter_eq("id", certificate_id),
+            build_filter_eq("user_id", user_id),
+        ],
+        updates={
+            "nft_mint_status": "minted",
+            "nft_token_id": token_id,
+            "nft_contract_address": contract_address,
+            "nft_tx_hash": tx_hash,
+        },
+        single=True,
+    )
+    return _record_from_row(row if isinstance(row, dict) else None)
+
+
+async def mark_portfolio_snapshot_certificate_mint_failed(
+    certificate_id: str,
+    user_id: str,
+    *,
+    error: str,
+) -> PortfolioSnapshotCertificateRecord | None:
+    row = await update_rows(
+        "portfolio_snapshot_certificates",
+        params=[
+            build_filter_eq("id", certificate_id),
+            build_filter_eq("user_id", user_id),
+        ],
+        updates={
+            "nft_mint_status": "failed",
         },
         single=True,
     )
