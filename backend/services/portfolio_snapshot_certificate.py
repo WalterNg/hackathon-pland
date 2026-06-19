@@ -3,21 +3,19 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import logging
 
+from core.config import settings
 from schemas.portfolio_snapshot_certificate import (
     PortfolioSnapshotCertificateDetail,
     PortfolioSnapshotCertificateListItem,
     PortfolioSnapshotCertificateRecord,
     PortfolioSnapshotCertificateVerifyResponse,
 )
-from services.blockchain_anchor import EthereumSepoliaHashAnchorService
 from services.portfolio_snapshot_canonicalizer import canonicalize_portfolio_snapshot
 from services.portfolio_snapshot_certificate_store import (
     get_latest_portfolio_snapshot,
     get_portfolio_snapshot_certificate,
     insert_portfolio_snapshot_certificate,
     list_portfolio_snapshot_certificates,
-    mark_portfolio_snapshot_certificate_anchored,
-    mark_portfolio_snapshot_certificate_failed,
     mark_portfolio_snapshot_certificate_verified,
     resolve_portfolio,
 )
@@ -26,9 +24,51 @@ from services.portfolio_snapshot_hasher import hash_portfolio_snapshot
 logger = logging.getLogger("hackathon-pland")
 
 
+def _build_token_uri(cert_id: str) -> str:
+    base = (settings.app_base_url or "https://pland.vercel.app").rstrip("/")
+    return f"{base}/api/nft/certificate/{cert_id}"
+
+
+async def mint_certificate_nft(*, user_id: str, certificate_id: str) -> None:
+    """
+    Mint a Soulbound NFT for any certificate (manual or achievement).
+    Non-blocking — logs warning on failure, never raises.
+    """
+    try:
+        from eth_account import Account  # type: ignore
+        from services.nft_mint_service import NftMintService
+        from services.portfolio_snapshot_certificate_store import (
+            mark_portfolio_snapshot_certificate_minted,
+            mark_portfolio_snapshot_certificate_mint_failed,
+        )
+
+        platform_wallet = Account.from_key(settings.eth_sepolia_private_key.strip()).address
+        token_uri = _build_token_uri(certificate_id)
+
+        mint_svc = NftMintService()
+        result = await mint_svc.mint(to_address=platform_wallet, token_uri=token_uri)
+
+        await mark_portfolio_snapshot_certificate_minted(
+            certificate_id,
+            user_id,
+            token_id=result.token_id,
+            contract_address=result.contract_address,
+            tx_hash=result.tx_hash,
+        )
+        logger.info(
+            "NFT minted for cert=%s token_id=%s tx=%s",
+            certificate_id, result.token_id, result.tx_hash,
+        )
+    except Exception as exc:
+        logger.warning("NFT mint failed (non-fatal) for cert=%s: %s", certificate_id, exc)
+        try:
+            from services.portfolio_snapshot_certificate_store import mark_portfolio_snapshot_certificate_mint_failed
+            await mark_portfolio_snapshot_certificate_mint_failed(certificate_id, user_id, error=str(exc))
+        except Exception:
+            pass
+
+
 class PortfolioSnapshotCertificateService:
-    def __init__(self, anchor_service: EthereumSepoliaHashAnchorService | None = None) -> None:
-        self.anchor_service = anchor_service or EthereumSepoliaHashAnchorService()
 
     def _to_list_item(self, record: PortfolioSnapshotCertificateRecord) -> PortfolioSnapshotCertificateListItem:
         return PortfolioSnapshotCertificateListItem(
@@ -39,13 +79,6 @@ class PortfolioSnapshotCertificateService:
             snapshotAt=record.snapshot_at,
             snapshotHash=record.snapshot_hash,
             hashAlgorithm=record.hash_algorithm,
-            anchorChain=record.anchor_chain,
-            anchorNetwork=record.anchor_network,
-            anchorTxHash=record.anchor_tx_hash,
-            anchorBlockNumber=record.anchor_block_number,
-            anchorExplorerUrl=record.anchor_explorer_url,
-            anchorStatus=record.anchor_status,
-            anchorError=record.anchor_error,
             certifyMode=record.certify_mode,
             achievementKey=record.achievement_key,
             title=record.title,
@@ -60,8 +93,6 @@ class PortfolioSnapshotCertificateService:
             **self._to_list_item(record).model_dump(by_alias=True),
             snapshotPayload=record.snapshot_payload,
             canonicalizationVersion=record.canonicalization_version,
-            anchorBlockHash=record.anchor_block_hash,
-            anchorWalletAddress=record.anchor_wallet_address,
         )
 
     async def resolve_portfolio_for_user(
@@ -121,9 +152,6 @@ class PortfolioSnapshotCertificateService:
                 "snapshot_hash": snapshot_hash,
                 "hash_algorithm": "sha256",
                 "canonicalization_version": "portfolio-snapshot-v1",
-                "anchor_chain": "ethereum",
-                "anchor_network": "sepolia",
-                "anchor_status": "pending_anchor",
                 "certify_mode": certify_mode,
                 "achievement_key": achievement_key,
                 "title": safe_title,
@@ -132,27 +160,13 @@ class PortfolioSnapshotCertificateService:
             }
         )
 
-        try:
-            anchor_result = await self.anchor_service.anchor_snapshot_hash(snapshot_hash)
-            anchored_record = await mark_portfolio_snapshot_certificate_anchored(
-                inserted_record.id,
-                user_id,
-                tx_hash=anchor_result.tx_hash,
-                block_number=anchor_result.block_number,
-                block_hash=anchor_result.block_hash,
-                wallet_address=anchor_result.wallet_address,
-                explorer_url=anchor_result.explorer_url,
-            )
-            if anchored_record is None:
-                raise ValueError("Certificate was anchored but could not be updated in storage.")
-            return self._to_detail(anchored_record)
-        except Exception as exc:
-            failed_record = await mark_portfolio_snapshot_certificate_failed(
-                inserted_record.id,
-                user_id,
-                anchor_error=str(exc),
-            )
-            return self._to_detail(failed_record or inserted_record)
+        detail = self._to_detail(inserted_record)
+
+        # Mint NFT badge for manual certificates (non-blocking)
+        if certify_mode == "manual":
+            await mint_certificate_nft(user_id=user_id, certificate_id=inserted_record.id)
+
+        return detail
 
     async def list_certificates(self, user_id: str, portfolio_id: str) -> list[PortfolioSnapshotCertificateListItem]:
         records = await list_portfolio_snapshot_certificates(user_id, portfolio_id)
@@ -186,9 +200,7 @@ class PortfolioSnapshotCertificateService:
             isValid=is_valid,
             verificationStatus=verification_status,
             computedHash=computed_hash,
-            anchoredHash=record.snapshot_hash,
-            anchorTxHash=record.anchor_tx_hash,
-            anchorExplorerUrl=record.anchor_explorer_url,
+            storedHash=record.snapshot_hash,
             verifiedAt=verified_at,
         )
 

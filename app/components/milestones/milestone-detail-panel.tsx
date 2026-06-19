@@ -1,10 +1,13 @@
-﻿import type { ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { PortfolioSnapshotCertificateDetail } from "@/app/lib/portfolio-certificate-types";
+import type { AchievementTier } from "@/app/lib/achievement-tier";
+import { TIER_STYLES } from "@/app/lib/achievement-tier";
 
 type Props = {
   certificate: PortfolioSnapshotCertificateDetail | null;
   isLoading: boolean;
   portfolioName?: string;
+  tier?: AchievementTier | null;
 };
 
 function formatDate(ts: string | null) {
@@ -58,9 +61,11 @@ function LoadingPanel() {
 function CertificatePanel({
   certificate,
   portfolioName,
+  tier,
 }: {
   certificate: PortfolioSnapshotCertificateDetail;
   portfolioName?: string;
+  tier?: AchievementTier | null;
 }) {
   const payload = certificate.snapshotPayload as {
     summary?: { totalValueUsd?: number };
@@ -69,33 +74,42 @@ function CertificatePanel({
 
   const totalValue = payload?.summary?.totalValueUsd;
   const assets: AssetRow[] = (payload?.assets ?? []).slice(0, 8);
-  const isAnchored = certificate.anchorStatus === "anchored";
+  const isMinted = certificate.nftMintStatus === "minted";
+  const tierStyle = tier ? TIER_STYLES[tier] : null;
 
-  const accentFrom = isAnchored
-    ? "from-[#1e1b4b]"
-    : certificate.anchorStatus === "pending_anchor"
-    ? "from-[#3b2502]"
-    : "from-[#111114]";
+  const headerBg = tierStyle
+    ? `bg-gradient-to-b ${tierStyle.gradientFrom} to-transparent`
+    : isMinted
+    ? "bg-gradient-to-b from-[#1e1b4b] to-transparent"
+    : certificate.nftMintStatus === "pending_mint"
+    ? "bg-gradient-to-b from-[#3b2502] to-transparent"
+    : "bg-gradient-to-b from-[#111114] to-transparent";
+
+  const statusPill = tierStyle
+    ? tierStyle.pill
+    : isMinted
+    ? "bg-violet-500/15 text-violet-400"
+    : certificate.nftMintStatus === "pending_mint"
+    ? "bg-amber-500/15 text-amber-400"
+    : "bg-white/6 text-neutral-500";
+
+  const mintStatusLabel = isMinted ? "Minted" : certificate.nftMintStatus === "pending_mint" ? "Pending" : "Failed";
+
+  const nftExplorerUrl = certificate.nftTxHash
+    ? `https://sepolia.etherscan.io/tx/${certificate.nftTxHash}`
+    : null;
 
   return (
     <div className="rounded-3xl border border-white/8 bg-(--surface-container-low) overflow-hidden">
-      <div className={`bg-gradient-to-b ${accentFrom} to-transparent px-6 pt-6 pb-5`}>
+      <div className={`${headerBg} px-6 pt-6 pb-5`}>
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="text-[0.6rem] font-bold uppercase tracking-[0.2em] text-neutral-500">Certified Snapshot</p>
             <h3 className="mt-1 text-base font-bold text-white">{certificate.title || portfolioName || "Portfolio Snapshot"}</h3>
             <p className="mt-0.5 text-sm text-neutral-400">{formatDate(certificate.snapshotAt)}</p>
           </div>
-          <span
-            className={`mt-1 shrink-0 rounded-full px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide ${
-              isAnchored
-                ? "bg-violet-500/15 text-violet-400"
-                : certificate.anchorStatus === "pending_anchor"
-                ? "bg-amber-500/15 text-amber-400"
-                : "bg-white/6 text-neutral-500"
-            }`}
-          >
-            {isAnchored ? "Anchored" : certificate.anchorStatus === "pending_anchor" ? "Pending" : "Failed"}
+          <span className={`mt-1 shrink-0 rounded-full px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide ${statusPill}`}>
+            {tier ? tier : mintStatusLabel}
           </span>
         </div>
 
@@ -131,17 +145,17 @@ function CertificatePanel({
 
         <div className="rounded-xl border border-white/6 bg-white/2 px-4 py-3 space-y-2.5">
           <p className="text-[0.6rem] font-bold uppercase tracking-widest text-neutral-500">Blockchain Proof</p>
-          <Row label="Network" value={<span className="capitalize">{certificate.anchorNetwork}</span>} />
-          <Row label="Status" value={isAnchored ? "Anchored" : certificate.anchorStatus === "pending_anchor" ? "Pending" : "Failed"} />
+          <Row label="Network" value={<span className="capitalize">Ethereum Sepolia</span>} />
+          <Row label="NFT Status" value={mintStatusLabel} />
           <Row label="Snapshot hash" value={<span className="font-mono text-[0.65rem]">{shortHash(certificate.snapshotHash, 24)}</span>} />
-          {certificate.anchorTxHash && <Row label="Tx hash" value={<span className="font-mono text-[0.65rem]">{shortHash(certificate.anchorTxHash, 24)}</span>} />}
-          {certificate.anchorBlockNumber && <Row label="Block" value={`#${certificate.anchorBlockNumber.toLocaleString()}`} />}
+          {certificate.nftTxHash && <Row label="Mint tx" value={<span className="font-mono text-[0.65rem]">{shortHash(certificate.nftTxHash, 24)}</span>} />}
+          {certificate.nftTokenId != null && <Row label="Token ID" value={`#${certificate.nftTokenId}`} />}
         </div>
 
         <div className="flex items-center gap-2 pt-1">
-          {certificate.anchorExplorerUrl && (
+          {nftExplorerUrl && (
             <a
-              href={certificate.anchorExplorerUrl}
+              href={nftExplorerUrl}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-neutral-300 hover:bg-white/5 hover:text-white transition-colors"
@@ -162,9 +176,10 @@ export function MilestoneDetailPanel({
   certificate,
   isLoading,
   portfolioName,
+  tier,
 }: Props) {
   if (isLoading) return <LoadingPanel />;
-  if (certificate) return <CertificatePanel certificate={certificate} portfolioName={portfolioName} />;
+  if (certificate) return <CertificatePanel certificate={certificate} portfolioName={portfolioName} tier={tier} />;
   return <EmptyPanel />;
 }
 
