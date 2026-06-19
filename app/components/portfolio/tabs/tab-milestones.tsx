@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { MilestoneAchievementBadge } from "@/app/components/milestones/milestone-achievement-badge";
 import { MilestoneDetailPanel } from "@/app/components/milestones/milestone-detail-panel";
 import { BadgeCollectionModal } from "@/app/components/milestones/badge-collection-modal";
+import { StorytellingModal } from "@/app/components/milestones/storytelling-modal";
 import { usePortfolioSnapshotCertificates } from "@/app/hooks/use-portfolio-snapshot-certificates";
 import { useAchievementCatalog } from "@/app/hooks/use-achievement-catalog";
 
@@ -17,6 +18,7 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
   const [isPanelLoading, setIsPanelLoading] = useState(false);
   const [showFailed, setShowFailed] = useState(false);
   const [showBadgeCollection, setShowBadgeCollection] = useState(false);
+  const [showStorytelling, setShowStorytelling] = useState(false);
 
   const { certificates, selectedCertificate, isLoading, error, getCertificate } =
     usePortfolioSnapshotCertificates(portfolioId, portfolioName);
@@ -47,6 +49,9 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
           onClose={() => setShowBadgeCollection(false)}
         />
       )}
+      {showStorytelling && (
+        <StorytellingModal onClose={() => setShowStorytelling(false)} />
+      )}
 
       <section className="mb-6 rounded-3xl border border-white/6 bg-(--surface-container-low) p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -57,6 +62,16 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowStorytelling(true)}
+              className="ui-button-secondary flex items-center gap-1.5"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+              </svg>
+              Get My Story
+            </button>
             <button
               type="button"
               onClick={() => setShowBadgeCollection(true)}

@@ -147,6 +147,20 @@ async def get_certificate_public(certificate_id: str) -> PortfolioSnapshotCertif
     return _record_from_row(row if isinstance(row, dict) else None)
 
 
+async def get_certificate_by_hash(snapshot_hash: str) -> PortfolioSnapshotCertificateRecord | None:
+    """Fetch a certificate by snapshot_hash without requiring user_id (for public verification endpoint)."""
+    row = await select_rows(
+        "portfolio_snapshot_certificates",
+        params=[
+            build_filter_select(CERTIFICATE_SELECT_COLUMNS),
+            build_filter_eq("snapshot_hash", snapshot_hash),
+            build_filter_limit(1),
+        ],
+        single=True,
+    )
+    return _record_from_row(row if isinstance(row, dict) else None)
+
+
 async def get_portfolio_snapshot_by_id(snapshot_id: str, user_id: str) -> dict[str, Any] | None:
     row = await select_rows(
         "portfolio_snapshots",

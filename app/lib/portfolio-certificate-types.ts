@@ -28,6 +28,20 @@ export type PortfolioSnapshotCertificateDetail = PortfolioSnapshotCertificate & 
   canonicalizationVersion: string;
 };
 
+export type CertificatePublicVerifyResult = {
+  certificateId: string;
+  title: string;
+  achievementKey: string | null;
+  snapshotAt: string;
+  snapshotHash: string;
+  nftMintStatus: NftMintStatus;
+  nftTokenId: number | null;
+  nftTxHash: string | null;
+  nftContractAddress: string | null;
+  externalUrl: string;
+  snapshotPayload: Record<string, unknown> | null;
+};
+
 export type PortfolioSnapshotCertificateVerificationResult = {
   certificateId: string;
   isValid: boolean;

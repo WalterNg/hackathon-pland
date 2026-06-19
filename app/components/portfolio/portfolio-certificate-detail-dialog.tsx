@@ -109,6 +109,14 @@ export function PortfolioCertificateDetailDialog({
               Open Explorer
             </a>
           ) : null}
+          <a
+            href={`/verify?hash=${encodeURIComponent(certificate.snapshotHash)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="ui-button-secondary px-4 py-2 text-sm"
+          >
+            Public verify page
+          </a>
           <button
             type="button"
             onClick={() => onVerify(certificate.id)}

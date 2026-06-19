@@ -6,7 +6,10 @@ from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import JSONResponse
 
 from core.config import settings
-from services.portfolio_snapshot_certificate_store import get_certificate_public
+from services.portfolio_snapshot_certificate_store import (
+    get_certificate_by_hash,
+    get_certificate_public,
+)
 from services.supabase_rest import SupabaseRestError, fetch_authenticated_user
 
 router = APIRouter()
@@ -145,3 +148,52 @@ async def get_nft_certificate_metadata(
     }
 
     return JSONResponse(content=metadata, media_type="application/json")
+
+
+@router.get("/certificates/verify")
+async def verify_certificate_by_hash(
+    hash: str | None = None,
+    authorization: str | None = Header(default=None),
+):
+    """
+    Public endpoint: look up a certificate by its snapshot_hash and return on-chain proof.
+    With a valid PLAND bearer token belonging to the certificate owner, the full
+    snapshot_payload (assets, metrics) is also returned.
+    """
+    if not hash or not hash.strip():
+        raise HTTPException(status_code=422, detail="hash query parameter is required.")
+
+    try:
+        record = await get_certificate_by_hash(hash.strip())
+    except SupabaseRestError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    if record is None:
+        raise HTTPException(status_code=404, detail="No certificate found for this hash.")
+
+    result: dict = {
+        "certificateId": record.id,
+        "title": record.title,
+        "achievementKey": record.achievement_key,
+        "snapshotAt": record.snapshot_at.isoformat() if record.snapshot_at else None,
+        "snapshotHash": record.snapshot_hash,
+        "nftMintStatus": record.nft_mint_status,
+        "nftTokenId": record.nft_token_id,
+        "nftTxHash": record.nft_tx_hash,
+        "nftContractAddress": record.nft_contract_address,
+        "externalUrl": _external_url(record.id),
+        "snapshotPayload": None,
+    }
+
+    # Return full portfolio state to the authenticated owner (story 5.4)
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+        try:
+            user = await fetch_authenticated_user(token)
+            user_id = str(user.get("id", "")).strip() if isinstance(user, dict) else ""
+            if user_id and record.user_id == user_id:
+                result["snapshotPayload"] = record.snapshot_payload
+        except Exception:
+            pass
+
+    return JSONResponse(content=result, media_type="application/json")

@@ -152,7 +152,7 @@ function CertificatePanel({
           {certificate.nftTokenId != null && <Row label="Token ID" value={`#${certificate.nftTokenId}`} />}
         </div>
 
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex flex-wrap items-center gap-2 pt-1">
           {nftExplorerUrl && (
             <a
               href={nftExplorerUrl}
@@ -166,6 +166,17 @@ function CertificatePanel({
               Etherscan
             </a>
           )}
+          <a
+            href={`/verify?hash=${encodeURIComponent(certificate.snapshotHash)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-neutral-300 hover:bg-white/5 hover:text-white transition-colors"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Public verify
+          </a>
         </div>
       </div>
     </div>
