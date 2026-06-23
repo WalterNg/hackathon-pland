@@ -85,13 +85,7 @@ function CertificatePanel({
     ? "bg-gradient-to-b from-[#3b2502] to-transparent"
     : "bg-gradient-to-b from-[#111114] to-transparent";
 
-  const statusPill = tierStyle
-    ? tierStyle.pill
-    : isMinted
-    ? "bg-violet-500/15 text-violet-400"
-    : certificate.nftMintStatus === "pending_mint"
-    ? "bg-amber-500/15 text-amber-400"
-    : "bg-white/6 text-neutral-500";
+
 
   const mintStatusLabel = isMinted ? "Minted" : certificate.nftMintStatus === "pending_mint" ? "Pending" : "Failed";
 
@@ -108,9 +102,6 @@ function CertificatePanel({
             <h3 className="mt-1 text-base font-bold text-white">{certificate.title || portfolioName || "Portfolio Snapshot"}</h3>
             <p className="mt-0.5 text-sm text-neutral-400">{formatDate(certificate.snapshotAt)}</p>
           </div>
-          <span className={`mt-1 shrink-0 rounded-full px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide ${statusPill}`}>
-            {tier ? tier : mintStatusLabel}
-          </span>
         </div>
 
         {totalValue !== undefined && (

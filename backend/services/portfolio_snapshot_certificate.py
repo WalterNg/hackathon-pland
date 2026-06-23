@@ -25,28 +25,45 @@ logger = logging.getLogger("hackathon-pland")
 
 
 def _build_token_uri(cert_id: str) -> str:
-    base = (settings.app_base_url or "https://pland.vercel.app").rstrip("/")
-    return f"{base}/api/nft/certificate/{cert_id}"
+    return f"https://pland.vercel.app/api/nft/certificate/{cert_id}"
 
 
-async def mint_certificate_nft(*, user_id: str, certificate_id: str) -> None:
+async def mint_certificate_nft(*, user_id: str, certificate_id: str, existing_tx_hash: str | None = None) -> None:
     """
-    Mint a Soulbound NFT for any certificate (manual or achievement).
+    Mint a Soulbound NFT for any certificate.
+    - If existing_tx_hash is given, skips submission and waits for that tx to confirm.
+    - On receipt timeout: keeps status as pending_mint (tx may still confirm on-chain).
+    - Only marks failed on actual tx revert or submission error.
     Non-blocking — logs warning on failure, never raises.
     """
     try:
         from eth_account import Account  # type: ignore
-        from services.nft_mint_service import NftMintService
+        from services.nft_mint_service import NftMintService, NftMintError
         from services.portfolio_snapshot_certificate_store import (
             mark_portfolio_snapshot_certificate_minted,
             mark_portfolio_snapshot_certificate_mint_failed,
+            save_portfolio_snapshot_certificate_tx_hash,
         )
 
         platform_wallet = Account.from_key(settings.eth_sepolia_private_key.strip()).address
         token_uri = _build_token_uri(certificate_id)
-
         mint_svc = NftMintService()
-        result = await mint_svc.mint(to_address=platform_wallet, token_uri=token_uri)
+
+        if existing_tx_hash:
+            tx_hash = existing_tx_hash
+        else:
+            tx_hash = await mint_svc.submit(to_address=platform_wallet, token_uri=token_uri)
+            await save_portfolio_snapshot_certificate_tx_hash(certificate_id, user_id, tx_hash=tx_hash)
+            logger.info("NFT tx submitted for cert=%s tx=%s", certificate_id, tx_hash)
+
+        try:
+            result = await mint_svc.confirm(tx_hash)
+        except NftMintError as exc:
+            if "Timed out" in str(exc):
+                # Tx is still pending on-chain — do NOT mark failed, leave as pending_mint.
+                logger.warning("NFT confirm timed out for cert=%s tx=%s — will retry later", certificate_id, tx_hash)
+                return
+            raise
 
         await mark_portfolio_snapshot_certificate_minted(
             certificate_id,
@@ -55,10 +72,8 @@ async def mint_certificate_nft(*, user_id: str, certificate_id: str) -> None:
             contract_address=result.contract_address,
             tx_hash=result.tx_hash,
         )
-        logger.info(
-            "NFT minted for cert=%s token_id=%s tx=%s",
-            certificate_id, result.token_id, result.tx_hash,
-        )
+        logger.info("NFT minted for cert=%s token_id=%s tx=%s", certificate_id, result.token_id, result.tx_hash)
+
     except Exception as exc:
         logger.warning("NFT mint failed (non-fatal) for cert=%s: %s", certificate_id, exc)
         try:
@@ -86,6 +101,10 @@ class PortfolioSnapshotCertificateService:
             verificationStatus=record.verification_status,
             verifiedAt=record.verified_at,
             createdAt=record.created_at,
+            nftMintStatus=record.nft_mint_status,
+            nftTokenId=record.nft_token_id,
+            nftContractAddress=record.nft_contract_address,
+            nftTxHash=record.nft_tx_hash,
         )
 
     def _to_detail(self, record: PortfolioSnapshotCertificateRecord) -> PortfolioSnapshotCertificateDetail:

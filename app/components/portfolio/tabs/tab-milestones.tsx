@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MilestoneAchievementBadge } from "@/app/components/milestones/milestone-achievement-badge";
 import { MilestoneDetailPanel } from "@/app/components/milestones/milestone-detail-panel";
 import { BadgeCollectionModal } from "@/app/components/milestones/badge-collection-modal";
-import { StorytellingModal } from "@/app/components/milestones/storytelling-modal";
+import { StorytellingChooserPopover, StorytellingModal, type StoryMode } from "@/app/components/milestones/storytelling-modal";
 import { usePortfolioSnapshotCertificates } from "@/app/hooks/use-portfolio-snapshot-certificates";
 import { useAchievementCatalog } from "@/app/hooks/use-achievement-catalog";
 
@@ -18,7 +18,8 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
   const [isPanelLoading, setIsPanelLoading] = useState(false);
   const [showFailed, setShowFailed] = useState(false);
   const [showBadgeCollection, setShowBadgeCollection] = useState(false);
-  const [showStorytelling, setShowStorytelling] = useState(false);
+  const [showStoryChooser, setShowStoryChooser] = useState(false);
+  const [storyMode, setStoryMode] = useState<StoryMode | null>(null);
 
   const { certificates, selectedCertificate, isLoading, error, getCertificate } =
     usePortfolioSnapshotCertificates(portfolioId, portfolioName);
@@ -40,6 +41,17 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
     : certificates.filter((c) => c.nftMintStatus !== "failed" || c.certifyMode === "auto_achievement");
   const ordered = [...visible].sort((a, b) => new Date(b.snapshotAt).getTime() - new Date(a.snapshotAt).getTime());
 
+  useEffect(() => {
+    if (!showStoryChooser && !storyMode) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showStoryChooser, storyMode]);
+
   return (
     <>
       {showBadgeCollection && (
@@ -49,8 +61,13 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
           onClose={() => setShowBadgeCollection(false)}
         />
       )}
-      {showStorytelling && (
-        <StorytellingModal onClose={() => setShowStorytelling(false)} />
+      {storyMode && (
+        <StorytellingModal
+          onClose={() => setStoryMode(null)}
+          portfolioId={portfolioId}
+          portfolioName={portfolioName}
+          mode={storyMode}
+        />
       )}
 
       <section className="mb-6 rounded-3xl border border-white/6 bg-(--surface-container-low) p-5 sm:p-6">
@@ -61,10 +78,13 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
               Certified snapshots and achievement certifications in one timeline.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="relative flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setShowStorytelling(true)}
+              onClick={() => {
+                setShowStoryChooser((value) => !value);
+                setShowBadgeCollection(false);
+              }}
               className="ui-button-secondary flex items-center gap-1.5"
             >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -72,6 +92,19 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
               </svg>
               Get My Story
             </button>
+            {showStoryChooser && !storyMode && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowStoryChooser(false)} />
+                <div className="absolute right-0 top-full z-50 mt-2">
+                  <StorytellingChooserPopover
+                    onChoose={(nextMode) => {
+                      setShowStoryChooser(false);
+                      setStoryMode(nextMode);
+                    }}
+                  />
+                </div>
+              </>
+            )}
             <button
               type="button"
               onClick={() => setShowBadgeCollection(true)}
@@ -144,7 +177,7 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
                         <p className="mb-1 text-[0.65rem] font-medium text-neutral-600">{dateLabel}</p>
                         <MilestoneAchievementBadge
                           cert={cert}
-                          tier={cert.achievementKey ? (tierMap.get(cert.achievementKey) ?? null) : null}
+                          tier={cert.achievementKey ? (tierMap.get(cert.achievementKey) ?? null) : "gold"}
                           nickname={cert.achievementKey ? (nicknameMap.get(cert.achievementKey) ?? null) : null}
                           isSelected={selectedId === cert.id}
                           onSelect={handleSelect}
@@ -162,7 +195,7 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
               certificate={selectedCertificate}
               isLoading={isPanelLoading}
               portfolioName={portfolioName}
-              tier={selectedCertificate?.achievementKey ? (tierMap.get(selectedCertificate.achievementKey) ?? null) : null}
+              tier={selectedCertificate?.achievementKey ? (tierMap.get(selectedCertificate.achievementKey) ?? null) : "gold"}
             />
           </div>
         </div>

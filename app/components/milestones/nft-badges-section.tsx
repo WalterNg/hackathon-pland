@@ -8,10 +8,6 @@ function badgeImageUrl(achievementKey: string) {
   return `https://gateway.pinata.cloud/ipfs/${IMAGE_FOLDER_CID}/${achievementKey}.png`;
 }
 
-function openSeaUrl(contractAddress: string, tokenId: number) {
-  return `https://testnets.opensea.io/assets/sepolia/${contractAddress}/${tokenId}`;
-}
-
 function formatDate(ts: string) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -52,11 +48,11 @@ function NftBadgeCard({ cert }: { cert: PortfolioSnapshotCertificate }) {
   const isMinted = cert.nftMintStatus === "minted";
   const isPending = cert.nftMintStatus === "pending_mint";
   const isFailed = cert.nftMintStatus === "failed";
+  const etherscanUrl = cert.nftTxHash ? `https://sepolia.etherscan.io/tx/${cert.nftTxHash}` : null;
 
   return (
     <div className="group relative overflow-hidden rounded-2xl border border-white/8 bg-white/3 p-4">
       <div className="flex items-start gap-3">
-        {/* Badge image */}
         <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/5">
           {cert.achievementKey && (
             // eslint-disable-next-line @next/next/no-img-element
@@ -71,31 +67,35 @@ function NftBadgeCard({ cert }: { cert: PortfolioSnapshotCertificate }) {
           )}
         </div>
 
-        {/* Info */}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold text-white leading-tight">{cert.title}</p>
+          <p className="truncate text-sm font-bold leading-tight text-white">{cert.title}</p>
           <p className="mt-0.5 text-[0.68rem] text-neutral-500">{formatDate(cert.snapshotAt)}</p>
 
-          {/* Mint status */}
           <div className="mt-2">
-            {isMinted && cert.nftTokenId != null && cert.nftContractAddress && (
+            {isMinted && etherscanUrl && (
               <a
-                href={openSeaUrl(cert.nftContractAddress, cert.nftTokenId)}
+                href={etherscanUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-2.5 py-1 text-[0.68rem] font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-2.5 py-1 text-[0.68rem] font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/20"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                #{cert.nftTokenId} · View on OpenSea
+                View on Etherscan
                 <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>
               </a>
             )}
+            {isMinted && !etherscanUrl && (
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-2.5 py-1 text-[0.68rem] font-semibold text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                Minted on-chain
+              </span>
+            )}
             {isPending && (
               <span className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/10 px-2.5 py-1 text-[0.68rem] font-semibold text-amber-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-                Minting…
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+                Minting...
               </span>
             )}
             {isFailed && (

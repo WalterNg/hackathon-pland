@@ -57,6 +57,10 @@ class PortfolioSnapshotCertificateListItem(BaseModel):
     verification_status: VerificationStatus = Field(alias="verificationStatus")
     verified_at: datetime | None = Field(default=None, alias="verifiedAt")
     created_at: datetime = Field(alias="createdAt")
+    nft_mint_status: NftMintStatus = Field(default="pending_mint", alias="nftMintStatus")
+    nft_token_id: int | None = Field(default=None, alias="nftTokenId")
+    nft_contract_address: str | None = Field(default=None, alias="nftContractAddress")
+    nft_tx_hash: str | None = Field(default=None, alias="nftTxHash")
 
 
 class PortfolioSnapshotCertificateDetail(PortfolioSnapshotCertificateListItem):

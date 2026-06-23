@@ -329,7 +329,6 @@ export function PortfolioForecastDialog({
       lowerY,
       lastValue,
       conePath: buildConePath(lastY, upperY, lowerY),
-      forecastPath: buildForecastWavyPath(lastY, forecastY, upperY, lowerY),
       currentReferencePath: buildHorizontalPath(lastY),
       forecastReferencePath: forecast ? buildHorizontalPath(forecastY) : "",
       downsideReferencePath: forecast ? buildHorizontalPath(lowerY) : "",
@@ -387,7 +386,7 @@ export function PortfolioForecastDialog({
       const svgY = ratioY * SVG_HEIGHT;
       const tooltipLeftPx = Math.max(104, Math.min(rect.width - 104, clientX - rect.left));
 
-      // Forecast zone: only activate when mouse is inside the fan cone or near the forecast line
+      // Forecast zone: only activate when mouse is inside the fan cone
       if (svgX > HISTORY_END_X && forecast) {
         const t = (svgX - HISTORY_END_X) / (FORECAST_END_X - HISTORY_END_X);
         const fanTop = Math.min(
@@ -398,13 +397,11 @@ export function PortfolioForecastDialog({
           graph.lastY + t * (graph.upperY - graph.lastY),
           graph.lastY + t * (graph.lowerY - graph.lastY),
         );
-        const lineY = graph.lastY + t * (graph.forecastY - graph.lastY);
         const HIT_TOLERANCE = 4; // SVG units
 
         const inFan = svgY >= fanTop - HIT_TOLERANCE && svgY <= fanBottom + HIT_TOLERANCE;
-        const nearLine = Math.abs(svgY - lineY) <= HIT_TOLERANCE;
 
-        if (inFan || nearLine) {
+        if (inFan) {
           const forecastTooltipLeft = Math.round(rect.width * 0.28);
           setHoverState({
             tooltipLeftPx: forecastTooltipLeft,
@@ -422,7 +419,7 @@ export function PortfolioForecastDialog({
           return;
         }
 
-        // Mouse in forecast X zone but outside fan/line — clear tooltip
+        // Mouse in forecast X zone but outside fan — clear tooltip
         setHoverState(null);
         return;
       }
@@ -679,14 +676,6 @@ export function PortfolioForecastDialog({
                         stroke="rgba(240,185,11,0.26)"
                         strokeWidth="0.55"
                         strokeDasharray="1.5 1.8"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                      <path
-                        d={graph.forecastPath}
-                        fill="none"
-                        stroke="rgba(240,185,11,0.92)"
-                        strokeWidth="1"
-                        strokeDasharray="2.4 2.2"
                         vectorEffect="non-scaling-stroke"
                       />
                       <circle cx={HISTORY_END_X} cy={graph.lastY} r="0.9" fill="rgba(240,185,11,1)" />

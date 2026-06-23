@@ -105,59 +105,66 @@ async def _fetch_snapshot_hash_from_metadata(token_uri: str) -> str | None:
 # Public API
 # ---------------------------------------------------------------------------
 
-async def _list_minted_certs_for_user(user_id: str) -> list[Any]:
-    """Return all minted certificates for a user across all portfolios."""
-    rows = await select_rows(
-        "portfolio_snapshot_certificates",
-        params=[
-            build_filter_select(CERTIFICATE_SELECT_COLUMNS),
-            build_filter_eq("user_id", user_id),
-            build_filter_eq("nft_mint_status", "minted"),
-            build_filter_order("snapshot_at", ascending=True),
-        ],
-    )
+async def _list_minted_certs_for_user(user_id: str, portfolio_id: str | None = None) -> list[Any]:
+    """Return minted certificates for a user, optionally scoped to one portfolio."""
+    params = [
+        build_filter_select(CERTIFICATE_SELECT_COLUMNS),
+        build_filter_eq("user_id", user_id),
+        build_filter_eq("nft_mint_status", "minted"),
+        build_filter_order("snapshot_at", ascending=True),
+    ]
+    if portfolio_id:
+        params.append(build_filter_eq("portfolio_id", portfolio_id))
+    rows = await select_rows("portfolio_snapshot_certificates", params=params)
     return [_record_from_row(r) for r in rows if isinstance(r, dict)]
 
 
-async def get_user_chain_nfts(user_id: str) -> list[dict]:
+
+
+async def _verify_record(record: Any) -> dict | None:
+    """Fetch tokenURI + metadata for one record concurrently with others."""
+    if record is None or record.nft_token_id is None:
+        return None
+
+    token_uri = await _call_token_uri(record.nft_token_id)
+    on_chain_hash: str | None = None
+    hash_verified: bool | None = None
+
+    if token_uri:
+        on_chain_hash = await _fetch_snapshot_hash_from_metadata(token_uri)
+        if on_chain_hash is not None:
+            hash_verified = on_chain_hash == record.snapshot_hash
+
+    return {
+        "certificateId": record.id,
+        "title": record.title,
+        "achievementKey": record.achievement_key,
+        "snapshotAt": record.snapshot_at.isoformat() if record.snapshot_at else None,
+        "snapshotHash": record.snapshot_hash,
+        "nftTokenId": record.nft_token_id,
+        "nftTxHash": record.nft_tx_hash,
+        "nftContractAddress": record.nft_contract_address,
+        "tokenUri": token_uri,
+        "onChainHash": on_chain_hash,
+        "hashVerified": hash_verified,
+        "etherscanUrl": (
+            f"https://sepolia.etherscan.io/tx/{record.nft_tx_hash}"
+            if record.nft_tx_hash else None
+        ),
+    }
+
+
+async def get_user_chain_nfts(user_id: str, portfolio_id: str | None = None) -> list[dict]:
     """
     6.1: Read user's NFT list from chain.
     6.2: Verify each token's snapshot_hash against the DB record.
 
-    Returns a list of dicts with on-chain verified NFT data, ordered by snapshot date.
+    Returns all minted certs (both achievement badges and manual certs) with on-chain
+    verification. On-chain reads run concurrently.
     """
-    records = await _list_minted_certs_for_user(user_id)
+    import asyncio
 
-    results: list[dict] = []
-    for record in records:
-        if record is None or record.nft_token_id is None:
-            continue
-
-        token_uri = await _call_token_uri(record.nft_token_id)
-        on_chain_hash: str | None = None
-        hash_verified: bool | None = None
-
-        if token_uri:
-            on_chain_hash = await _fetch_snapshot_hash_from_metadata(token_uri)
-            if on_chain_hash is not None:
-                hash_verified = on_chain_hash == record.snapshot_hash
-
-        results.append({
-            "certificateId": record.id,
-            "title": record.title,
-            "achievementKey": record.achievement_key,
-            "snapshotAt": record.snapshot_at.isoformat() if record.snapshot_at else None,
-            "snapshotHash": record.snapshot_hash,
-            "nftTokenId": record.nft_token_id,
-            "nftTxHash": record.nft_tx_hash,
-            "nftContractAddress": record.nft_contract_address,
-            "tokenUri": token_uri,
-            "onChainHash": on_chain_hash,
-            "hashVerified": hash_verified,
-            "etherscanUrl": (
-                f"https://sepolia.etherscan.io/tx/{record.nft_tx_hash}"
-                if record.nft_tx_hash else None
-            ),
-        })
-
-    return results
+    records = await _list_minted_certs_for_user(user_id, portfolio_id=portfolio_id)
+    tasks = [_verify_record(r) for r in records]
+    results = await asyncio.gather(*tasks, return_exceptions=False)
+    return [r for r in results if r is not None]

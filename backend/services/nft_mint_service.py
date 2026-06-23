@@ -74,12 +74,12 @@ class NftMintService:
             raise NftMintError(f"RPC error: {payload['error']}")
         return payload.get("result")
 
-    async def _wait_for_receipt(self, tx_hash: str) -> dict[str, Any]:
-        for _ in range(20):
+    async def _wait_for_receipt(self, tx_hash: str, *, retries: int = 60, interval: float = 3.0) -> dict[str, Any]:
+        for _ in range(retries):
             receipt = await self._rpc("eth_getTransactionReceipt", [tx_hash])
             if receipt:
                 return receipt
-            await asyncio.sleep(2)
+            await asyncio.sleep(interval)
         raise NftMintError(f"Timed out waiting for receipt: {tx_hash}")
 
 
@@ -103,10 +103,21 @@ class NftMintService:
                 return int(topics[3], 16)
         raise NftMintError("Transfer event not found in receipt — could not extract token_id.")
 
-    async def mint(self, to_address: str, token_uri: str) -> NftMintResult:
+    async def get_base_nonce(self) -> int:
+        """Fetch current pending nonce for the platform wallet."""
+        try:
+            from eth_account import Account  # type: ignore
+        except ImportError as exc:
+            raise NftMintError("eth-account is required.") from exc
+        wallet = Account.from_key(self.private_key).address
+        nonce_hex = await self._rpc("eth_getTransactionCount", [wallet, "pending"])
+        return int(nonce_hex, 16)
+
+    async def submit(self, to_address: str, token_uri: str, *, nonce: int | None = None) -> str:
         """
-        Mint a badge NFT to `to_address` with `token_uri`.
-        Returns NftMintResult containing token_id and tx details.
+        Sign and broadcast the mint transaction.
+        Returns tx_hash immediately without waiting for confirmation.
+        If nonce is provided, uses it directly (for parallel batch minting).
         """
         self._require_config()
 
@@ -119,7 +130,10 @@ class NftMintService:
         checksum_to = to_checksum_address(to_address)
         checksum_contract = to_checksum_address(self.contract_address)
 
-        nonce_hex = await self._rpc("eth_getTransactionCount", [checksum_wallet, "pending"])
+        if nonce is None:
+            nonce_hex = await self._rpc("eth_getTransactionCount", [checksum_wallet, "pending"])
+            nonce = int(nonce_hex, 16)
+
         gas_price_hex = await self._rpc("eth_gasPrice", [])
         chain_id_hex = await self._rpc("eth_chainId", [])
 
@@ -138,7 +152,7 @@ class NftMintService:
         tx = {
             "to": checksum_contract,
             "value": 0,
-            "nonce": int(nonce_hex, 16),
+            "nonce": nonce,
             "gas": gas_limit,
             "gasPrice": int(gas_price_hex, 16),
             "chainId": int(chain_id_hex, 16),
@@ -149,6 +163,10 @@ class NftMintService:
         tx_hash = await self._rpc(
             "eth_sendRawTransaction", [f"0x{signed.raw_transaction.hex()}"]
         )
+        return tx_hash
+
+    async def confirm(self, tx_hash: str) -> NftMintResult:
+        """Wait for a submitted tx to be mined and return the result."""
         receipt = await self._wait_for_receipt(tx_hash)
 
         if receipt.get("status") == "0x0":
@@ -165,3 +183,8 @@ class NftMintService:
             contract_address=self.contract_address,
             explorer_url=explorer_url,
         )
+
+    async def mint(self, to_address: str, token_uri: str) -> NftMintResult:
+        """Submit and confirm in one call (original interface, kept for compatibility)."""
+        tx_hash = await self.submit(to_address, token_uri)
+        return await self.confirm(tx_hash)

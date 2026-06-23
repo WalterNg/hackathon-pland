@@ -6,6 +6,7 @@ from typing import Any
 from schemas.portfolio_snapshot_certificate import PortfolioSnapshotCertificateRecord
 from services.supabase_rest import (
     build_filter_eq,
+    build_filter_in,
     build_filter_is_null,
     build_filter_limit,
     build_filter_order,
@@ -88,6 +89,23 @@ async def mark_portfolio_snapshot_certificate_verified(
     return _record_from_row(row if isinstance(row, dict) else None)
 
 
+async def save_portfolio_snapshot_certificate_tx_hash(
+    certificate_id: str,
+    user_id: str,
+    *,
+    tx_hash: str,
+) -> None:
+    await update_rows(
+        "portfolio_snapshot_certificates",
+        params=[
+            build_filter_eq("id", certificate_id),
+            build_filter_eq("user_id", user_id),
+        ],
+        updates={"nft_tx_hash": tx_hash},
+        single=True,
+    )
+
+
 async def mark_portfolio_snapshot_certificate_minted(
     certificate_id: str,
     user_id: str,
@@ -131,6 +149,34 @@ async def mark_portfolio_snapshot_certificate_mint_failed(
         single=True,
     )
     return _record_from_row(row if isinstance(row, dict) else None)
+
+
+async def list_all_minted_certificates(limit: int = 500) -> list[PortfolioSnapshotCertificateRecord]:
+    """Fetch all minted certificates across all users (for admin verification)."""
+    rows = await select_rows(
+        "portfolio_snapshot_certificates",
+        params=[
+            build_filter_select(CERTIFICATE_SELECT_COLUMNS),
+            build_filter_eq("nft_mint_status", "minted"),
+            build_filter_order("created_at", ascending=True),
+            build_filter_limit(limit),
+        ],
+    )
+    return [PortfolioSnapshotCertificateRecord(**row) for row in rows if isinstance(row, dict)]
+
+
+async def get_unminted_certificates(limit: int = 100) -> list[PortfolioSnapshotCertificateRecord]:
+    """Fetch all certificates with status pending_mint or failed (for retry jobs)."""
+    rows = await select_rows(
+        "portfolio_snapshot_certificates",
+        params=[
+            build_filter_select(CERTIFICATE_SELECT_COLUMNS),
+            build_filter_in("nft_mint_status", ["pending_mint", "failed"]),
+            build_filter_order("created_at", ascending=True),
+            build_filter_limit(limit),
+        ],
+    )
+    return [PortfolioSnapshotCertificateRecord(**row) for row in rows if isinstance(row, dict)]
 
 
 async def get_certificate_public(certificate_id: str) -> PortfolioSnapshotCertificateRecord | None:

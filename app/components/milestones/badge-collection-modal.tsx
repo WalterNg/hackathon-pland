@@ -142,13 +142,6 @@ export function BadgeCollectionModal({ portfolioId, portfolioName, onClose }: Pr
                       <p className={`text-[0.65rem] font-bold leading-tight ${unlocked ? "text-white" : "text-neutral-600"}`}>
                         {achievement.nickname}
                       </p>
-                      {tier && tierStyle && (
-                        <span className={`rounded-full px-1.5 py-0.5 text-[0.55rem] font-bold uppercase tracking-wide ${
-                          unlocked ? tierStyle.pill : "bg-white/5 text-neutral-600"
-                        }`}>
-                          {tier}
-                        </span>
-                      )}
                     </div>
                   </div>
                 );

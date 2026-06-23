@@ -34,15 +34,16 @@ async def _require_user_id(authorization: str | None) -> str:
 @router.get("/storytelling/nfts")
 async def list_user_chain_nfts(
     authorization: str | None = Header(default=None),
+    portfolio_id: str | None = None,
 ):
     """
     6.1 + 6.2: Return the authenticated user's minted NFTs with on-chain verification.
-    Each entry includes tokenURI fetched from chain and hash_verified status.
+    Optionally scoped to a single portfolio via ?portfolio_id=<id>.
     """
     user_id = await _require_user_id(authorization)
 
     try:
-        nfts = await get_user_chain_nfts(user_id)
+        nfts = await get_user_chain_nfts(user_id, portfolio_id=portfolio_id)
     except SupabaseRestError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except Exception as exc:
@@ -54,6 +55,7 @@ async def list_user_chain_nfts(
 
 class GenerateStoryRequest(BaseModel):
     mode: Literal["share", "audit"]
+    portfolio_id: str | None = None
 
 
 @router.post("/storytelling/generate")
@@ -64,11 +66,12 @@ async def generate_story(
     """
     6.3 (share mode): Generate a social-media-ready narrative from on-chain achievements.
     6.4 (audit mode): Generate a structured due-diligence audit report.
+    Scoped to the portfolio specified in body.portfolio_id when provided.
     """
     user_id = await _require_user_id(authorization)
 
     try:
-        nfts = await get_user_chain_nfts(user_id)
+        nfts = await get_user_chain_nfts(user_id, portfolio_id=body.portfolio_id)
     except Exception as exc:
         logger.exception("Chain read failed for storytelling (user=%s)", user_id)
         raise HTTPException(status_code=502, detail=f"Could not read NFTs from chain: {exc}") from exc
@@ -84,10 +87,14 @@ async def generate_story(
             narrative = await generate_share_narrative(nfts)
             return {"mode": "share", "narrative": narrative, "nftCount": len(nfts)}
         else:
-            report = await generate_audit_report(nfts)
-            return {"mode": "audit", "report": report, "nftCount": len(nfts)}
+            audit_markdown = await generate_audit_report(
+                nfts,
+                user_id=user_id,
+                portfolio_id=body.portfolio_id,
+            )
+            return {"mode": "audit", "audit_markdown": audit_markdown, "nftCount": len(nfts)}
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
-        logger.exception("LLM storytelling failed (user=%s, mode=%s)", user_id, body.mode)
+        logger.exception("Storytelling generation failed (user=%s, mode=%s)", user_id, body.mode)
         raise HTTPException(status_code=500, detail=f"Story generation failed: {exc}") from exc

@@ -59,8 +59,8 @@ _ACHIEVEMENT_TIER: dict[str, str] = {
     "sharpe_2_0":            "Silver",
 }
 
-# Purple badge image for manual (non-achievement) certificates
-_MANUAL_CERT_IMAGE = f"ipfs://{_IMAGE_FOLDER_CID}/manual_cert.png"
+# Default badge image for manual (non-achievement) certificates — standalone Pinata upload
+_MANUAL_CERT_IMAGE = "ipfs://bafybeidodyb5k4w3pxmdzt6u3mbk6m4puns6opp5epd5pikpfbiko3hiwe"
 
 
 def _image_for(achievement_key: str | None) -> str:
