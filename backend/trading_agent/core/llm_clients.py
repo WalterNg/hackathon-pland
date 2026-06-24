@@ -35,6 +35,7 @@ class GeminiClient(BaseLLMClient):
                 api_key=api_key,
                 temperature=DEFAULT_TRADING_AGENT_CONFIG.temperature,
                 max_retries=DEFAULT_TRADING_AGENT_CONFIG.max_retries,
+                max_tokens=DEFAULT_TRADING_AGENT_CONFIG.max_tokens,
             )
         return self._llm
 
@@ -71,6 +72,7 @@ class OpenRouterClient(BaseLLMClient):
                 base_url="https://openrouter.ai/api/v1",
                 temperature=DEFAULT_TRADING_AGENT_CONFIG.temperature,
                 max_retries=DEFAULT_TRADING_AGENT_CONFIG.max_retries,
+                max_tokens=DEFAULT_TRADING_AGENT_CONFIG.max_tokens,
             )
         return self._llm
 

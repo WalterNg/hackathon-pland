@@ -23,6 +23,7 @@ class TradingAgentConfig:
     model_name: str = yaml_config.get("llm", {}).get("model_name", "google/gemini-2.5-flash")
     temperature: float = float(yaml_config.get("llm", {}).get("temperature", 0.2))
     max_retries: int = int(yaml_config.get("llm", {}).get("max_retries", 3))
+    max_tokens: int = int(yaml_config.get("llm", {}).get("max_tokens", 2048))
 
     # Agent Settings
     investment_debate_rounds: int = int(yaml_config.get("trading_agent", {}).get("investment_debate_rounds", 1))
