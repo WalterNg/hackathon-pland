@@ -53,15 +53,3 @@ AGENTS.md
 # Data files
 backend/scripts/data_model/
 backend/scripts/data_raw/
-
-# FreqAI runtime artifacts
-# backend/services/freqai/artifacts/
-backend/services/freqai/user_data/backtest_results/
-backend/services/freqai/user_data/data/
-backend/services/freqai/user_data/freqaimodels/
-backend/services/freqai/user_data/hyperopts/
-backend/services/freqai/user_data/hyperopt_results/
-backend/services/freqai/user_data/logs/
-backend/services/freqai/user_data/models/
-backend/services/freqai/user_data/notebooks/
-backend/services/freqai/user_data/plot/

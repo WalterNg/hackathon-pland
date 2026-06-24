@@ -126,7 +126,6 @@ export function StorytellingModal({ onClose, portfolioId, portfolioName, mode }:
   const [status, setStatus] = useState<"reading" | "writing" | "ready" | "error">("reading");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -177,7 +176,7 @@ export function StorytellingModal({ onClose, portfolioId, portfolioName, mode }:
     return () => {
       cancelled = true;
     };
-  }, [mode, portfolioId, refreshKey]);
+  }, [mode, portfolioId]);
 
   async function copyContent() {
     if (!content) return;
@@ -226,13 +225,6 @@ export function StorytellingModal({ onClose, portfolioId, portfolioName, mode }:
             </div>
 
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setRefreshKey((value) => value + 1)}
-                className="text-xs font-semibold text-neutral-500 transition-colors hover:text-white"
-              >
-                Regenerate
-              </button>
               <button
                 type="button"
                 onClick={copyContent}
