@@ -6,7 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-AnchorStatus = Literal["pending_anchor", "anchored", "failed"]
+NftMintStatus = Literal["pending_mint", "minted", "failed"]
 VerificationStatus = Literal["unverified", "verified", "mismatch"]
 CertifyMode = Literal["manual", "auto_achievement"]
 
@@ -42,14 +42,6 @@ class CanonicalPortfolioSnapshotPayload(BaseModel):
     risk_violations: list[dict[str, Any]] = Field(default_factory=list, alias="riskViolations")
 
 
-class PortfolioSnapshotAnchorResult(BaseModel):
-    tx_hash: str = Field(alias="txHash")
-    block_number: int = Field(alias="blockNumber")
-    block_hash: str = Field(alias="blockHash")
-    wallet_address: str = Field(alias="walletAddress")
-    explorer_url: str = Field(alias="explorerUrl")
-
-
 class PortfolioSnapshotCertificateListItem(BaseModel):
     id: str
     portfolio_id: str = Field(alias="portfolioId")
@@ -58,13 +50,6 @@ class PortfolioSnapshotCertificateListItem(BaseModel):
     snapshot_at: datetime = Field(alias="snapshotAt")
     snapshot_hash: str = Field(alias="snapshotHash")
     hash_algorithm: str = Field(alias="hashAlgorithm")
-    anchor_chain: str = Field(alias="anchorChain")
-    anchor_network: str = Field(alias="anchorNetwork")
-    anchor_tx_hash: str | None = Field(default=None, alias="anchorTxHash")
-    anchor_block_number: int | None = Field(default=None, alias="anchorBlockNumber")
-    anchor_explorer_url: str | None = Field(default=None, alias="anchorExplorerUrl")
-    anchor_status: AnchorStatus = Field(alias="anchorStatus")
-    anchor_error: str | None = Field(default=None, alias="anchorError")
     certify_mode: CertifyMode = Field(alias="certifyMode")
     achievement_key: str | None = Field(default=None, alias="achievementKey")
     title: str
@@ -72,13 +57,15 @@ class PortfolioSnapshotCertificateListItem(BaseModel):
     verification_status: VerificationStatus = Field(alias="verificationStatus")
     verified_at: datetime | None = Field(default=None, alias="verifiedAt")
     created_at: datetime = Field(alias="createdAt")
+    nft_mint_status: NftMintStatus = Field(default="pending_mint", alias="nftMintStatus")
+    nft_token_id: int | None = Field(default=None, alias="nftTokenId")
+    nft_contract_address: str | None = Field(default=None, alias="nftContractAddress")
+    nft_tx_hash: str | None = Field(default=None, alias="nftTxHash")
 
 
 class PortfolioSnapshotCertificateDetail(PortfolioSnapshotCertificateListItem):
     snapshot_payload: dict[str, Any] = Field(alias="snapshotPayload")
     canonicalization_version: str = Field(alias="canonicalizationVersion")
-    anchor_block_hash: str | None = Field(default=None, alias="anchorBlockHash")
-    anchor_wallet_address: str | None = Field(default=None, alias="anchorWalletAddress")
 
 
 class PortfolioSnapshotCertificateVerifyResponse(BaseModel):
@@ -86,9 +73,7 @@ class PortfolioSnapshotCertificateVerifyResponse(BaseModel):
     is_valid: bool = Field(alias="isValid")
     verification_status: VerificationStatus = Field(alias="verificationStatus")
     computed_hash: str = Field(alias="computedHash")
-    anchored_hash: str = Field(alias="anchoredHash")
-    anchor_tx_hash: str | None = Field(default=None, alias="anchorTxHash")
-    anchor_explorer_url: str | None = Field(default=None, alias="anchorExplorerUrl")
+    stored_hash: str = Field(alias="storedHash")
     verified_at: datetime = Field(alias="verifiedAt")
 
 
@@ -103,15 +88,6 @@ class PortfolioSnapshotCertificateRecord(BaseModel):
     snapshot_hash: str
     hash_algorithm: str
     canonicalization_version: str
-    anchor_chain: str
-    anchor_network: str
-    anchor_tx_hash: str | None = None
-    anchor_block_number: int | None = None
-    anchor_block_hash: str | None = None
-    anchor_wallet_address: str | None = None
-    anchor_explorer_url: str | None = None
-    anchor_status: AnchorStatus
-    anchor_error: str | None = None
     certify_mode: CertifyMode = "manual"
     achievement_key: str | None = None
     title: str = "Certified Snapshot"
@@ -119,3 +95,7 @@ class PortfolioSnapshotCertificateRecord(BaseModel):
     verification_status: VerificationStatus
     verified_at: datetime | None = None
     created_at: datetime
+    nft_mint_status: NftMintStatus = "pending_mint"
+    nft_token_id: int | None = None
+    nft_contract_address: str | None = None
+    nft_tx_hash: str | None = None

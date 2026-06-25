@@ -24,8 +24,8 @@ function shortHash(hash: string) {
   return hash.length > 18 ? `${hash.slice(0, 10)}...${hash.slice(-8)}` : hash;
 }
 
-function statusTone(status: PortfolioSnapshotCertificate["anchorStatus"]) {
-  if (status === "anchored") {
+function statusTone(status: PortfolioSnapshotCertificate["nftMintStatus"]) {
+  if (status === "minted") {
     return "text-success bg-success-faint";
   }
   if (status === "failed") {
@@ -44,18 +44,18 @@ export function PortfolioCertificateCard({ certificate, onOpen }: PortfolioCerti
           </p>
           <p className="mt-1 text-sm font-semibold text-strong">{formatDate(certificate.snapshotAt)}</p>
         </div>
-        <span className={`rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.12em] ${statusTone(certificate.anchorStatus)}`}>
-          {certificate.anchorStatus === "pending_anchor"
+        <span className={`rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.12em] ${statusTone(certificate.nftMintStatus)}`}>
+          {certificate.nftMintStatus === "pending_mint"
             ? "Pending"
-            : certificate.anchorStatus === "anchored"
-              ? "Anchored"
+            : certificate.nftMintStatus === "minted"
+              ? "Minted"
               : "Failed"}
         </span>
       </div>
 
       <div className="mt-3 space-y-1.5 text-xs text-muted">
         <p>Hash: <span className="font-medium text-strong">{shortHash(certificate.snapshotHash)}</span></p>
-        <p>Network: <span className="font-medium text-strong">{certificate.anchorNetwork}</span></p>
+        <p>Network: <span className="font-medium text-strong">Ethereum Sepolia</span></p>
         <p>Verification: <span className="font-medium text-strong">{certificate.verificationStatus}</span></p>
       </div>
 

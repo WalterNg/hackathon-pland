@@ -1,6 +1,6 @@
-export type PortfolioSnapshotCertificateStatus = "pending_anchor" | "anchored" | "failed";
 export type PortfolioSnapshotCertificateVerificationStatus = "unverified" | "verified" | "mismatch";
 export type PortfolioSnapshotCertificateCertifyMode = "manual" | "auto_achievement";
+export type NftMintStatus = "pending_mint" | "minted" | "failed";
 
 export type PortfolioSnapshotCertificate = {
   id: string;
@@ -10,13 +10,6 @@ export type PortfolioSnapshotCertificate = {
   snapshotAt: string;
   snapshotHash: string;
   hashAlgorithm: string;
-  anchorChain: string;
-  anchorNetwork: string;
-  anchorTxHash: string | null;
-  anchorBlockNumber: number | null;
-  anchorExplorerUrl: string | null;
-  anchorStatus: PortfolioSnapshotCertificateStatus;
-  anchorError: string | null;
   certifyMode: PortfolioSnapshotCertificateCertifyMode;
   achievementKey: string | null;
   title: string;
@@ -24,13 +17,29 @@ export type PortfolioSnapshotCertificate = {
   verificationStatus: PortfolioSnapshotCertificateVerificationStatus;
   verifiedAt: string | null;
   createdAt: string;
+  nftMintStatus: NftMintStatus;
+  nftTokenId: number | null;
+  nftContractAddress: string | null;
+  nftTxHash: string | null;
 };
 
 export type PortfolioSnapshotCertificateDetail = PortfolioSnapshotCertificate & {
   snapshotPayload: Record<string, unknown>;
   canonicalizationVersion: string;
-  anchorBlockHash: string | null;
-  anchorWalletAddress: string | null;
+};
+
+export type CertificatePublicVerifyResult = {
+  certificateId: string;
+  title: string;
+  achievementKey: string | null;
+  snapshotAt: string;
+  snapshotHash: string;
+  nftMintStatus: NftMintStatus;
+  nftTokenId: number | null;
+  nftTxHash: string | null;
+  nftContractAddress: string | null;
+  externalUrl: string;
+  snapshotPayload: Record<string, unknown> | null;
 };
 
 export type PortfolioSnapshotCertificateVerificationResult = {
@@ -38,8 +47,6 @@ export type PortfolioSnapshotCertificateVerificationResult = {
   isValid: boolean;
   verificationStatus: PortfolioSnapshotCertificateVerificationStatus;
   computedHash: string;
-  anchoredHash: string;
-  anchorTxHash: string | null;
-  anchorExplorerUrl: string | null;
+  storedHash: string;
   verifiedAt: string;
 };

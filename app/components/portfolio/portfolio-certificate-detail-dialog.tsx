@@ -78,19 +78,13 @@ export function PortfolioCertificateDetailDialog({
           </div>
 
           <div className="rounded-2xl border border-white/8 bg-(--surface-container-low) p-4 text-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Anchor</p>
-            <p className="mt-2 text-strong">{certificate.anchorNetwork}</p>
-            <p className="mt-2 text-muted">Status: {certificate.anchorStatus}</p>
-            <p className="mt-2 text-muted">Tx Hash: {certificate.anchorTxHash ? formatHash(certificate.anchorTxHash) : "N/A"}</p>
-            <p className="mt-2 text-muted">Block: {certificate.anchorBlockNumber ?? "N/A"}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">NFT Badge</p>
+            <p className="mt-2 text-strong">Ethereum Sepolia</p>
+            <p className="mt-2 text-muted">Mint status: {certificate.nftMintStatus}</p>
+            <p className="mt-2 text-muted">Mint Tx: {certificate.nftTxHash ? formatHash(certificate.nftTxHash) : "N/A"}</p>
+            <p className="mt-2 text-muted">Token ID: {certificate.nftTokenId != null ? `#${certificate.nftTokenId}` : "N/A"}</p>
           </div>
         </div>
-
-        {certificate.anchorError ? (
-          <div className="mt-4 rounded-2xl bg-danger-soft px-4 py-3 text-sm text-danger">
-            Anchor error: {certificate.anchorError}
-          </div>
-        ) : null}
 
         {verificationResult ? (
           <div className="mt-4 rounded-2xl border border-white/8 bg-(--surface-container-low) p-4 text-sm">
@@ -99,15 +93,15 @@ export function PortfolioCertificateDetailDialog({
               {verificationResult.isValid ? "Verified successfully" : "Hash mismatch detected"}
             </p>
             <p className="mt-2 text-muted">Computed Hash: {formatHash(verificationResult.computedHash)}</p>
-            <p className="mt-2 text-muted">Anchored Hash: {formatHash(verificationResult.anchoredHash)}</p>
+            <p className="mt-2 text-muted">Stored Hash: {formatHash(verificationResult.storedHash)}</p>
             <p className="mt-2 text-muted">Verified At: {formatDate(verificationResult.verifiedAt)}</p>
           </div>
         ) : null}
 
         <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
-          {certificate.anchorExplorerUrl ? (
+          {certificate.nftTxHash ? (
             <a
-              href={certificate.anchorExplorerUrl}
+              href={`https://sepolia.etherscan.io/tx/${certificate.nftTxHash}`}
               target="_blank"
               rel="noreferrer"
               className="ui-button-secondary px-4 py-2 text-sm"
@@ -115,6 +109,14 @@ export function PortfolioCertificateDetailDialog({
               Open Explorer
             </a>
           ) : null}
+          <a
+            href={`/verify?hash=${encodeURIComponent(certificate.snapshotHash)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="ui-button-secondary px-4 py-2 text-sm"
+          >
+            Public verify page
+          </a>
           <button
             type="button"
             onClick={() => onVerify(certificate.id)}

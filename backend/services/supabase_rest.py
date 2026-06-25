@@ -59,6 +59,11 @@ def build_filter_order(column: str, ascending: bool = True) -> str:
     return f"order={quote(f'{column}.{direction}', safe='.')}"
 
 
+def build_filter_in(column: str, values: list[str]) -> str:
+    inner = ",".join(str(v) for v in values)
+    return f"{column}=in.({quote(inner, safe=',.')})"
+
+
 async def _request_json(
     method: str,
     path: str,

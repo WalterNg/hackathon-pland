@@ -166,6 +166,45 @@ sequenceDiagram
 | Testing | `pytest` + `FastAPI TestClient` | API, orchestration, and guardrail test coverage |
 | Deployment | `Vercel` config included | Frontend hosting and web configuration |
 
+## Smart Contract Setup
+
+The `onchain/` directory contains the Hardhat project for the `PlandAchievementBadge` NFT contract (ERC-721) deployed on Ethereum Sepolia. This is a separate sub-project — you only need this if you want to redeploy the contract yourself.
+
+### Prerequisites
+
+- The contract is already deployed on Sepolia. If you just want to run the app, skip this section and set `NFT_CONTRACT_ADDRESS` in `.env` to the existing deployed address.
+
+### Deploy a new contract
+
+```bash
+cd onchain
+npm install
+```
+
+Make sure `.env` at the repository root has:
+
+```
+ETH_SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_KEY
+ETH_SEPOLIA_PRIVATE_KEY=0xYOUR_PRIVATE_KEY
+```
+
+Compile and deploy:
+
+```bash
+npx hardhat compile
+npx ts-node scripts/deploy.ts
+```
+
+Copy the printed contract address into `.env`:
+
+```
+NFT_CONTRACT_ADDRESS=0xYOUR_DEPLOYED_ADDRESS
+```
+
+The backend uses this address at runtime via `web3.py` — no Hardhat needed after deployment.
+
+---
+
 ## Quick Start
 
 ### Prerequisites

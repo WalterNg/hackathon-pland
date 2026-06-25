@@ -30,6 +30,11 @@ export function AppTopNavigation({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [menuOpen]);
 
+  const menuItemClass =
+    "flex w-full items-center gap-3 px-4 py-3.5 " +
+    "[font-family:inherit] text-[15px] leading-5 font-medium tracking-normal " +
+    "text-muted transition-colors hover:bg-white/6 hover:text-strong";
+
   const handleStartJourney = () => {
     setMenuOpen(false);
     startJourney();
@@ -95,25 +100,31 @@ export function AppTopNavigation({
         </button>
 
         {menuOpen && (
-          <div className="absolute right-0 top-full z-50 mt-1.5 min-w-[260px] overflow-hidden rounded-xl border border-white/10 bg-[#12151f] shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
+          <div className="absolute right-0 top-full z-50 mt-1.5 min-w-65 overflow-hidden rounded-xl border border-white/10 bg-[#12151f] shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
             <button
               type="button"
               onClick={handleStartJourney}
-              className="flex w-full items-center gap-3 px-4 py-3.5 text-sm font-medium text-muted hover:bg-white/6 hover:text-strong transition-colors"
+              className={menuItemClass}
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                className="shrink-0 text-primary"
-                aria-hidden="true"
-              >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-primary" aria-hidden="true">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.8" />
                 <path d="M16.5 7.5l-3.5 7-3.5-3.5 7-3.5z" fill="currentColor" />
               </svg>
               <span>User Journey</span>
             </button>
+            <a
+              href="/verify"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMenuOpen(false)}
+              className={menuItemClass}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-primary" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.8" />
+                <path d="M8.5 12l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>Verify Certificate</span>
+            </a>
           </div>
         )}
       </div>

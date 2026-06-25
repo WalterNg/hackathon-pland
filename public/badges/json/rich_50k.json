@@ -1,0 +1,13 @@
+{
+  "name": "Wealth II",
+  "description": "Achieve a total portfolio value of $50,000 or more.",
+  "image": "ipfs://bafybeih64xr5ymvnjb6c2pbvohldvit22d2snufeojizeexbch4gutxsii/rich_50k.png",
+  "attributes": [
+    {"trait_type": "Category", "value": "Wealth"},
+    {"trait_type": "Tier", "value": "Silver"},
+    {"trait_type": "Metric", "value": "portfolio_value_usd"},
+    {"trait_type": "Threshold", "value": "≥50,000"},
+    {"trait_type": "Chain", "value": "Ethereum Sepolia"},
+    {"trait_type": "Type", "value": "Soulbound"}
+  ]
+}

@@ -1,9 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MilestoneAchievementBadge } from "@/app/components/milestones/milestone-achievement-badge";
 import { MilestoneDetailPanel } from "@/app/components/milestones/milestone-detail-panel";
+import { BadgeCollectionModal } from "@/app/components/milestones/badge-collection-modal";
+import { StorytellingChooserPopover, StorytellingModal, type StoryMode } from "@/app/components/milestones/storytelling-modal";
 import { usePortfolioSnapshotCertificates } from "@/app/hooks/use-portfolio-snapshot-certificates";
+import { useAchievementCatalog } from "@/app/hooks/use-achievement-catalog";
 
 type TabMilestonesProps = {
   portfolioName: string;
@@ -14,9 +17,14 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isPanelLoading, setIsPanelLoading] = useState(false);
   const [showFailed, setShowFailed] = useState(false);
+  const [showBadgeCollection, setShowBadgeCollection] = useState(false);
+  const [showStoryChooser, setShowStoryChooser] = useState(false);
+  const [storyMode, setStoryMode] = useState<StoryMode | null>(null);
 
   const { certificates, selectedCertificate, isLoading, error, getCertificate } =
     usePortfolioSnapshotCertificates(portfolioId, portfolioName);
+
+  const { tierMap, nicknameMap } = useAchievementCatalog();
 
   const handleSelect = async (id: string) => {
     if (id === selectedId) return;
@@ -26,15 +34,42 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
     setIsPanelLoading(false);
   };
 
-  const anchored = useMemo(() => certificates.filter((c) => c.anchorStatus === "anchored"), [certificates]);
-  const pending = useMemo(() => certificates.filter((c) => c.anchorStatus === "pending_anchor"), [certificates]);
-  const failed = useMemo(() => certificates.filter((c) => c.anchorStatus === "failed"), [certificates]);
-  const achievements = useMemo(() => certificates.filter((c) => c.certifyMode === "auto_achievement"), [certificates]);
-  const visible = showFailed ? certificates : certificates.filter((c) => c.anchorStatus !== "failed");
+  // Achievement certs are always shown even if anchor failed — the badge was still earned.
+  const failed = useMemo(() => certificates.filter((c) => c.nftMintStatus === "failed" && c.certifyMode !== "auto_achievement"), [certificates]);
+  const visible = showFailed
+    ? certificates
+    : certificates.filter((c) => c.nftMintStatus !== "failed" || c.certifyMode === "auto_achievement");
   const ordered = [...visible].sort((a, b) => new Date(b.snapshotAt).getTime() - new Date(a.snapshotAt).getTime());
+
+  useEffect(() => {
+    if (!showStoryChooser && !storyMode) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showStoryChooser, storyMode]);
 
   return (
     <>
+      {showBadgeCollection && (
+        <BadgeCollectionModal
+          portfolioId={portfolioId}
+          portfolioName={portfolioName}
+          onClose={() => setShowBadgeCollection(false)}
+        />
+      )}
+      {storyMode && (
+        <StorytellingModal
+          onClose={() => setStoryMode(null)}
+          portfolioId={portfolioId}
+          portfolioName={portfolioName}
+          mode={storyMode}
+        />
+      )}
+
       <section className="mb-6 rounded-3xl border border-white/6 bg-(--surface-container-low) p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -43,38 +78,57 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
               Certified snapshots and achievement certifications in one timeline.
             </p>
           </div>
-          {failed.length > 0 && (
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowStoryChooser((value) => !value);
+                  setShowBadgeCollection(false);
+                }}
+                className="ui-button-secondary flex items-center gap-1.5"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                </svg>
+                Get My Story
+              </button>
+              {showStoryChooser && !storyMode && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowStoryChooser(false)} />
+                  <div className="absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2">
+                    <StorytellingChooserPopover
+                      onChoose={(nextMode) => {
+                        setShowStoryChooser(false);
+                        setStoryMode(nextMode);
+                      }}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
             <button
               type="button"
-              onClick={() => setShowFailed((v) => !v)}
-              className="ui-button-secondary"
+              onClick={() => setShowBadgeCollection(true)}
+              className="ui-button-secondary flex items-center gap-1.5"
             >
-              {showFailed ? "Hide failed" : `Show failed (${failed.length})`}
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 002.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 012.916.52 6.003 6.003 0 01-5.395 4.972m0 0a6.726 6.726 0 01-2.749 1.35m0 0a6.772 6.772 0 01-3.044 0" />
+              </svg>
+              Badge Collection
             </button>
-          )}
+            {failed.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowFailed((v) => !v)}
+                className="ui-button-secondary"
+              >
+                {showFailed ? "Hide failed" : `Show failed (${failed.length})`}
+              </button>
+            )}
+          </div>
         </div>
       </section>
-
-      {!isLoading && certificates.length > 0 && (
-        <div className="mb-6 grid grid-cols-4 gap-3">
-          <div className="rounded-2xl border border-white/6 bg-(--surface-container-low) px-4 py-3 text-center">
-            <p className="text-xl font-bold text-strong">{certificates.length}</p>
-            <p className="mt-0.5 text-xs text-muted">Total snapshots</p>
-          </div>
-          <div className="rounded-2xl border border-violet-500/20 bg-[#1e1b4b]/60 px-4 py-3 text-center">
-            <p className="text-xl font-bold text-violet-300">{anchored.length}</p>
-            <p className="mt-0.5 text-xs text-muted">Anchored on-chain</p>
-          </div>
-          <div className="rounded-2xl border border-amber-500/20 bg-[#3b2502]/40 px-4 py-3 text-center">
-            <p className="text-xl font-bold text-amber-300">{pending.length}</p>
-            <p className="mt-0.5 text-xs text-muted">Pending anchor</p>
-          </div>
-          <div className="rounded-2xl border border-emerald-500/20 bg-[#042f2e]/40 px-4 py-3 text-center">
-            <p className="text-xl font-bold text-emerald-300">{achievements.length}</p>
-            <p className="mt-0.5 text-xs text-muted">Achievements</p>
-          </div>
-        </div>
-      )}
 
       {isLoading && (
         <div className="space-y-2">
@@ -101,7 +155,7 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
 
       {!isLoading && !error && ordered.length > 0 && (
         <div className="flex gap-6 items-start">
-          <div className="w-85 shrink-0">
+          <div className="w-55 shrink-0">
             <div className="relative">
               <div className="absolute left-2.25 top-4 bottom-4 w-px bg-white/8" />
               <div className="space-y-2">
@@ -110,21 +164,23 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
                     month: "short", day: "numeric", year: "numeric",
                   }).format(new Date(cert.snapshotAt));
 
-                  const dotColor = cert.anchorStatus === "anchored"
+                  const dotColor = cert.nftMintStatus === "minted"
                     ? "bg-violet-400"
-                    : cert.anchorStatus === "pending_anchor"
+                    : cert.nftMintStatus === "pending_mint"
                     ? "bg-amber-400"
                     : "bg-neutral-700";
 
                   return (
                     <div key={cert.id} className="flex gap-4 items-start">
-                      <div className="shrink-0 pt-[18px]">
-                        <div className={`h-[10px] w-[10px] rounded-full border border-black/30 z-10 ${dotColor}`} />
+                      <div className="shrink-0 pt-4.5">
+                        <div className={`h-2.5 w-2.5 rounded-full border border-black/30 z-10 ${dotColor}`} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="mb-1 text-[0.65rem] font-medium text-neutral-600">{dateLabel}</p>
                         <MilestoneAchievementBadge
                           cert={cert}
+                          tier={cert.achievementKey ? (tierMap.get(cert.achievementKey) ?? null) : "gold"}
+                          nickname={cert.achievementKey ? (nicknameMap.get(cert.achievementKey) ?? null) : null}
                           isSelected={selectedId === cert.id}
                           onSelect={handleSelect}
                         />
@@ -141,6 +197,7 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
               certificate={selectedCertificate}
               isLoading={isPanelLoading}
               portfolioName={portfolioName}
+              tier={selectedCertificate?.achievementKey ? (tierMap.get(selectedCertificate.achievementKey) ?? null) : "gold"}
             />
           </div>
         </div>

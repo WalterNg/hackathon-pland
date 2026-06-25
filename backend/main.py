@@ -24,12 +24,14 @@ from api.routes import (
     binance_market,
     debug_market,
     evaluate,
+    nft_certificate,
     portfolio_achievements,
     portfolio_forecast,
     portfolio_snapshot_certificates,
     risk_agent,
     risk_rules,
     sentiment_agent,
+    storytelling,
     ta_agent,
     trading_agent,
 )
@@ -79,6 +81,8 @@ app.include_router(binance_market.router, prefix="/api", tags=["Binance Market"]
 app.include_router(trading_agent.router, prefix="/api", tags=["Trading Agent"])
 app.include_router(portfolio_snapshot_certificates.router, prefix="/api", tags=["Portfolio Snapshot Certificates"])
 app.include_router(portfolio_achievements.router, prefix="/api", tags=["Portfolio Achievements"])
+app.include_router(nft_certificate.router, prefix="/api", tags=["NFT Certificate Metadata"])
+app.include_router(storytelling.router, prefix="/api", tags=["AI Storytelling"])
 app.include_router(risk_rules.router, prefix="/api", tags=["Risk Rules"])
 
 @app.get("/health")

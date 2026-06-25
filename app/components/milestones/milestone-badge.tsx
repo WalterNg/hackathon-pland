@@ -29,22 +29,20 @@ type BadgeStyle = {
   statusText: string;
 };
 
-function getBadgeStyle(
-  anchorStatus: MilestoneCertificate["anchorStatus"]
-): BadgeStyle {
-  if (anchorStatus === "anchored") {
+function getBadgeStyle(nftMintStatus: MilestoneCertificate["nftMintStatus"]): BadgeStyle {
+  if (nftMintStatus === "minted") {
     return {
       wrapper: "border border-violet-500/30 bg-[#1e1b4b] shadow-[0_0_16px_0_rgba(124,58,237,0.15)] hover:shadow-[0_0_24px_0_rgba(124,58,237,0.25)] hover:border-violet-500/50",
       icon: "text-violet-400",
       iconBg: "bg-violet-500/10",
-      label: "Anchored",
+      label: "Minted",
       labelColor: "text-violet-400",
       statusDot: "bg-violet-400",
       statusText: "text-violet-400",
     };
   }
 
-  if (anchorStatus === "pending_anchor") {
+  if (nftMintStatus === "pending_mint") {
     return {
       wrapper: "border border-amber-500/30 bg-[#3b2502] shadow-[0_0_16px_0_rgba(217,119,6,0.15)] hover:shadow-[0_0_24px_0_rgba(217,119,6,0.25)] hover:border-amber-500/50",
       icon: "text-amber-400",
@@ -56,21 +54,20 @@ function getBadgeStyle(
     };
   }
 
-  // failed or pending
   return {
     wrapper: "border border-white/6 bg-[#1a1a1a] hover:border-white/10",
     icon: "text-neutral-500",
     iconBg: "bg-white/5",
-      label: anchorStatus === "failed" ? "Failed" : "Pending",
-      labelColor: "text-neutral-500",
-      statusDot: "bg-neutral-600",
-      statusText: "text-neutral-500",
+    label: "Failed",
+    labelColor: "text-neutral-500",
+    statusDot: "bg-neutral-600",
+    statusText: "text-neutral-500",
   };
 }
 
 export function MilestoneBadge({ milestone, onOpen }: MilestoneBadgeProps) {
-  const style = getBadgeStyle(milestone.anchorStatus);
-  const isFaded = milestone.anchorStatus === "failed";
+  const style = getBadgeStyle(milestone.nftMintStatus);
+  const isFaded = milestone.nftMintStatus === "failed";
 
   return (
     <button
@@ -79,9 +76,8 @@ export function MilestoneBadge({ milestone, onOpen }: MilestoneBadgeProps) {
       className={`group w-full rounded-2xl p-4 text-left transition-all duration-200 cursor-pointer ${style.wrapper} ${isFaded ? "opacity-50" : ""}`}
     >
       <div className="flex items-start gap-3">
-        {/* Icon */}
         <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${style.iconBg}`}>
-          {milestone.anchorStatus === "anchored" ? (
+          {milestone.nftMintStatus === "minted" ? (
             <svg className={`h-5 w-5 ${style.icon}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.955 11.955 0 003 12c0 6.627 5.373 12 12 12s12-5.373 12-12c0-2.2-.592-4.258-1.625-6.022" />
             </svg>
@@ -92,7 +88,6 @@ export function MilestoneBadge({ milestone, onOpen }: MilestoneBadgeProps) {
           )}
         </div>
 
-        {/* Content */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <p className="truncate text-sm font-semibold text-white">{milestone.title || milestone.portfolioName}</p>

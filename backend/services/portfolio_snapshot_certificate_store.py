@@ -6,6 +6,7 @@ from typing import Any
 from schemas.portfolio_snapshot_certificate import PortfolioSnapshotCertificateRecord
 from services.supabase_rest import (
     build_filter_eq,
+    build_filter_in,
     build_filter_is_null,
     build_filter_limit,
     build_filter_order,
@@ -19,9 +20,9 @@ from services.supabase_rest import (
 CERTIFICATE_SELECT_COLUMNS = (
     "id,user_id,portfolio_id,portfolio_snapshot_id,certificate_version,snapshot_at,"
     "snapshot_payload,snapshot_hash,hash_algorithm,canonicalization_version,"
-    "anchor_chain,anchor_network,anchor_tx_hash,anchor_block_number,anchor_block_hash,"
-    "anchor_wallet_address,anchor_explorer_url,anchor_status,anchor_error,certify_mode,achievement_key,title,note,"
-    "verification_status,verified_at,created_at"
+    "certify_mode,achievement_key,title,note,"
+    "verification_status,verified_at,created_at,"
+    "nft_mint_status,nft_token_id,nft_contract_address,nft_tx_hash"
 )
 
 
@@ -66,57 +67,6 @@ async def get_portfolio_snapshot_certificate(certificate_id: str, user_id: str) 
     return _record_from_row(row if isinstance(row, dict) else None)
 
 
-async def mark_portfolio_snapshot_certificate_anchored(
-    certificate_id: str,
-    user_id: str,
-    *,
-    tx_hash: str,
-    block_number: int,
-    block_hash: str,
-    wallet_address: str,
-    explorer_url: str,
-) -> PortfolioSnapshotCertificateRecord | None:
-    row = await update_rows(
-        "portfolio_snapshot_certificates",
-        params=[
-            build_filter_eq("id", certificate_id),
-            build_filter_eq("user_id", user_id),
-        ],
-        updates={
-            "anchor_status": "anchored",
-            "anchor_tx_hash": tx_hash,
-            "anchor_block_number": block_number,
-            "anchor_block_hash": block_hash,
-            "anchor_wallet_address": wallet_address,
-            "anchor_explorer_url": explorer_url,
-            "anchor_error": None,
-        },
-        single=True,
-    )
-    return _record_from_row(row if isinstance(row, dict) else None)
-
-
-async def mark_portfolio_snapshot_certificate_failed(
-    certificate_id: str,
-    user_id: str,
-    *,
-    anchor_error: str,
-) -> PortfolioSnapshotCertificateRecord | None:
-    row = await update_rows(
-        "portfolio_snapshot_certificates",
-        params=[
-            build_filter_eq("id", certificate_id),
-            build_filter_eq("user_id", user_id),
-        ],
-        updates={
-            "anchor_status": "failed",
-            "anchor_error": anchor_error,
-        },
-        single=True,
-    )
-    return _record_from_row(row if isinstance(row, dict) else None)
-
-
 async def mark_portfolio_snapshot_certificate_verified(
     certificate_id: str,
     user_id: str,
@@ -134,6 +84,124 @@ async def mark_portfolio_snapshot_certificate_verified(
             "verification_status": verification_status,
             "verified_at": verified_at,
         },
+        single=True,
+    )
+    return _record_from_row(row if isinstance(row, dict) else None)
+
+
+async def save_portfolio_snapshot_certificate_tx_hash(
+    certificate_id: str,
+    user_id: str,
+    *,
+    tx_hash: str,
+) -> None:
+    await update_rows(
+        "portfolio_snapshot_certificates",
+        params=[
+            build_filter_eq("id", certificate_id),
+            build_filter_eq("user_id", user_id),
+        ],
+        updates={"nft_tx_hash": tx_hash},
+        single=True,
+    )
+
+
+async def mark_portfolio_snapshot_certificate_minted(
+    certificate_id: str,
+    user_id: str,
+    *,
+    token_id: int,
+    contract_address: str,
+    tx_hash: str,
+) -> PortfolioSnapshotCertificateRecord | None:
+    row = await update_rows(
+        "portfolio_snapshot_certificates",
+        params=[
+            build_filter_eq("id", certificate_id),
+            build_filter_eq("user_id", user_id),
+        ],
+        updates={
+            "nft_mint_status": "minted",
+            "nft_token_id": token_id,
+            "nft_contract_address": contract_address,
+            "nft_tx_hash": tx_hash,
+        },
+        single=True,
+    )
+    return _record_from_row(row if isinstance(row, dict) else None)
+
+
+async def mark_portfolio_snapshot_certificate_mint_failed(
+    certificate_id: str,
+    user_id: str,
+    *,
+    error: str,
+) -> PortfolioSnapshotCertificateRecord | None:
+    row = await update_rows(
+        "portfolio_snapshot_certificates",
+        params=[
+            build_filter_eq("id", certificate_id),
+            build_filter_eq("user_id", user_id),
+        ],
+        updates={
+            "nft_mint_status": "failed",
+        },
+        single=True,
+    )
+    return _record_from_row(row if isinstance(row, dict) else None)
+
+
+async def list_all_minted_certificates(limit: int = 500) -> list[PortfolioSnapshotCertificateRecord]:
+    """Fetch all minted certificates across all users (for admin verification)."""
+    rows = await select_rows(
+        "portfolio_snapshot_certificates",
+        params=[
+            build_filter_select(CERTIFICATE_SELECT_COLUMNS),
+            build_filter_eq("nft_mint_status", "minted"),
+            build_filter_order("created_at", ascending=True),
+            build_filter_limit(limit),
+        ],
+    )
+    return [PortfolioSnapshotCertificateRecord(**row) for row in rows if isinstance(row, dict)]
+
+
+async def get_unminted_certificates(limit: int = 100) -> list[PortfolioSnapshotCertificateRecord]:
+    """Fetch all certificates with status pending_mint or failed (for retry jobs)."""
+    rows = await select_rows(
+        "portfolio_snapshot_certificates",
+        params=[
+            build_filter_select(CERTIFICATE_SELECT_COLUMNS),
+            build_filter_in("nft_mint_status", ["pending_mint", "failed"]),
+            build_filter_order("created_at", ascending=True),
+            build_filter_limit(limit),
+        ],
+    )
+    return [PortfolioSnapshotCertificateRecord(**row) for row in rows if isinstance(row, dict)]
+
+
+async def get_certificate_public(certificate_id: str) -> PortfolioSnapshotCertificateRecord | None:
+    """Fetch a certificate by ID without requiring user_id (for public NFT metadata endpoint)."""
+    row = await select_rows(
+        "portfolio_snapshot_certificates",
+        params=[
+            build_filter_select(CERTIFICATE_SELECT_COLUMNS),
+            build_filter_eq("id", certificate_id),
+            build_filter_limit(1),
+        ],
+        single=True,
+    )
+    return _record_from_row(row if isinstance(row, dict) else None)
+
+
+async def get_certificate_by_hash(snapshot_hash: str) -> PortfolioSnapshotCertificateRecord | None:
+    """Fetch a certificate by snapshot_hash without requiring user_id (for public verification endpoint)."""
+    row = await select_rows(
+        "portfolio_snapshot_certificates",
+        params=[
+            build_filter_select(CERTIFICATE_SELECT_COLUMNS),
+            build_filter_eq("snapshot_hash", snapshot_hash),
+            build_filter_limit(1),
+        ],
         single=True,
     )
     return _record_from_row(row if isinstance(row, dict) else None)

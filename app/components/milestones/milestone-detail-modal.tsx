@@ -1,4 +1,4 @@
-﻿import type { PortfolioSnapshotCertificateDetail } from "@/app/lib/portfolio-certificate-types";
+import type { PortfolioSnapshotCertificateDetail } from "@/app/lib/portfolio-certificate-types";
 
 type MilestoneDetailModalProps = {
   open: boolean;
@@ -39,7 +39,12 @@ export function MilestoneDetailModal({
 
   const totalValue = payload?.summary?.totalValueUsd;
   const assets: AssetRow[] = (payload?.assets ?? []).slice(0, 8);
-  const isAnchored = certificate.anchorStatus === "anchored";
+  const isMinted = certificate.nftMintStatus === "minted";
+  const nftExplorerUrl = certificate.nftTxHash
+    ? `https://sepolia.etherscan.io/tx/${certificate.nftTxHash}`
+    : null;
+
+  const mintStatusLabel = isMinted ? "minted" : certificate.nftMintStatus === "pending_mint" ? "pending" : "failed";
 
   return (
     <div
@@ -51,9 +56,9 @@ export function MilestoneDetailModal({
       <div className="w-full max-w-lg rounded-3xl bg-[#111114] ring-1 ring-white/10 shadow-2xl overflow-hidden">
         <div
           className={`px-6 pt-6 pb-5 ${
-            isAnchored
+            isMinted
               ? "bg-gradient-to-br from-[#1e1b4b] to-[#111114]"
-              : certificate.anchorStatus === "pending_anchor"
+              : certificate.nftMintStatus === "pending_mint"
               ? "bg-gradient-to-br from-[#3b2502] to-[#111114]"
               : "bg-[#111114]"
           }`}
@@ -109,32 +114,32 @@ export function MilestoneDetailModal({
             <p className="text-xs font-semibold uppercase tracking-widest text-neutral-500">Blockchain Proof</p>
             <div className="flex items-center justify-between text-sm">
               <span className="text-neutral-400">Network</span>
-              <span className="font-medium text-white capitalize">{certificate.anchorNetwork}</span>
+              <span className="font-medium text-white capitalize">Ethereum Sepolia</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-neutral-400">Status</span>
-              <span className={`font-medium capitalize ${isAnchored ? "text-violet-400" : certificate.anchorStatus === "pending_anchor" ? "text-amber-400" : "text-neutral-500"}`}>
-                {isAnchored ? "anchored" : certificate.anchorStatus === "pending_anchor" ? "pending" : "failed"}
+              <span className="text-neutral-400">NFT Status</span>
+              <span className={`font-medium capitalize ${isMinted ? "text-violet-400" : certificate.nftMintStatus === "pending_mint" ? "text-amber-400" : "text-neutral-500"}`}>
+                {mintStatusLabel}
               </span>
             </div>
-            {certificate.anchorTxHash && (
+            {certificate.nftTxHash && (
               <div className="flex items-center justify-between text-sm">
-                <span className="text-neutral-400">Tx Hash</span>
-                <span className="font-mono text-xs text-neutral-300">{shortHash(certificate.anchorTxHash, 20)}</span>
+                <span className="text-neutral-400">Mint Tx</span>
+                <span className="font-mono text-xs text-neutral-300">{shortHash(certificate.nftTxHash, 20)}</span>
               </div>
             )}
-            {certificate.anchorBlockNumber && (
+            {certificate.nftTokenId != null && (
               <div className="flex items-center justify-between text-sm">
-                <span className="text-neutral-400">Block</span>
-                <span className="text-neutral-300">#{certificate.anchorBlockNumber.toLocaleString()}</span>
+                <span className="text-neutral-400">Token ID</span>
+                <span className="text-neutral-300">#{certificate.nftTokenId}</span>
               </div>
             )}
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-1">
-            {certificate.anchorExplorerUrl && (
+            {nftExplorerUrl && (
               <a
-                href={certificate.anchorExplorerUrl}
+                href={nftExplorerUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-neutral-300 hover:bg-white/5 hover:text-white transition-colors"

@@ -13,6 +13,41 @@ type ProxyOptions = {
   searchParams?: URLSearchParams;
 };
 
+/**
+ * Public variant — does NOT require an Authorization header.
+ * Passes the bearer token through if present (for owner-extended responses).
+ */
+export async function proxyBackendPublic(
+  request: Request,
+  backendPath: string,
+  options: ProxyOptions = {}
+): Promise<Response> {
+  const authorization = request.headers.get("authorization")?.trim();
+
+  const url = new URL(`${backendUrl()}${backendPath}`);
+  if (options.searchParams) {
+    options.searchParams.forEach((value, key) => url.searchParams.set(key, value));
+  }
+
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (authorization) {
+    headers["Authorization"] = authorization;
+  }
+
+  const upstream = await fetch(url.toString(), {
+    method: options.method ?? "GET",
+    headers,
+    body: options.body,
+    cache: "no-store",
+  });
+
+  const text = await upstream.text();
+  return new Response(text, {
+    status: upstream.status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 export async function proxyBackend(
   request: Request,
   backendPath: string,

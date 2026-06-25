@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 from schemas.achievement import AchievementDefinition, PortfolioAchievementUnlock, PortfolioAchievementsResponse
@@ -10,6 +11,8 @@ from services.portfolio_achievement_store import (
     list_active_achievements,
     list_portfolio_achievement_unlocks,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class PortfolioAchievementService:
@@ -43,8 +46,8 @@ class PortfolioAchievementService:
 
         created_unlocks: list[PortfolioAchievementUnlock] = []
 
-        # Local import avoids service-layer import cycles.
-        from services.portfolio_snapshot_certificate import PortfolioSnapshotCertificateService
+        # Local imports avoid service-layer import cycles.
+        from services.portfolio_snapshot_certificate import PortfolioSnapshotCertificateService, mint_certificate_nft
 
         certificate_service = PortfolioSnapshotCertificateService()
 
@@ -52,30 +55,49 @@ class PortfolioAchievementService:
             if await has_portfolio_achievement_unlock(user_id, portfolio_id, definition.key):
                 continue
 
-            cert = await certificate_service.issue_certificate(
-                user_id=user_id,
-                portfolio_id=portfolio_id,
-                snapshot_payload=snapshot_payload,
-                certify_mode="auto_achievement",
-                title=definition.title,
-                note=definition.description,
-                achievement_key=definition.key,
-            )
+            try:
+                cert = await certificate_service.issue_certificate(
+                    user_id=user_id,
+                    portfolio_id=portfolio_id,
+                    snapshot_payload=snapshot_payload,
+                    certify_mode="auto_achievement",
+                    title=definition.title,
+                    note=definition.description,
+                    achievement_key=definition.key,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to create cert for achievement=%s, skipping: %s",
+                    definition.key, exc,
+                )
+                continue
 
-            unlock = await insert_portfolio_achievement_unlock(
-                user_id=user_id,
-                portfolio_id=portfolio_id,
-                achievement_key=definition.key,
-                certificate_id=cert.id,
-                snapshot_at=ts,
-                snapshot_hash=cert.snapshot_hash,
-                metadata={
-                    "metric": definition.metric,
-                    "operator": definition.operator,
-                    "threshold": float(definition.threshold),
-                    "observedValue": metric_value,
-                },
-            )
+            # Mint Soulbound NFT badge — failure is non-blocking
+            await mint_certificate_nft(user_id=user_id, certificate_id=cert.id)
+
+            try:
+                unlock = await insert_portfolio_achievement_unlock(
+                    user_id=user_id,
+                    portfolio_id=portfolio_id,
+                    achievement_key=definition.key,
+                    certificate_id=cert.id,
+                    snapshot_at=ts,
+                    snapshot_hash=cert.snapshot_hash,
+                    metadata={
+                        "metric": definition.metric,
+                        "operator": definition.operator,
+                        "threshold": float(definition.threshold),
+                        "observedValue": metric_value,
+                    },
+                )
+            except Exception as exc:
+                # Race condition: another concurrent request already inserted the unlock.
+                logger.info(
+                    "Unlock insert skipped for achievement=%s (concurrent request won): %s",
+                    definition.key, exc,
+                )
+                unlock = None
+
             if unlock is not None:
                 created_unlocks.append(unlock)
 
