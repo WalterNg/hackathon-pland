@@ -6,8 +6,10 @@ from datetime import datetime, timezone
 from typing import Any
 
 from core.config import settings
+from services.portfolio_achievement_store import list_portfolio_achievement_unlocks
 from services.portfolio_snapshot_certificate_store import (
     get_latest_portfolio_snapshot,
+    list_portfolio_snapshot_certificates,
     resolve_portfolio,
 )
 from trading_agent.config import DEFAULT_TRADING_AGENT_CONFIG
@@ -310,136 +312,159 @@ def _recommendation_for_violation(violation: dict[str, Any]) -> str:
     return "Review the active violation and align the portfolio with the configured risk control."
 
 
+def _fmt_condition(metric: str, operator: str, threshold: float) -> str:
+    op = "≥" if operator == "gte" else "≤"
+    if metric == "total_value_usd":
+        return f"Value {op} {_format_currency(threshold)}"
+    if metric == "distinct_assets":
+        return f"Assets {op} {int(threshold)}"
+    if metric == "max_drawdown_percent":
+        return f"Drawdown {op} {threshold:.0f}%"
+    if metric == "sharpe_ratio_30d":
+        return f"Sharpe {op} {threshold:.1f}"
+    return f"{metric} {op} {threshold}"
+
+
+def _fmt_observed(metric: str, value: Any) -> str:
+    if value is None:
+        return "—"
+    try:
+        fval = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if metric == "total_value_usd":
+        return _format_currency(fval)
+    if metric == "distinct_assets":
+        return f"{int(fval)} assets"
+    if metric == "max_drawdown_percent":
+        return f"−{abs(fval):.1f}%"
+    if metric == "sharpe_ratio_30d":
+        return f"{fval:.2f}"
+    return f"{fval:.2f}"
+
+
+def _get_metric_value(metrics: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        val = metrics.get(key)
+        if val is not None:
+            return val
+    return None
+
+
+def _shorten_hash(h: str | None) -> str:
+    if not h or len(h) < 14:
+        return h or "—"
+    return f"{h[:8]}…{h[-6:]}"
+
+
 def _render_audit_markdown(state_packet: dict[str, Any]) -> str:
-    """Render the audit report directly from the authoritative state packet."""
-    portfolio = state_packet.get("portfolio") if isinstance(state_packet.get("portfolio"), dict) else {}
-    snapshot = state_packet.get("snapshot") if isinstance(state_packet.get("snapshot"), dict) else {}
-    derived = state_packet.get("derived") if isinstance(state_packet.get("derived"), dict) else {}
-    checkpoints = state_packet.get("checkpoints") if isinstance(state_packet.get("checkpoints"), list) else []
-    risk_violations = snapshot.get("riskViolations") if isinstance(snapshot.get("riskViolations"), list) else []
+    portfolio_name = (state_packet.get("portfolio") or {}).get("name") or "Portfolio"
+    report_date = (state_packet.get("portfolio") or {}).get("dateOfReport") or ""
+    all_certs: list[dict[str, Any]] = state_packet.get("all_certs") or []
+    all_unlocks: list[dict[str, Any]] = state_packet.get("all_unlocks") or []
+    nfts_by_cert_id: dict[str, dict] = state_packet.get("nfts_by_cert_id") or {}
 
-    summary_rows = [
-        ["Portfolio Name", portfolio.get("name")],
-        ["Portfolio Manager", portfolio.get("manager")],
-        ["Benchmark", portfolio.get("benchmark")],
-        ["Date of Report", portfolio.get("dateOfReport")],
-        ["Investment Objective", portfolio.get("objective")],
-        ["Portfolio ID", portfolio.get("portfolioId")],
-        ["Snapshot ID", snapshot.get("snapshotId")],
-        ["Snapshot At", snapshot.get("snapshotAt")],
-        ["Total Value USD", derived.get("totalValueUsd")],
-        ["Cash Ratio", derived.get("cashRatio")],
-        ["Asset Count", derived.get("assetCount")],
-        ["Distinct Assets", derived.get("distinctAssets")],
+    certs_asc = sorted(all_certs, key=lambda c: str(c.get("snapshotAt") or ""))
+    unlocks_asc = sorted(all_unlocks, key=lambda u: str(u.get("snapshotAt") or ""))
+
+    period_from = str(certs_asc[0].get("snapshotAt") or "")[:10] if certs_asc else "—"
+    period_to = str(certs_asc[-1].get("snapshotAt") or "")[:10] if certs_asc else "—"
+    minted_count = sum(1 for c in all_certs if c.get("nftMintStatus") == "minted")
+
+    all_violations: list[dict[str, Any]] = []
+    for cert in certs_asc:
+        payload = cert.get("snapshotPayload") or {}
+        for v in (payload.get("riskViolations") or []):
+            if isinstance(v, dict):
+                all_violations.append({**v, "_certTitle": cert.get("title"), "_date": str(cert.get("snapshotAt") or "")[:10]})
+
+    lines: list[str] = []
+    manual_certs = [c for c in certs_asc if c.get("certifyMode") != "auto_achievement"]
+    manual_count = len(manual_certs)
+
+    lines += [
+        f"# Audit Report — {portfolio_name}",
+        f"**Generated:** {report_date} · **Network:** Ethereum Sepolia · **Period:** {period_from} → {period_to}",
+        "",
+        "---",
+        "",
+        "## Tổng quan",
+        "",
+        "| Snapshots | Thành tích | NFTs Minted | Manual Checkpoints |",
+        "|-----------|-----------|-------------|-------------------|",
+        f"| {len(all_certs)} | {len(all_unlocks)} / 6 | {minted_count} | {manual_count} |",
+        "",
+        "---",
+        "",
+        "## Achievement Claims",
+        "",
     ]
-    summary_rows = [row for row in summary_rows if _is_present(row[1])]
 
-    performance_rows = [
-        ["Period Start Value", derived.get("chart", {}).get("start") if isinstance(derived.get("chart"), dict) else None],
-        ["Period End Value", derived.get("chart", {}).get("end") if isinstance(derived.get("chart"), dict) else None],
-        ["Period Return", derived.get("chart", {}).get("periodReturn") if isinstance(derived.get("chart"), dict) else None],
-        ["Annualized Return", derived.get("chart", {}).get("annualizedReturn") if isinstance(derived.get("chart"), dict) else None],
-    ]
-    performance_rows = [row for row in performance_rows if _is_present(row[1])]
-
-    metrics_rows = _non_empty_dict_rows(snapshot.get("metrics") if isinstance(snapshot.get("metrics"), dict) else {}, exclude={"timestamp"})
-
-    holdings_rows = _holdings_rows(derived.get("topHoldings") if isinstance(derived.get("topHoldings"), list) else [])
-    violation_rows = _violation_rows([item for item in risk_violations if isinstance(item, dict)])
-    checkpoint_rows = _checkpoint_rows([item for item in checkpoints if isinstance(item, dict)])
-
-    strengths: list[list[Any]] = []
-    if _is_present(checkpoint_rows):
-        strengths.append(["On-chain checkpoints", f"{len(checkpoint_rows)} certificate{'' if len(checkpoint_rows) == 1 else 's'} were read successfully."])
-    if _is_present(holdings_rows):
-        strengths.append(["Holdings captured", f"{len(holdings_rows)} top holdings were available in the snapshot packet."])
-
-    weaknesses: list[list[Any]] = []
-    if violation_rows:
-        for violation in [item for item in risk_violations if isinstance(item, dict)]:
-            weaknesses.append([
-                violation.get("title") or violation.get("event_type") or "Risk violation",
-                violation.get("message") or violation.get("severity") or "",
-            ])
-    else:
-        weaknesses.append(["Risk violations", "No active risk violations were included in the latest snapshot packet."])
-
-    recommendations: list[list[Any]] = []
-    if violation_rows:
-        for violation in [item for item in risk_violations if isinstance(item, dict)]:
-            recommendations.append([
-                violation.get("title") or violation.get("event_type") or "Action",
-                _recommendation_for_violation(violation),
-            ])
-    else:
-        recommendations.append(["Maintain controls", "No corrective action is required from the current snapshot data alone."])
-
-    sections: list[str] = ["# AUDIT PORTFOLIO PERFORMANCE REPORT"]
-    sections.append(_render_key_value_section("1. Executive Summary", summary_rows))
-    sections.append(_render_key_value_section("2. Performance Snapshot", performance_rows))
-
-    if metrics_rows or violation_rows:
-        risk_body_parts: list[str] = []
-        if metrics_rows:
-            risk_body_parts.append("### Snapshot Metrics\n\n" + _bullet_list(metrics_rows))
-        if violation_rows:
-            violation_bullets: list[str] = []
-            for row in violation_rows:
-                event_type, severity, title, message, observed_value, threshold_value, symbol = row
-                details = []
-                if _is_present(severity):
-                    details.append(f"Severity: {_escape_markdown_cell(severity)}")
-                if _is_present(message):
-                    details.append(f"Message: {_escape_markdown_cell(message)}")
-                if _is_present(observed_value):
-                    details.append(f"Observed: {_escape_markdown_cell(observed_value)}")
-                if _is_present(threshold_value):
-                    details.append(f"Threshold: {_escape_markdown_cell(threshold_value)}")
-                if _is_present(symbol):
-                    details.append(f"Symbol: {_escape_markdown_cell(symbol)}")
-                head = _escape_markdown_cell(title or event_type or "Risk violation")
-                suffix = f" ({_escape_markdown_cell(event_type)})" if _is_present(event_type) else ""
-                bullet = f"- **{head}**{suffix}"
-                if details:
-                    bullet += " - " + "; ".join(details)
-                violation_bullets.append(bullet)
-            risk_body_parts.append("### Active Risk Violations\n\n" + "\n".join(violation_bullets))
-        sections.append(_render_section("3. Risk & Violations", "\n\n".join(risk_body_parts)))
-
-    if holdings_rows:
-        holdings_bullets = [
-            "- **{symbol}:** Weight {weight}, Quantity {quantity}, Current Price {price}, Value {value}".format(
-                symbol=_escape_markdown_cell(row[0]),
-                weight=_escape_markdown_cell(row[1]),
-                quantity=_escape_markdown_cell(row[2]),
-                price=_escape_markdown_cell(row[3]),
-                value=_escape_markdown_cell(row[4]),
-            )
-            for row in holdings_rows
+    if unlocks_asc:
+        lines += [
+            "| Badge | Ngày | Điều kiện | Observed | NFT | Hash | Verified |",
+            "|-------|------|-----------|----------|-----|------|---------|",
         ]
-        sections.append(_render_section("4. Holdings Snapshot", "\n".join(holdings_bullets)))
+        for u in unlocks_asc:
+            badge = u.get("badgeTitle") or u.get("achievementKey") or "—"
+            date = str(u.get("snapshotAt") or "")[:10] or "—"
+            condition = _fmt_condition(u.get("metric") or "", u.get("operator") or "gte", float(u.get("threshold") or 0))
+            observed = _fmt_observed(u.get("metric") or "", u.get("observedValue"))
+            cert_id = u.get("certificateId")
+            cert = next((c for c in all_certs if c.get("id") == cert_id), None)
+            nft = nfts_by_cert_id.get(cert_id or "") if cert_id else None
+            token_id = f"#{cert.get('nftTokenId')}" if cert and cert.get("nftTokenId") else "—"
+            tx_hash = _shorten_hash(cert.get("nftTxHash") if cert else None)
+            hash_verified = nft.get("hashVerified") if nft else None
+            verified = "✅" if hash_verified is True else ("❌" if hash_verified is False else "—")
+            lines.append(f"| {badge} | {date} | {condition} | {observed} | {token_id} | {tx_hash} | {verified} |")
+    else:
+        lines.append("*Chưa có achievement nào được unlock.*")
 
-    if checkpoint_rows:
-        checkpoint_bullets = [
-            "- **{badge}** ({date}) - {criterion}; Hash verified: {hash_verified}; Proof: {proof}".format(
-                badge=_escape_markdown_cell(row[0]),
-                date=_escape_markdown_cell(row[1]),
-                criterion=_escape_markdown_cell(row[2]),
-                hash_verified=_escape_markdown_cell(row[3]),
-                proof=_escape_markdown_cell(row[4]),
-            )
-            for row in checkpoint_rows
+    lines += ["", "---", "", "## Manual Checkpoints", ""]
+
+    if manual_certs:
+        lines += [
+            "| Ngày | Tiêu đề | Ghi chú | NFT | Hash |",
+            "|------|---------|---------|-----|------|",
         ]
-        sections.append(_render_section("5. Checkpoints", "\n".join(checkpoint_bullets)))
+        for cert in manual_certs:
+            date = str(cert.get("snapshotAt") or "")[:10] or "—"
+            title = _escape_markdown_cell(cert.get("title") or "—")
+            note = _escape_markdown_cell(cert.get("note") or "—")
+            token_id = f"#{cert.get('nftTokenId')}" if cert.get("nftTokenId") else "—"
+            tx_hash = _shorten_hash(cert.get("nftTxHash"))
+            lines.append(f"| {date} | {title} | {note} | {token_id} | {tx_hash} |")
+    else:
+        lines.append("*Chưa có manual checkpoint nào.*")
 
-    findings_parts: list[str] = []
-    if strengths:
-        findings_parts.append("### Strengths\n\n" + _bullet_list(strengths))
-    findings_parts.append("### Weaknesses / Findings\n\n" + _bullet_list(weaknesses))
-    findings_parts.append("### Recommendations\n\n" + _bullet_list(recommendations))
-    sections.append(_render_section("6. Findings & Actions", "\n\n".join(findings_parts)))
+    lines += ["", "---", "", "## Snapshot History", ""]
 
-    return "\n\n---\n\n".join(section for section in sections if section)
+    if certs_asc:
+        lines += [
+            "| Ngày | Tiêu đề | Value (USD) | Assets | Sharpe (30d) | Max Drawdown | NFT | Certified by |",
+            "|------|---------|------------|--------|-------------|-------------|-----|-------------|",
+        ]
+        for cert in certs_asc:
+            date = str(cert.get("snapshotAt") or "")[:10] or "—"
+            title = _escape_markdown_cell(cert.get("title") or "—")
+            payload = cert.get("snapshotPayload") or {}
+            summary = payload.get("summary") or {}
+            metrics = payload.get("metrics") or {}
+            assets = payload.get("assets") or []
+            value = _format_currency(summary.get("totalValueUsd")) or "—"
+            asset_count = str(len(assets)) if assets else "—"
+            sharpe_raw = _get_metric_value(metrics, "sharpe_ratio_30d", "sharpeRatio30d")
+            sharpe = f"{float(sharpe_raw):.2f}" if sharpe_raw is not None else "—"
+            dd_raw = _get_metric_value(metrics, "max_drawdown_percent", "maxDrawdown", "maxDrawdownPercent")
+            drawdown = f"−{abs(float(dd_raw)):.1f}%" if dd_raw is not None else "—"
+            token_id = f"#{cert.get('nftTokenId')}" if cert.get("nftTokenId") else "—"
+            certify_mode = "Achievement" if cert.get("certifyMode") == "auto_achievement" else "Manual"
+            lines.append(f"| {date} | {title} | {value} | {asset_count} | {sharpe} | {drawdown} | {token_id} | {certify_mode} |")
+    else:
+        lines.append("*Chưa có snapshot nào được certify.*")
+
+    return "\n".join(lines)
 
 
 def _chart_summary(chart: list[dict[str, Any]]) -> dict[str, str]:
@@ -507,87 +532,62 @@ async def _build_audit_packet(
     portfolio_id: str | None,
     nfts: list[dict],
 ) -> dict[str, Any]:
-    """Build the audit state packet from portfolio snapshots and verified NFTs."""
+    """Build the audit state packet from all certificates, achievement unlocks, and verified NFTs."""
     portfolio_name: str | None = None
-    snapshot_payload: dict[str, Any] | None = None
-    snapshot_at: str | None = None
-    latest_snapshot_id: str | None = None
+    report_date = datetime.now(timezone.utc).date().isoformat()
+
+    all_certs_raw: list[dict[str, Any]] = []
+    all_unlocks_raw: list[dict[str, Any]] = []
 
     if portfolio_id:
         portfolio = await resolve_portfolio(user_id, portfolio_id=portfolio_id)
         if portfolio and portfolio.get("name"):
             portfolio_name = str(portfolio["name"])
 
-        latest_snapshot = await get_latest_portfolio_snapshot(portfolio_id, user_id)
-        if isinstance(latest_snapshot, dict):
-            latest_snapshot_id = str(latest_snapshot.get("id") or "")
-            snapshot_at_raw = latest_snapshot.get("snapshot_at")
-            snapshot_at = snapshot_at_raw.isoformat() if isinstance(snapshot_at_raw, datetime) else str(snapshot_at_raw or "")
-            raw_payload = latest_snapshot.get("metadata")
-            if isinstance(raw_payload, dict):
-                snapshot_payload = raw_payload
+        cert_records = await list_portfolio_snapshot_certificates(user_id, portfolio_id)
+        for cert in cert_records:
+            all_certs_raw.append({
+                "id": cert.id,
+                "title": cert.title,
+                "note": cert.note,
+                "snapshotAt": cert.snapshot_at.isoformat(),
+                "certifyMode": cert.certify_mode,
+                "achievementKey": cert.achievement_key,
+                "nftMintStatus": cert.nft_mint_status,
+                "nftTokenId": cert.nft_token_id,
+                "nftTxHash": cert.nft_tx_hash,
+                "snapshotPayload": cert.snapshot_payload if isinstance(cert.snapshot_payload, dict) else {},
+            })
 
-    summary = snapshot_payload.get("summary") if isinstance(snapshot_payload, dict) and isinstance(snapshot_payload.get("summary"), dict) else {}
-    metrics = snapshot_payload.get("metrics") if isinstance(snapshot_payload, dict) and isinstance(snapshot_payload.get("metrics"), dict) else {}
-    chart = snapshot_payload.get("chart") if isinstance(snapshot_payload, dict) and isinstance(snapshot_payload.get("chart"), list) else []
-    assets = snapshot_payload.get("assets") if isinstance(snapshot_payload, dict) and isinstance(snapshot_payload.get("assets"), list) else []
-    risk_violations = snapshot_payload.get("riskViolations") if isinstance(snapshot_payload, dict) and isinstance(snapshot_payload.get("riskViolations"), list) else []
+        unlock_records = await list_portfolio_achievement_unlocks(user_id, portfolio_id)
+        for unlock in unlock_records:
+            metadata = unlock.metadata if isinstance(unlock.metadata, dict) else {}
+            all_unlocks_raw.append({
+                "achievementKey": unlock.achievement_key,
+                "badgeTitle": unlock.achievement.title,
+                "metric": unlock.achievement.metric,
+                "operator": unlock.achievement.operator,
+                "threshold": unlock.achievement.threshold,
+                "observedValue": metadata.get("observedValue"),
+                "snapshotAt": str(unlock.snapshot_at or ""),
+                "certificateId": unlock.certificate_id,
+            })
 
-    top_holdings: list[dict[str, Any]] = []
-    for asset in assets:
-        if not isinstance(asset, dict):
-            continue
-        top_holdings.append({
-            "symbol": asset.get("symbol"),
-            "weight": asset.get("weight"),
-            "quantity": asset.get("quantity"),
-            "currentPrice": asset.get("currentPrice"),
-            "valueUsd": asset.get("valueUsd"),
-        })
-    top_holdings = sorted(
-        top_holdings,
-        key=lambda item: float(item.get("valueUsd") or 0),
-        reverse=True,
-    )[:5]
-
-    checkpoints = []
-    for nft in nfts:
-        checkpoints.append({
-            "badge": nft.get("title") or nft.get("achievementKey") or "Certified Snapshot",
-            "date": (nft.get("snapshotAt") or "")[:10] or None,
-            "criterion": _ACHIEVEMENT_CRITERIA.get(str(nft.get("achievementKey") or ""), "Portfolio checkpoint certified on-chain"),
-            "hashVerified": nft.get("hashVerified"),
-            "onChainProof": nft.get("etherscanUrl"),
-        })
-
-    report_date = datetime.now(timezone.utc).date().isoformat()
-    chart_summary = _chart_summary([item for item in chart if isinstance(item, dict)])
+    nfts_by_cert_id: dict[str, dict] = {
+        nft["certificateId"]: nft
+        for nft in nfts
+        if isinstance(nft, dict) and nft.get("certificateId")
+    }
 
     return {
         "portfolio": {
             "name": portfolio_name,
-            "manager": None,
-            "benchmark": None,
             "dateOfReport": report_date,
-            "objective": None,
             "portfolioId": portfolio_id or None,
         },
-        "snapshot": {
-            "snapshotId": latest_snapshot_id or None,
-            "snapshotAt": _format_iso_date(snapshot_at) or None,
-            "summary": _safe_json(summary),
-            "metrics": _safe_json(metrics),
-            "riskViolations": _safe_json(risk_violations),
-        },
-        "derived": {
-            "totalValueUsd": _format_currency(summary.get("totalValueUsd") if isinstance(summary, dict) else None) or None,
-            "cashRatio": _format_ratio_percent(summary.get("cashRatio") if isinstance(summary, dict) else None) or None,
-            "distinctAssets": len(assets),
-            "assetCount": len(assets),
-            "chart": chart_summary,
-            "topHoldings": _safe_json(top_holdings),
-        },
-        "checkpoints": _safe_json(checkpoints),
+        "all_certs": all_certs_raw,
+        "all_unlocks": all_unlocks_raw,
+        "nfts_by_cert_id": nfts_by_cert_id,
     }
 
 

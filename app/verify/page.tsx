@@ -89,7 +89,7 @@ function CertificateCard({ result }: { result: CertificatePublicVerifyResult }) 
     <div className="w-full max-w-xl space-y-4">
       {/* Header card */}
       <div className={`rounded-3xl border ${isMinted ? "border-emerald-500/20" : "border-white/8"} bg-(--surface-container-low) overflow-hidden`}>
-        <div className={`px-6 pt-6 pb-5 ${isMinted ? "bg-gradient-to-b from-[#0d2c1c] to-transparent" : "bg-gradient-to-b from-[#111114] to-transparent"}`}>
+        <div className={`px-6 pt-6 pb-5 ${isMinted ? "bg-linear-to-b from-[#0d2c1c] to-transparent" : "bg-linear-to-b from-[#111114] to-transparent"}`}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[0.6rem] font-bold uppercase tracking-[0.2em] text-neutral-500">PLAND Certificate</p>
@@ -154,12 +154,6 @@ function CertificateCard({ result }: { result: CertificatePublicVerifyResult }) 
               View on Etherscan
             </a>
           )}
-          <Link
-            href={result.externalUrl}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:bg-white/5 hover:text-white"
-          >
-            View certificate
-          </Link>
         </div>
       </div>
 

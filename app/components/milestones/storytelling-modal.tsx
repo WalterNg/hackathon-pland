@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { createSupabaseBrowserClient } from "@/app/lib/supabase/client";
 
 type ChainNft = {
@@ -81,7 +82,7 @@ function MarkdownContent({ content }: { content: string }) {
       prose-hr:border-white/10
       prose-table:text-neutral-300 prose-th:text-white prose-td:border-white/8"
     >
-      <ReactMarkdown>{content}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
     </div>
   );
 }
@@ -92,19 +93,19 @@ export function StorytellingChooserPopover({
   onChoose: (mode: StoryMode) => void;
 }) {
   return (
-    <div className="w-[286px] rounded-[1.5rem] border border-white/10 bg-(--surface-container-high) p-3 shadow-2xl ring-1 ring-white/10">
+    <div className="w-71.5 rounded-3xl border border-white/10 bg-(--surface-container-high) p-3 shadow-2xl ring-1 ring-white/10">
       <div className="grid grid-cols-2 gap-3">
         <button
           type="button"
           onClick={() => onChoose("share")}
-          className="rounded-2xl border border-white/10 bg-white/4 px-4 py-5 text-sm font-semibold text-white transition-colors hover:bg-white/8"
+          className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/20 hover:text-emerald-300"
         >
           Share
         </button>
         <button
           type="button"
           onClick={() => onChoose("audit")}
-          className="rounded-2xl border border-white/10 bg-white/4 px-4 py-5 text-sm font-semibold text-white transition-colors hover:bg-white/8"
+          className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/20 hover:text-emerald-300"
         >
           Audit
         </button>
@@ -218,7 +219,7 @@ export function StorytellingModal({ onClose, portfolioId, portfolioName, mode }:
               <span className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Status</span>
               <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[0.7rem] font-semibold text-neutral-300">
                 {status === "reading" && "Reading from blockchain"}
-                {status === "writing" && "Writing with AI"}
+                {status === "writing" && (mode === "audit" ? "Generating report..." : "Writing with AI")}
                 {status === "ready" && "Ready"}
                 {status === "error" && "Failed"}
               </span>
@@ -251,14 +252,14 @@ export function StorytellingModal({ onClose, portfolioId, portfolioName, mode }:
 
           <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-white/8 bg-(--surface-container-low) px-5 py-5">
             {status === "reading" || status === "writing" ? (
-              <div className="flex min-h-[18rem] flex-col items-center justify-center gap-3 text-neutral-500">
+              <div className="flex min-h-72 flex-col items-center justify-center gap-3 text-neutral-500">
                 <Spinner />
                 <p className="text-sm">{status === "reading" ? "Reading from blockchain..." : "Writing with AI..."}</p>
               </div>
             ) : content ? (
               <MarkdownContent content={content} />
             ) : (
-              <div className="flex min-h-[18rem] items-center justify-center text-sm text-neutral-500">
+              <div className="flex min-h-72 items-center justify-center text-sm text-neutral-500">
                 No content generated.
               </div>
             )}

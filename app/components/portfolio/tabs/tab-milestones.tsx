@@ -78,33 +78,35 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
               Certified snapshots and achievement certifications in one timeline.
             </p>
           </div>
-          <div className="relative flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setShowStoryChooser((value) => !value);
-                setShowBadgeCollection(false);
-              }}
-              className="ui-button-secondary flex items-center gap-1.5"
-            >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-              </svg>
-              Get My Story
-            </button>
-            {showStoryChooser && !storyMode && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowStoryChooser(false)} />
-                <div className="absolute right-0 top-full z-50 mt-2">
-                  <StorytellingChooserPopover
-                    onChoose={(nextMode) => {
-                      setShowStoryChooser(false);
-                      setStoryMode(nextMode);
-                    }}
-                  />
-                </div>
-              </>
-            )}
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowStoryChooser((value) => !value);
+                  setShowBadgeCollection(false);
+                }}
+                className="ui-button-secondary flex items-center gap-1.5"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                </svg>
+                Get My Story
+              </button>
+              {showStoryChooser && !storyMode && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowStoryChooser(false)} />
+                  <div className="absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2">
+                    <StorytellingChooserPopover
+                      onChoose={(nextMode) => {
+                        setShowStoryChooser(false);
+                        setStoryMode(nextMode);
+                      }}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => setShowBadgeCollection(true)}
@@ -170,8 +172,8 @@ export function TabMilestones({ portfolioName, portfolioId }: TabMilestonesProps
 
                   return (
                     <div key={cert.id} className="flex gap-4 items-start">
-                      <div className="shrink-0 pt-[18px]">
-                        <div className={`h-[10px] w-[10px] rounded-full border border-black/30 z-10 ${dotColor}`} />
+                      <div className="shrink-0 pt-4.5">
+                        <div className={`h-2.5 w-2.5 rounded-full border border-black/30 z-10 ${dotColor}`} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="mb-1 text-[0.65rem] font-medium text-neutral-600">{dateLabel}</p>
