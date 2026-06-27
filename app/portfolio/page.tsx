@@ -534,7 +534,12 @@ function PortfolioContent() {
 
             {/* ── Tab: Risk Rules ── */}
             {activeTab === "risk-rules" && (
-              <TabRiskRules portfolioName={portfolioName} portfolioId={portfolioId} />
+              <TabRiskRules
+                portfolioName={portfolioName}
+                portfolioId={portfolioId}
+                snapshot={effectiveSnapshot}
+                lastServerSyncAt={lastServerSyncAt}
+              />
             )}
 
             {/* ── Tab: Journal ── */}

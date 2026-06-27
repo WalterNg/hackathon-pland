@@ -25,14 +25,30 @@ const OVERRIDE_REASONS: OverrideReason[] = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60_000);
-  if (m < 1)  return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+function formatRelativeTime(iso: string | null | undefined): string {
+  if (!iso) return "unknown";
+
+  const timestamp = new Date(iso).getTime();
+  if (!Number.isFinite(timestamp)) return "unknown";
+
+  const diffMs = timestamp - Date.now();
+  const diffMinutes = Math.floor(Math.abs(diffMs) / 60_000);
+
+  if (diffMinutes < 1) {
+    return diffMs >= 0 ? "in <1m" : "just now";
+  }
+
+  if (diffMinutes < 60) {
+    return diffMs >= 0 ? `in ${diffMinutes}m` : `${diffMinutes}m ago`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return diffMs >= 0 ? `in ${diffHours}h` : `${diffHours}h ago`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  return diffMs >= 0 ? `in ${diffDays}d` : `${diffDays}d ago`;
 }
 
 function fmtValue(v: number | null, eventType: string): string {
@@ -161,6 +177,50 @@ function chipLabel(status: string, severity: string): string {
   return "Warning";
 }
 
+function formatAlertSymbol(alert: RiskAlertRecord): string | null {
+  const rawSymbol = alert.symbol?.trim();
+  if (rawSymbol) {
+    return rawSymbol.replace(/USDT$/i, "");
+  }
+
+  const match = alert.message.match(/^([A-Z0-9_-]+)\s+allocation is/i);
+  if (match?.[1]) {
+    return match[1];
+  }
+
+  const signatureMatch = alert.signature.match(/^position:([^:]+):/i);
+  if (signatureMatch?.[1]) {
+    return signatureMatch[1].replace(/USDT$/i, "");
+  }
+
+  return null;
+}
+
+function toTimestamp(value: string | null | undefined): number {
+  if (!value) return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function getAlertPriority(alert: RiskAlertRecord): number {
+  if (alert.status === "active" && alert.severity === "critical") return 0;
+  if (alert.status === "active") return 1;
+  if (alert.status === "snoozed") return 2;
+  if (alert.status === "overridden") return 3;
+  if (alert.status === "resolved") return 4;
+  return 5;
+}
+
+function compareAlerts(left: RiskAlertRecord, right: RiskAlertRecord): number {
+  const priorityDiff = getAlertPriority(left) - getAlertPriority(right);
+  if (priorityDiff !== 0) return priorityDiff;
+
+  const timeDiff = toTimestamp(right.lastTriggeredAt) - toTimestamp(left.lastTriggeredAt);
+  if (timeDiff !== 0) return timeDiff;
+
+  return right.triggerCount - left.triggerCount;
+}
+
 // ─── Alert row ────────────────────────────────────────────────────────────────
 
 type AlertRowProps = {
@@ -200,6 +260,7 @@ function AlertRow({ alert, isUpdating, onAcknowledge, onResolve, onSnooze, onCan
     isSnoozed          ? "bg-sky-400" :
     isResolved         ? "bg-emerald-500/60" :
                          "bg-amber-400";
+  const alertSymbol = formatAlertSymbol(alert);
 
   return (
     <div className={`relative flex items-center gap-3 rounded-xl border px-4 pt-5 pb-3.5 transition-colors hover:bg-white/2 ${rowBg}`}>
@@ -215,8 +276,10 @@ function AlertRow({ alert, isUpdating, onAcknowledge, onResolve, onSnooze, onCan
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <p className="text-sm font-semibold text-strong">{alert.title}</p>
-
+          <p className="text-sm font-semibold text-strong">
+            {alert.title}
+            {alertSymbol ? `: ${alertSymbol}` : ""}
+          </p>
         </div>
 
         <p className="mt-0.5 text-xs text-muted">
@@ -224,9 +287,9 @@ function AlertRow({ alert, isUpdating, onAcknowledge, onResolve, onSnooze, onCan
           <span className="mx-1 opacity-40">/</span>
           {fmtValue(alert.thresholdValue, alert.eventType)} limit
           <span className="mx-1.5 opacity-30">·</span>
-          {timeAgo(alert.lastTriggeredAt)}
+          {formatRelativeTime(alert.firstTriggeredAt ?? alert.lastTriggeredAt)}
           {isSnoozed && alert.snoozedUntil && (
-            <span className="ml-2 text-blue-300">re-alerts {timeAgo(alert.snoozedUntil)}</span>
+            <span className="ml-2 text-blue-300">re-alerts {formatRelativeTime(alert.snoozedUntil)}</span>
           )}
           {isOverridden && alert.overrideReason && (
             <span className="ml-2 text-purple-300">{alert.overrideReason}</span>
@@ -297,10 +360,12 @@ export function RiskMonitorAlerts({
     resolved:  alerts.filter((a) => a.status === "resolved").length,
   }), [alerts]);
 
-  const filtered = useMemo(() =>
-    statusFilter === "all" ? alerts : alerts.filter((a) => a.status === statusFilter),
-    [alerts, statusFilter]
-  );
+  const filtered = useMemo(() => {
+    const nextAlerts =
+      statusFilter === "all" ? [...alerts] : alerts.filter((a) => a.status === statusFilter);
+    nextAlerts.sort(compareAlerts);
+    return nextAlerts;
+  }, [alerts, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);

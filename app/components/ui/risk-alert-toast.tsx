@@ -121,6 +121,7 @@ function ToastCard({ item, portfolioName, onDismiss }: ToastCardProps) {
 
 const POLL_INTERVAL_MS = 30_000;
 const AUTO_DISMISS_MS = 8_000;
+const RISK_ALERTS_REFRESH_EVENT = "risk-alerts:refresh";
 
 type Props = {
   portfolioName?: string;
@@ -167,32 +168,43 @@ export function RiskAlertToast({ portfolioName = "Main Portfolio" }: Props) {
     [dismiss]
   );
 
+  const poll = useCallback(async () => {
+    try {
+      const res = await fetchWithSupabaseAuth(
+        `/api/risk-rules/alerts?portfolioName=${encodeURIComponent(portfolioName)}&status=active&limit=20`
+      );
+      if (!res.ok) return;
+      const payload = (await res.json()) as { alerts: RiskAlertRecord[] };
+      const newAlerts = filterNew(payload.alerts ?? []);
+      showAlerts(newAlerts);
+    } catch {
+      // silently ignore
+    }
+  }, [portfolioName, showAlerts]);
+
   useEffect(() => {
     let disposed = false;
-
-    const poll = async () => {
-      try {
-        const res = await fetchWithSupabaseAuth(
-          `/api/risk-rules/alerts?portfolioName=${encodeURIComponent(portfolioName)}&status=active&limit=20`
-        );
-        if (!res.ok || disposed) return;
-        const payload = (await res.json()) as { alerts: RiskAlertRecord[] };
-        const newAlerts = filterNew(payload.alerts ?? []);
-        if (!disposed) showAlerts(newAlerts);
-      } catch {
-        // silently ignore
-      }
+    const runPoll = async () => {
+      if (disposed) return;
+      await poll();
+    };
+    const handleRefresh = (event: Event) => {
+      const detail = event instanceof CustomEvent ? event.detail as { portfolioName?: string } | undefined : undefined;
+      if (detail?.portfolioName && detail.portfolioName !== portfolioName) return;
+      void runPoll();
     };
 
-    void poll();
-    const intervalId = window.setInterval(poll, POLL_INTERVAL_MS);
+    void runPoll();
+    const intervalId = window.setInterval(() => { void runPoll(); }, POLL_INTERVAL_MS);
+    window.addEventListener(RISK_ALERTS_REFRESH_EVENT, handleRefresh as EventListener);
 
     return () => {
       disposed = true;
+      window.removeEventListener(RISK_ALERTS_REFRESH_EVENT, handleRefresh as EventListener);
       window.clearInterval(intervalId);
       for (const timer of timerRefs.current.values()) clearTimeout(timer);
     };
-  }, [portfolioName, showAlerts]);
+  }, [poll, portfolioName]);
 
   if (toasts.length === 0) return null;
 

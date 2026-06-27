@@ -40,7 +40,7 @@ const RULE_DEFS: RuleDef[] = [
   {
     key: "maxDailyLossUsd", profileKey: "maxDailyLossUsd",
     category: "daily", label: "Daily loss cap", description: "Max intraday loss in USD",
-    tooltip: "Measures the USD loss since the previous portfolio snapshot (previous value − current value). Alerts when the loss exceeds the set USD cap.",
+    tooltip: "Measures the USD loss from the portfolio's 00:00 UTC opening value to the current value. Alerts when that intraday loss exceeds the set USD cap.",
     unit: "USD", max: 10000, step: 10, live: true,
     getCurrentValue: (_, __, d) => d,
   },
@@ -82,6 +82,12 @@ function fmtVal(v: number | null, unit: string): string {
   return v.toFixed(2);
 }
 
+function fmtSignedUsd(v: number | null): string {
+  if (v === null) return "—";
+  const sign = v >= 0 ? "+" : "-";
+  return `${sign}$${Math.abs(v).toFixed(2)}`;
+}
+
 type Status = "breach" | "near" | "ok" | "off";
 
 function getStatus(current: number | null, thresh: number | null, enabled: boolean): Status {
@@ -107,13 +113,26 @@ type GaugeRowProps = {
   thresh: number | null;
   enabled: boolean;
   currentValue: number | null;
+  currentValueLabel?: string | null;
+  currentValueToneClassName?: string;
   isSaving: boolean;
   isPlaceholder?: boolean;
   onToggle: () => void;
   onThresholdChange: (v: number | null) => void;
 };
 
-function GaugeRow({ def, thresh, enabled, currentValue, isSaving, isPlaceholder, onToggle, onThresholdChange }: GaugeRowProps) {
+function GaugeRow({
+  def,
+  thresh,
+  enabled,
+  currentValue,
+  currentValueLabel,
+  currentValueToneClassName,
+  isSaving,
+  isPlaceholder,
+  onToggle,
+  onThresholdChange,
+}: GaugeRowProps) {
   const status = getStatus(currentValue, thresh, enabled);
   const { pill, fill, rowBg, rowBorder } = STATUS_STYLES[status];
   const isBreaching = status === "breach";
@@ -178,7 +197,9 @@ function GaugeRow({ def, thresh, enabled, currentValue, isSaving, isPlaceholder,
             )}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] tabular-nums text-white/35">{fmtVal(currentValue, def.unit)}</span>
+            <span className={`text-[10px] tabular-nums ${currentValueToneClassName ?? "text-white/35"}`}>
+              {currentValueLabel ?? fmtVal(currentValue, def.unit)}
+            </span>
             {breachAmount && <span className="text-[10px] text-red-400/75">{breachAmount}</span>}
             <div className="ml-auto flex items-center gap-1">
               {!isPlaceholder && enabled ? (
@@ -231,6 +252,7 @@ type Props = {
   currentMaxDrawdownPct: number | null;
   currentMaxPositionSizePct: number | null;
   currentDailyLossUsd: number | null;
+  currentDailyNetPnlUsd: number | null;
 };
 
 type LocalState = {
@@ -245,7 +267,7 @@ type LocalState = {
 
 export function RiskMonitorRules({
   profile, isLoading, isSaving, error, onSave,
-  currentMaxDrawdownPct, currentMaxPositionSizePct, currentDailyLossUsd,
+  currentMaxDrawdownPct, currentMaxPositionSizePct, currentDailyLossUsd, currentDailyNetPnlUsd,
 }: Props) {
   const [saveLabel, setSaveLabel] = useState<"idle" | "saved">("idle");
   const [local, setLocal] = useState<LocalState>({
@@ -297,6 +319,12 @@ export function RiskMonitorRules({
 
   const visibleLive = liveRules;
   const visiblePlaceholder = placeholders;
+  const dailyPnlToneClassName =
+    currentDailyNetPnlUsd === null
+      ? "text-white/35"
+      : currentDailyNetPnlUsd >= 0
+        ? "text-emerald-400"
+        : "text-red-400";
 
   const breachCount = useMemo(() =>
     liveRules.filter((r) => getStatus(currentMap[r.label], threshMap[r.label], enabledMap[r.label] ?? false) === "breach").length,
@@ -442,6 +470,8 @@ export function RiskMonitorRules({
               thresh={threshMap[def.label] ?? null}
               enabled={enabledMap[def.label] ?? false}
               currentValue={currentMap[def.label] ?? null}
+              currentValueLabel={def.label === "Daily loss cap" ? fmtSignedUsd(currentDailyNetPnlUsd) : null}
+              currentValueToneClassName={def.label === "Daily loss cap" ? dailyPnlToneClassName : undefined}
               isSaving={isSaving}
               onToggle={() => handleToggle(def.label)}
               onThresholdChange={(v) => handleThreshChange(def.label, v)}

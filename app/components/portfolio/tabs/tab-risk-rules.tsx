@@ -3,55 +3,77 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RiskMonitorAlerts } from "@/app/components/risk-rules/risk-monitor-alerts";
 import { RiskMonitorRules } from "@/app/components/risk-rules/risk-monitor-rules";
-import { usePortfolioSnapshot } from "@/app/hooks/use-portfolio-snapshot";
 import { useRiskRulesV2 } from "@/app/hooks/use-risk-rules-v2";
 import { useRiskAlertsV2 } from "@/app/hooks/use-risk-alerts-v2";
+import type { PortfolioSnapshot } from "@/app/lib/portfolio-types";
 import { fetchWithSupabaseAuth } from "@/app/lib/supabase/authenticated-fetch";
 
 const EVALUATE_COOLDOWN_MS = 30_000;
+const RISK_ALERTS_REFRESH_EVENT = "risk-alerts:refresh";
 
 type InnerTab = "alerts" | "rules";
 
+function buildEvaluationPayload(portfolioName: string, snapshot: PortfolioSnapshot) {
+  return {
+    portfolioName,
+    snapshot: {
+      metrics: {
+        maxDrawdownPercent: snapshot.metrics?.maxDrawdownPercent ?? 0,
+        dailyLossUsd: snapshot.metrics?.dailyLossUsd ?? null,
+      },
+      assets: (snapshot.assets ?? []).map((a) => ({ symbol: a.symbol, allocationPercent: a.allocationPercent ?? 0 })),
+      chart: (snapshot.chart ?? []).map((c) => ({ totalValueUsd: c.totalValueUsd ?? 0 })),
+    },
+  };
+}
+
+async function evaluateRiskSnapshot(portfolioName: string, snapshot: PortfolioSnapshot) {
+  await fetchWithSupabaseAuth("/api/risk-rules/evaluate", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(buildEvaluationPayload(portfolioName, snapshot)),
+  });
+}
+
+function notifyRiskAlertsRefresh(portfolioName: string) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(RISK_ALERTS_REFRESH_EVENT, { detail: { portfolioName } }));
+}
+
 function useEvaluateOnSnapshot(
   portfolioName: string,
-  snapshot: ReturnType<typeof usePortfolioSnapshot>["snapshot"]
+  snapshot: PortfolioSnapshot | null,
+  evaluationKey: string | null
 ) {
   const lastEvaluatedAtRef = useRef<number>(0);
-  const snapshotIdRef = useRef<string | null>(null);
+  const evaluationKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!snapshot) return;
-    const key = snapshot.summary?.timestamp ?? null;
-    if (key === snapshotIdRef.current) return;
+    if (!snapshot || !evaluationKey) return;
+    if (evaluationKey === evaluationKeyRef.current) return;
     const now = Date.now();
     if (now - lastEvaluatedAtRef.current < EVALUATE_COOLDOWN_MS) return;
-    snapshotIdRef.current = key;
+    evaluationKeyRef.current = evaluationKey;
     lastEvaluatedAtRef.current = now;
 
-    void fetchWithSupabaseAuth("/api/risk-rules/evaluate", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        portfolioName,
-        snapshot: {
-          metrics: { maxDrawdownPercent: snapshot.metrics?.maxDrawdownPercent ?? 0 },
-          assets: (snapshot.assets ?? []).map((a) => ({ symbol: a.symbol, allocationPercent: a.allocationPercent ?? 0 })),
-          chart: (snapshot.chart ?? []).map((c) => ({ totalValueUsd: c.totalValueUsd ?? 0 })),
-        },
-      }),
-    }).catch(() => {});
-  }, [portfolioName, snapshot]);
+    void evaluateRiskSnapshot(portfolioName, snapshot).catch(() => {});
+  }, [portfolioName, snapshot, evaluationKey]);
 }
 
 type TabRiskRulesProps = {
   portfolioName: string;
   portfolioId: string | null;
+  snapshot: PortfolioSnapshot | null;
+  lastServerSyncAt: string | null;
 };
 
-export function TabRiskRules({ portfolioName, portfolioId }: TabRiskRulesProps) {
+export function TabRiskRules({
+  portfolioName,
+  portfolioId,
+  snapshot,
+  lastServerSyncAt,
+}: TabRiskRulesProps) {
   const [activeTab, setActiveTab] = useState<InnerTab>("alerts");
-
-  const { snapshot } = usePortfolioSnapshot(portfolioId, portfolioName);
 
   const { profile, isLoading: rulesLoading, isSaving, error: rulesError, save, reload: reloadRules } =
     useRiskRulesV2(portfolioName);
@@ -61,26 +83,40 @@ export function TabRiskRules({ portfolioName, portfolioId }: TabRiskRulesProps) 
     reload: reloadAlerts, acknowledge, resolve, override, revokeOverride, snooze, cancelSnooze,
   } = useRiskAlertsV2(portfolioName, "all", 15_000);
 
-  useEvaluateOnSnapshot(portfolioName, snapshot);
+  useEvaluateOnSnapshot(portfolioName, snapshot, lastServerSyncAt);
 
-  const reloadAll = useCallback(() => { setTimeout(() => reloadAlerts(), 1500); }, [reloadAlerts]);
+  const reloadAll = useCallback(() => {
+    reloadAlerts();
+    window.setTimeout(() => reloadAlerts(), 1200);
+  }, [reloadAlerts]);
 
   const currentMaxDrawdownPct = snapshot?.metrics?.maxDrawdownPercent ?? null;
   const currentMaxPositionSizePct = useMemo(() => {
     if (!snapshot?.assets?.length) return null;
     return Math.max(...snapshot.assets.map((a) => a.allocationPercent ?? 0));
   }, [snapshot]);
-  const currentDailyLossUsd = useMemo(() => {
-    const chart = snapshot?.chart ?? [];
-    if (chart.length < 2) return null;
-    return Math.max(0, (chart[chart.length - 2]?.totalValueUsd ?? 0) - (chart[chart.length - 1]?.totalValueUsd ?? 0));
+  const currentDailyLossUsd = snapshot?.metrics?.dailyLossUsd ?? null;
+  const currentDailyNetPnlUsd = useMemo(() => {
+    const dailyOpenValueUsd = snapshot?.metrics?.dailyOpenValueUsd;
+    const currentValueUsd = snapshot?.summary?.totalValueUsd;
+    if (dailyOpenValueUsd === null || dailyOpenValueUsd === undefined) return null;
+    if (currentValueUsd === null || currentValueUsd === undefined) return null;
+    return currentValueUsd - dailyOpenValueUsd;
   }, [snapshot]);
 
   const handleSave = useCallback(async (values: Parameters<typeof save>[0]) => {
     const ok = await save(values);
-    if (ok) { reloadRules(); reloadAll(); }
+    if (!ok) return false;
+
+    if (snapshot) {
+      await evaluateRiskSnapshot(portfolioName, snapshot).catch(() => {});
+    }
+
+    reloadRules();
+    reloadAll();
+    notifyRiskAlertsRefresh(portfolioName);
     return ok;
-  }, [save, reloadRules, reloadAll]);
+  }, [save, reloadRules, reloadAll, portfolioName, snapshot]);
 
   const activeAlertCount = alerts.filter((a) => a.status === "active").length;
   const criticalCount = alerts.filter((a) => a.status === "active" && a.severity === "critical").length;
@@ -168,6 +204,7 @@ export function TabRiskRules({ portfolioName, portfolioId }: TabRiskRulesProps) 
           currentMaxDrawdownPct={currentMaxDrawdownPct}
           currentMaxPositionSizePct={currentMaxPositionSizePct}
           currentDailyLossUsd={currentDailyLossUsd}
+          currentDailyNetPnlUsd={currentDailyNetPnlUsd}
         />
       )}
     </>

@@ -477,10 +477,9 @@ export function evaluateRiskViolations(
   }
 
   const maxDailyLossUsd = profile.maxDailyLossUsd;
-  if (maxDailyLossUsd !== null && snapshot.chart.length >= 2) {
-    const previous = snapshot.chart[snapshot.chart.length - 2]?.totalValueUsd ?? 0;
-    const current = snapshot.chart[snapshot.chart.length - 1]?.totalValueUsd ?? 0;
-    const dailyLossUsd = Math.max(0, previous - current);
+  const observedDailyLossUsd = snapshot.metrics.dailyLossUsd ?? null;
+  if (maxDailyLossUsd !== null && observedDailyLossUsd !== null) {
+    const dailyLossUsd = Math.max(0, observedDailyLossUsd);
 
     if (dailyLossUsd > maxDailyLossUsd) {
       const signature = `daily-loss:${maxDailyLossUsd.toFixed(2)}`;
@@ -488,7 +487,7 @@ export function evaluateRiskViolations(
         eventType: "daily_loss_limit_breached",
         severity: selectSeverity(dailyLossUsd, maxDailyLossUsd),
         title: "Daily loss threshold breached",
-        message: `Daily loss is ${dailyLossUsd.toFixed(2)} USD (limit ${maxDailyLossUsd.toFixed(2)} USD).`,
+        message: `Daily loss since 00:00 UTC open is ${dailyLossUsd.toFixed(2)} USD (limit ${maxDailyLossUsd.toFixed(2)} USD).`,
         observedValue: dailyLossUsd,
         thresholdValue: maxDailyLossUsd,
         signature,
