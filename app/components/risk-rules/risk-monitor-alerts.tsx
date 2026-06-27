@@ -146,11 +146,11 @@ function ruleTag(eventType: string): string {
 }
 
 function chipStyles(status: string, severity: string): string {
-  if (status === "resolved")   return "border-white/7 bg-background text-emerald-400/55";
-  if (status === "snoozed")    return "border-white/7 bg-background text-sky-400/55";
-  if (status === "overridden") return "border-white/7 bg-background text-purple-400/55";
-  if (severity === "critical") return "border-red-500/20 bg-background text-red-400/65";
-  return "border-amber-400/18 bg-background text-amber-400/60";
+  if (status === "resolved")   return "border-emerald-500/40 bg-emerald-500/15 text-emerald-300";
+  if (status === "snoozed")    return "border-sky-400/35 bg-sky-400/12 text-sky-300";
+  if (status === "overridden") return "border-purple-400/35 bg-purple-400/12 text-purple-300";
+  if (severity === "critical") return "border-red-500/50 bg-red-500/20 text-red-300";
+  return "border-amber-400/40 bg-amber-400/15 text-amber-300";
 }
 
 function chipLabel(status: string, severity: string): string {
@@ -188,14 +188,28 @@ function AlertRow({ alert, isUpdating, onAcknowledge, onResolve, onSnooze, onCan
     isCrit       ? "bg-red-500"        : "bg-amber-400";
 
   const rowBg =
-    isActive && isCrit ? "bg-red-500/4 border-red-500/20" :
-    isOverridden       ? "bg-purple-500/4 border-purple-500/15" :
-    isSnoozed          ? "bg-blue-400/4 border-blue-400/15" :
+    isActive && isCrit ? "bg-red-500/6 border-red-500/30" :
+    isOverridden       ? "bg-purple-500/5 border-purple-500/20" :
+    isSnoozed          ? "bg-blue-400/5 border-blue-400/20" :
+    isResolved         ? "bg-white/1 border-white/8" :
                          "border-white/6";
+
+  const accentBar =
+    isActive && isCrit ? "bg-red-500" :
+    isOverridden       ? "bg-purple-400" :
+    isSnoozed          ? "bg-sky-400" :
+    isResolved         ? "bg-emerald-500/60" :
+                         "bg-amber-400";
 
   return (
     <div className={`relative flex items-center gap-3 rounded-xl border px-4 pt-5 pb-3.5 transition-colors hover:bg-white/2 ${rowBg}`}>
-      <span className={`absolute left-3.5 top-0 -translate-y-1/2 rounded-full border px-2 py-px text-[9px] font-semibold uppercase tracking-widest ${chipStyles(alert.status, alert.severity)}`}>
+      {/* left accent stripe */}
+      <span className={`absolute left-0 top-0 h-full w-0.75 rounded-l-xl ${accentBar}`} />
+
+      <span className={`absolute left-3.5 top-0 -translate-y-1/2 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest ${chipStyles(alert.status, alert.severity)}`}>
+        {isActive && isCrit && (
+          <span className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-red-400 align-middle" />
+        )}
         {chipLabel(alert.status, alert.severity)}
       </span>
 
