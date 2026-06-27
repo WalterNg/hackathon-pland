@@ -14,6 +14,7 @@ type RuleDef = {
   category: RuleCategory;
   label: string;
   description: string;
+  tooltip: string;
   unit: "%"| "USD" | "x" | "";
   max: number;
   step: number;
@@ -25,37 +26,42 @@ const RULE_DEFS: RuleDef[] = [
   {
     key: "maxDrawdownPct", profileKey: "maxDrawdownPct",
     category: "portfolio", label: "Max drawdown", description: "Portfolio decline from peak",
+    tooltip: "Measures the largest percentage decline from a portfolio peak to the subsequent trough over the selected period.",
     unit: "%", max: 100, step: 0.5, live: true,
     getCurrentValue: (d) => d,
   },
   {
     key: "maxPositionSizePct", profileKey: "maxPositionSizePct",
     category: "position", label: "Max position size", description: "Single asset allocation cap",
+    tooltip: "Measures the largest single asset as a % of total portfolio value.",
     unit: "%", max: 100, step: 0.5, live: true,
     getCurrentValue: (_, p) => p,
   },
   {
     key: "maxDailyLossUsd", profileKey: "maxDailyLossUsd",
     category: "daily", label: "Daily loss cap", description: "Max intraday loss in USD",
+    tooltip: "Measures the USD loss from the portfolio's 00:00 UTC opening value to the current value. Alerts when that intraday loss exceeds the set USD cap.",
     unit: "USD", max: 10000, step: 10, live: true,
     getCurrentValue: (_, __, d) => d,
   },
   {
     key: "maxLeverage", profileKey: "maxLeverage",
     category: "portfolio", label: "Max leverage", description: "Portfolio leverage ceiling",
+    tooltip: "Caps the portfolio's total leverage ratio (total exposure / equity). E.g. 2x means you're controlling twice your actual capital.",
     unit: "x", max: 10, step: 0.1, live: false,
   },
   {
     key: "riskPerTradePct", profileKey: "riskPerTradePct",
     category: "position", label: "Risk per trade", description: "Capital at risk per position",
+    tooltip: "Limits the % of capital at risk on any single trade, calculated as the distance from entry to stop-loss relative to total portfolio size.",
     unit: "%", max: 20, step: 0.5, live: false,
   },
   // UI-only placeholders — no backend evaluation yet
-  { key: "maxDrawdownPct", category: "advanced", label: "Volatility 7d", description: "Rolling 7-day volatility", unit: "%", max: 100, step: 1, live: false },
-  { key: "maxDrawdownPct", category: "advanced", label: "Min Sharpe 30d", description: "Risk-adjusted return floor", unit: "", max: 3, step: 0.1, live: false },
-  { key: "maxDrawdownPct", category: "position", label: "Unrealized loss", description: "Open position loss limit", unit: "%", max: 100, step: 0.5, live: false },
-  { key: "maxDrawdownPct", category: "portfolio", label: "HHI concentration", description: "Portfolio diversification score", unit: "", max: 10000, step: 100, live: false },
-  { key: "maxDrawdownPct", category: "advanced", label: "Portfolio beta", description: "Market sensitivity cap", unit: "", max: 3, step: 0.1, live: false },
+  { key: "maxDrawdownPct", category: "advanced", label: "Volatility 7d", description: "Rolling 7-day volatility", tooltip: "Annualized price volatility of the portfolio over the last 7 days. A high value indicates unusually large swings in portfolio value.", unit: "%", max: 100, step: 1, live: false },
+  { key: "maxDrawdownPct", category: "advanced", label: "Min Sharpe 30d", description: "Risk-adjusted return floor", tooltip: "Risk-adjusted return over 30 days. A Sharpe ratio below 1 means the returns don't adequately compensate for the risk being taken.", unit: "", max: 3, step: 0.1, live: false },
+  { key: "maxDrawdownPct", category: "position", label: "Unrealized loss", description: "Open position loss limit", tooltip: "Total unrealized loss across all open positions as a % of portfolio. Alerts when floating losses exceed this threshold before any position is closed.", unit: "%", max: 100, step: 0.5, live: false },
+  { key: "maxDrawdownPct", category: "portfolio", label: "HHI concentration", description: "Portfolio diversification score", tooltip: "Herfindahl-Hirschman Index (0–10,000) measuring portfolio concentration. Higher = less diversified. HHI above 2,500 is considered highly concentrated.", unit: "", max: 10000, step: 100, live: false },
+  { key: "maxDrawdownPct", category: "advanced", label: "Portfolio beta", description: "Market sensitivity cap", tooltip: "Measures how sensitive the portfolio is to overall market moves. Beta = 1 tracks the market; beta > 1 means the portfolio moves more than the market.", unit: "", max: 3, step: 0.1, live: false },
 ];
 
 const CATEGORIES: Array<{ value: RuleCategory | "all"; label: string }> = [
@@ -74,6 +80,12 @@ function fmtVal(v: number | null, unit: string): string {
   if (unit === "%")   return `${v.toFixed(1)}%`;
   if (unit === "x")   return `${v.toFixed(1)}x`;
   return v.toFixed(2);
+}
+
+function fmtSignedUsd(v: number | null): string {
+  if (v === null) return "—";
+  const sign = v >= 0 ? "+" : "-";
+  return `${sign}$${Math.abs(v).toFixed(2)}`;
 }
 
 type Status = "breach" | "near" | "ok" | "off";
@@ -101,13 +113,26 @@ type GaugeRowProps = {
   thresh: number | null;
   enabled: boolean;
   currentValue: number | null;
+  currentValueLabel?: string | null;
+  currentValueToneClassName?: string;
   isSaving: boolean;
   isPlaceholder?: boolean;
   onToggle: () => void;
   onThresholdChange: (v: number | null) => void;
 };
 
-function GaugeRow({ def, thresh, enabled, currentValue, isSaving, isPlaceholder, onToggle, onThresholdChange }: GaugeRowProps) {
+function GaugeRow({
+  def,
+  thresh,
+  enabled,
+  currentValue,
+  currentValueLabel,
+  currentValueToneClassName,
+  isSaving,
+  isPlaceholder,
+  onToggle,
+  onThresholdChange,
+}: GaugeRowProps) {
   const status = getStatus(currentValue, thresh, enabled);
   const { pill, fill, rowBg, rowBorder } = STATUS_STYLES[status];
   const isBreaching = status === "breach";
@@ -140,12 +165,15 @@ function GaugeRow({ def, thresh, enabled, currentValue, isSaving, isPlaceholder,
       <div className="min-w-0 space-y-1.5">
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-semibold text-strong">{def.label}</span>
-          {def.live && (
-            <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-emerald-400">live</span>
-          )}
-          {isPlaceholder && (
-            <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted">soon</span>
-          )}
+          <span className="group relative">
+            <svg className="h-3 w-3 cursor-default text-white/25 transition-colors group-hover:text-white/55" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 3a.875.875 0 1 1 0 1.75A.875.875 0 0 1 8 4zm-1 3h2v4.5H7V7z" />
+            </svg>
+            <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 rounded-lg border border-white/10 bg-[#1a1a1f] px-3 py-2 text-[11px] leading-relaxed text-white/70 opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+              <span className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-white/10" />
+              {def.tooltip}
+            </span>
+          </span>
         </div>
         {/* Slider gauge — thumb IS the threshold */}
         <div className="space-y-1 pr-1">
@@ -169,7 +197,9 @@ function GaugeRow({ def, thresh, enabled, currentValue, isSaving, isPlaceholder,
             )}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] tabular-nums text-white/35">{fmtVal(currentValue, def.unit)}</span>
+            <span className={`text-[10px] tabular-nums ${currentValueToneClassName ?? "text-white/35"}`}>
+              {currentValueLabel ?? fmtVal(currentValue, def.unit)}
+            </span>
             {breachAmount && <span className="text-[10px] text-red-400/75">{breachAmount}</span>}
             <div className="ml-auto flex items-center gap-1">
               {!isPlaceholder && enabled ? (
@@ -222,6 +252,7 @@ type Props = {
   currentMaxDrawdownPct: number | null;
   currentMaxPositionSizePct: number | null;
   currentDailyLossUsd: number | null;
+  currentDailyNetPnlUsd: number | null;
 };
 
 type LocalState = {
@@ -236,7 +267,7 @@ type LocalState = {
 
 export function RiskMonitorRules({
   profile, isLoading, isSaving, error, onSave,
-  currentMaxDrawdownPct, currentMaxPositionSizePct, currentDailyLossUsd,
+  currentMaxDrawdownPct, currentMaxPositionSizePct, currentDailyLossUsd, currentDailyNetPnlUsd,
 }: Props) {
   const [saveLabel, setSaveLabel] = useState<"idle" | "saved">("idle");
   const [local, setLocal] = useState<LocalState>({
@@ -288,6 +319,12 @@ export function RiskMonitorRules({
 
   const visibleLive = liveRules;
   const visiblePlaceholder = placeholders;
+  const dailyPnlToneClassName =
+    currentDailyNetPnlUsd === null
+      ? "text-white/35"
+      : currentDailyNetPnlUsd >= 0
+        ? "text-emerald-400"
+        : "text-red-400";
 
   const breachCount = useMemo(() =>
     liveRules.filter((r) => getStatus(currentMap[r.label], threshMap[r.label], enabledMap[r.label] ?? false) === "breach").length,
@@ -295,13 +332,26 @@ export function RiskMonitorRules({
   );
 
   const isDirty = useMemo(() => {
-    if (!profile) return false;
     const approxEq = (a: number | null, b: number | null) =>
       a === b || (a !== null && b !== null && Math.abs(a - b) < 0.001);
+    if (!profile) {
+      // No saved profile yet — dirty if user has enabled any rule
+      return (
+        local.maxDrawdownPct !== null ||
+        local.maxPositionSizePct !== null ||
+        local.maxDailyLossUsd !== null ||
+        local.maxLeverageEnabled ||
+        local.riskPerTradeEnabled
+      );
+    }
     return (
-      !approxEq(local.maxDrawdownPct,    profile.maxDrawdownPct ?? null) ||
+      !approxEq(local.maxDrawdownPct,     profile.maxDrawdownPct ?? null) ||
       !approxEq(local.maxPositionSizePct, profile.maxPositionSizePct ?? null) ||
-      !approxEq(local.maxDailyLossUsd,   profile.maxDailyLossUsd ?? null)
+      !approxEq(local.maxDailyLossUsd,    profile.maxDailyLossUsd ?? null) ||
+      local.maxLeverageEnabled !== (profile.maxLeverage !== null && profile.maxLeverage !== undefined) ||
+      !approxEq(local.maxLeverage,        profile.maxLeverage ?? null) ||
+      local.riskPerTradeEnabled !== (profile.riskPerTradePct !== null && profile.riskPerTradePct !== undefined) ||
+      !approxEq(local.riskPerTradePct,    profile.riskPerTradePct ?? null)
     );
   }, [local, profile]);
 
@@ -339,7 +389,15 @@ export function RiskMonitorRules({
   };
 
   const handleReset = () => {
-    if (!profile) return;
+    if (!profile) {
+      setLocal({
+        maxDrawdownPct: null, maxPositionSizePct: null, maxDailyLossUsd: null,
+        maxLeverageEnabled: false, maxLeverage: null,
+        riskPerTradeEnabled: false, riskPerTradePct: null,
+      });
+      setSaveLabel("idle");
+      return;
+    }
     setLocal({
       maxDrawdownPct:     profile.maxDrawdownPct ?? null,
       maxPositionSizePct: profile.maxPositionSizePct ?? null,
@@ -412,6 +470,8 @@ export function RiskMonitorRules({
               thresh={threshMap[def.label] ?? null}
               enabled={enabledMap[def.label] ?? false}
               currentValue={currentMap[def.label] ?? null}
+              currentValueLabel={def.label === "Daily loss cap" ? fmtSignedUsd(currentDailyNetPnlUsd) : null}
+              currentValueToneClassName={def.label === "Daily loss cap" ? dailyPnlToneClassName : undefined}
               isSaving={isSaving}
               onToggle={() => handleToggle(def.label)}
               onThresholdChange={(v) => handleThreshChange(def.label, v)}
@@ -436,10 +496,6 @@ export function RiskMonitorRules({
         </div>
       </div>
 
-      <p className="text-[11px] text-muted">
-        <span className="mr-1 inline-block rounded-full border border-emerald-500/25 bg-emerald-500/10 px-1.5 text-[9px] font-semibold text-emerald-400">live</span>
-        Rules are actively monitored. <span className="text-white/30">Soon</span> rules are coming in the next release.
-      </p>
     </div>
   );
 }

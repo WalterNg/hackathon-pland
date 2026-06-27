@@ -76,6 +76,15 @@ function isRealtimeTickerSymbol(symbol: string): boolean {
   return normalized.endsWith("USDT") && normalized.length > 4;
 }
 
+function calculateDailyLossUsd(snapshot: PortfolioSnapshot, totalValueUsdRaw: number): number | null {
+  const dailyOpenValueUsd = snapshot.metrics.dailyOpenValueUsd;
+  if (dailyOpenValueUsd === null || dailyOpenValueUsd === undefined) {
+    return null;
+  }
+
+  return round(Math.max(0, dailyOpenValueUsd - totalValueUsdRaw));
+}
+
 async function fetchBackendWithSupabaseAuth(path: string, init: RequestInit = {}) {
   const supabase = await createSupabaseBrowserClient();
   const {
@@ -129,6 +138,7 @@ function applyRealtimeTicker(
   const totalCostBasisUsd = currentSnapshot.metrics.totalCostBasisUsd;
   const totalVolume24hUsd = round(updatedAssets.reduce((sum, asset) => sum + asset.volume24hUsd, 0));
   const activeAssets = updatedAssets.filter((asset) => asset.quantity > 0).length;
+  const dailyLossUsd = calculateDailyLossUsd(currentSnapshot, totalValueUsdRaw);
 
   const allTimeProfitUsd = round(totalValueUsdRaw - totalCostBasisUsd);
   const allTimeProfitPercent = totalCostBasisUsd > 0 ? round((allTimeProfitUsd / totalCostBasisUsd) * 100) : 0;
@@ -225,6 +235,7 @@ function applyRealtimeTicker(
       var95Percent: riskMetrics.var95Percent,
       topRiskContributorSymbol: riskMetrics.topRiskContributorSymbol,
       topRiskContributorPercent: riskMetrics.topRiskContributorPercent,
+      dailyLossUsd,
       lastRiskUpdatedAt: nowIso
     },
     chart: chartWindow,

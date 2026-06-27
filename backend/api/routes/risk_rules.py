@@ -58,6 +58,7 @@ class AlertStatusUpdate(BaseModel):
 class SnapshotMetrics(BaseModel):
     maxDrawdownPercent: float = 0.0
     riskScore: float = 0.0
+    dailyLossUsd: float | None = None
 
 
 class SnapshotAsset(BaseModel):
@@ -179,6 +180,13 @@ def _select_severity(observed: float, threshold: float) -> str:
     if observed >= threshold * 1.25:
         return "critical"
     return "warning"
+
+
+def _normalize_daily_loss_usd(value: float | None) -> float | None:
+    """Clamp the incoming daily-loss metric to a non-negative USD value."""
+    if value is None:
+        return None
+    return max(0.0, float(value))
 
 
 async def _get_active_profile(user_id: str, portfolio_id: str) -> dict[str, Any] | None:
@@ -715,10 +723,8 @@ async def evaluate_risk(
 
     # ── Daily loss check ─────────────────────────────────────────────────────
     max_daily_loss_usd = profile_row.get("max_daily_loss_usd")
-    if max_daily_loss_usd is not None and len(chart) >= 2:
-        previous = float(chart[-2].totalValueUsd or 0.0)
-        current = float(chart[-1].totalValueUsd or 0.0)
-        daily_loss = max(0.0, previous - current)
+    daily_loss = _normalize_daily_loss_usd(metrics.dailyLossUsd)
+    if max_daily_loss_usd is not None and daily_loss is not None:
         threshold = float(max_daily_loss_usd)
         if daily_loss > threshold:
             sig = f"daily-loss:{threshold:.2f}"
@@ -726,7 +732,7 @@ async def evaluate_risk(
                 "event_type": "daily_loss_limit_breached",
                 "severity": _select_severity(daily_loss, threshold),
                 "title": "Daily loss threshold breached",
-                "message": f"Daily loss is {daily_loss:.2f} USD (limit {threshold:.2f} USD).",
+                "message": f"Daily loss since 00:00 UTC open is {daily_loss:.2f} USD (limit {threshold:.2f} USD).",
                 "observed_value": daily_loss,
                 "threshold_value": threshold,
                 "symbol": None,

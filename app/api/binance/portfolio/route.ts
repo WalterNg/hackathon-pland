@@ -162,6 +162,9 @@ async function buildAndCachePortfolioSnapshot(
     metrics: {
       ...snapshot.metrics,
       ...recalculatedRiskMetrics,
+      dailyOpenValueUsd: snapshot.metrics.dailyOpenValueUsd ?? null,
+      dailyLossUsd: snapshot.metrics.dailyLossUsd ?? null,
+      dailyOpenAt: snapshot.metrics.dailyOpenAt ?? null,
       violatedRulesCount: riskViolations.length,
       lastRiskUpdatedAt: nowIso,
     },

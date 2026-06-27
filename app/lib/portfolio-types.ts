@@ -75,6 +75,9 @@ export type PortfolioMetrics = {
   var95Percent?: number | null;
   topRiskContributorSymbol?: string | null;
   topRiskContributorPercent?: number | null;
+  dailyOpenValueUsd?: number | null;
+  dailyLossUsd?: number | null;
+  dailyOpenAt?: string | null;
 };
 
 export type PortfolioRiskViolation = {
@@ -109,6 +112,7 @@ export type PortfolioAssetRow = {
   quantity: number;
   avgBuyPriceUsd: number;
   priceUsd: number;
+  dailyOpenPriceUsd?: number | null;
   valueUsd: number;
   allocationPercent: number;
   change24hPercent: number;

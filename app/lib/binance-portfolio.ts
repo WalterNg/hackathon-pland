@@ -21,6 +21,7 @@ const BACKFILL_WINDOW_MS = 24 * 60 * 60 * 1000; // 1-day pre-inception context w
 
 type Kline = {
   openTime: number;
+  openPrice: number;
   closePrice: number;
 };
 
@@ -28,6 +29,12 @@ type PriceMap = Record<string, number>;
 type Change24hMap = Record<string, number>;
 type VolumeMap = Record<string, number>;
 type KlinesMap = Record<string, Kline[]>;
+
+type DailyOpenMetrics = {
+  dailyOpenAt: string | null;
+  dailyOpenValueUsd: number | null;
+  dailyLossUsd: number | null;
+};
 
 // ── Holdings timeline ─────────────────────────────────────────────────────────
 // Each snapshot captures the exact portfolio state immediately AFTER a transaction.
@@ -155,6 +162,56 @@ function baseAssetFromSymbol(symbol: string): string {
 
 function isPerformerCandidate(symbol: string): boolean {
   return !STABLE_ASSET_SYMBOLS.has(baseAssetFromSymbol(symbol));
+}
+
+function getLatestDailyOpenPrice(klines: Kline[]): number | null {
+  const latestKline = klines[klines.length - 1];
+  if (!latestKline || latestKline.openPrice <= 0) {
+    return null;
+  }
+
+  return latestKline.openPrice;
+}
+
+function calculateDailyOpenMetrics(
+  assets: Array<Pick<PortfolioAssetRow, "symbol" | "quantity" | "priceUsd" | "dailyOpenPriceUsd">>,
+  dailyOpenAt: string | null,
+  currentValueUsd: number
+): DailyOpenMetrics {
+  if (assets.length === 0) {
+    return {
+      dailyOpenAt,
+      dailyOpenValueUsd: 0,
+      dailyLossUsd: 0,
+    };
+  }
+
+  let isBaselineComplete = true;
+  const dailyOpenValueUsdRaw = assets.reduce((sum, asset) => {
+    const baselinePriceUsd = asset.dailyOpenPriceUsd;
+    if (baselinePriceUsd === null || baselinePriceUsd === undefined) {
+      if (!STABLE_ASSET_SYMBOLS.has(baseAssetFromSymbol(asset.symbol))) {
+        isBaselineComplete = false;
+      }
+      return sum + asset.quantity * asset.priceUsd;
+    }
+
+    return sum + asset.quantity * baselinePriceUsd;
+  }, 0);
+
+  if (!isBaselineComplete) {
+    return {
+      dailyOpenAt,
+      dailyOpenValueUsd: null,
+      dailyLossUsd: null,
+    };
+  }
+
+  return {
+    dailyOpenAt,
+    dailyOpenValueUsd: round(dailyOpenValueUsdRaw),
+    dailyLossUsd: round(Math.max(0, dailyOpenValueUsdRaw - currentValueUsd)),
+  };
 }
 
 function normalizePositions(positions?: ReadonlyArray<PortfolioPosition>): ReadonlyArray<PortfolioPosition> {
@@ -480,7 +537,10 @@ export async function buildBinancePortfolioSnapshot(
         beta: 0,
         breachPenaltyScore: 0,
         violatedRulesCount: 0,
-        lastRiskUpdatedAt: new Date().toISOString()
+        lastRiskUpdatedAt: new Date().toISOString(),
+        dailyOpenValueUsd: 0,
+        dailyLossUsd: 0,
+        dailyOpenAt: null,
       },
       chart: [],
       assets: []
@@ -560,6 +620,7 @@ export async function buildBinancePortfolioSnapshot(
   const assetsBase: Array<Omit<PortfolioAssetRow, "allocationPercent">> = positions.map((position) => {
     const symbol = position.symbol;
     const priceUsd = prices[symbol] ?? 0;
+    const dailyOpenPriceUsd = getLatestDailyOpenPrice(dailyKlinesMap[symbol] ?? []);
     const valueUsd = position.quantity * priceUsd;
     const costUsd = position.quantity * position.avgBuyPriceUsd;
     const pnlUsd = valueUsd - costUsd;
@@ -570,6 +631,7 @@ export async function buildBinancePortfolioSnapshot(
       quantity: position.quantity,
       avgBuyPriceUsd: round(position.avgBuyPriceUsd, 8),
       priceUsd: round(priceUsd, 8),
+      dailyOpenPriceUsd: dailyOpenPriceUsd !== null ? round(dailyOpenPriceUsd, 8) : null,
       valueUsd: round(valueUsd),
       change24hPercent: round(changes24h[symbol] ?? 0),
       change7dPercent: round(get7dChangePercent(dailyKlinesMap[symbol] ?? [])),
@@ -580,11 +642,19 @@ export async function buildBinancePortfolioSnapshot(
   });
 
   const totalValueUsd = round(totalValueUsdRaw);
+  const latestDailyOpenTimeMs = heldSymbols
+    .map((symbol) => {
+      const klines = dailyKlinesMap[symbol] ?? [];
+      return klines[klines.length - 1]?.openTime ?? null;
+    })
+    .find((openTime): openTime is number => openTime !== null) ?? null;
+  const dailyOpenAt = latestDailyOpenTimeMs !== null ? new Date(latestDailyOpenTimeMs).toISOString() : null;
 
   const assets: PortfolioAssetRow[] = assetsBase.map((asset) => ({
     ...asset,
     allocationPercent: totalValueUsdRaw > 0 ? round((asset.valueUsd / totalValueUsdRaw) * 100) : 0,
   }));
+  const dailyOpenMetrics = calculateDailyOpenMetrics(assets, dailyOpenAt, totalValueUsdRaw);
 
   const sortedByAllTime = [...assets]
     .filter((asset) => isPerformerCandidate(asset.symbol))
@@ -668,6 +738,9 @@ export async function buildBinancePortfolioSnapshot(
       var95Percent: riskMetrics.var95Percent,
       topRiskContributorSymbol: riskMetrics.topRiskContributorSymbol,
       topRiskContributorPercent: riskMetrics.topRiskContributorPercent,
+      dailyOpenValueUsd: dailyOpenMetrics.dailyOpenValueUsd,
+      dailyLossUsd: dailyOpenMetrics.dailyLossUsd,
+      dailyOpenAt: dailyOpenMetrics.dailyOpenAt,
       violatedRulesCount: 0,
       lastRiskUpdatedAt: riskUpdatedAt,
     },

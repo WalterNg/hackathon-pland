@@ -18,7 +18,7 @@ async def get_klines(
     limit: int = Query(1000, ge=1, le=1000),
     startTime: int | None = Query(None, description="Start time in milliseconds"),
 ):
-    """Return klines as [{openTime, closePrice}] for portfolio chart building."""
+    """Return klines as [{openTime, openPrice, closePrice}] for portfolio chart building."""
     params: dict = {"symbol": symbol.upper(), "interval": interval, "limit": limit}
     if startTime is not None:
         params["startTime"] = startTime
@@ -35,7 +35,14 @@ async def get_klines(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     rows = resp.json()
-    klines = [{"openTime": row[0], "closePrice": float(row[4])} for row in rows]
+    klines = [
+        {
+            "openTime": row[0],
+            "openPrice": float(row[1]),
+            "closePrice": float(row[4]),
+        }
+        for row in rows
+    ]
     return {"symbol": symbol.upper(), "interval": interval, "klines": klines}
 
 
