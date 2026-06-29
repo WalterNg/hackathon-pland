@@ -330,20 +330,8 @@ export function PortfolioForecastDialog({
     const p10Path = forecast
       ? buildForecastPath(forecast.percentilePathP10, forecast.horizonHours, range.min, range.spread)
       : "";
-    const p25Path = forecast
-      ? buildForecastPath(forecast.percentilePathP25, forecast.horizonHours, range.min, range.spread)
-      : "";
-    const p40Path = forecast
-      ? buildForecastPath(forecast.percentilePathP40, forecast.horizonHours, range.min, range.spread)
-      : "";
     const p50Path = forecast
       ? buildForecastPath(forecast.percentilePathP50, forecast.horizonHours, range.min, range.spread)
-      : "";
-    const p60Path = forecast
-      ? buildForecastPath(forecast.percentilePathP60, forecast.horizonHours, range.min, range.spread)
-      : "";
-    const p75Path = forecast
-      ? buildForecastPath(forecast.percentilePathP75, forecast.horizonHours, range.min, range.spread)
       : "";
     const p90Path = forecast
       ? buildForecastPath(forecast.percentilePathP90, forecast.horizonHours, range.min, range.spread)
@@ -352,24 +340,6 @@ export function PortfolioForecastDialog({
       ? buildBandPath(
           forecast.percentilePathP10,
           forecast.percentilePathP90,
-          forecast.horizonHours,
-          range.min,
-          range.spread,
-        )
-      : "";
-    const middleBandPath = forecast
-      ? buildBandPath(
-          forecast.percentilePathP25,
-          forecast.percentilePathP75,
-          forecast.horizonHours,
-          range.min,
-          range.spread,
-        )
-      : "";
-    const coreBandPath = forecast
-      ? buildBandPath(
-          forecast.percentilePathP40,
-          forecast.percentilePathP60,
           forecast.horizonHours,
           range.min,
           range.spread,
@@ -407,15 +377,9 @@ export function PortfolioForecastDialog({
       historyPath,
       historyPoints,
       p10Path,
-      p25Path,
-      p40Path,
       p50Path,
-      p60Path,
-      p75Path,
       p90Path,
       outerBandPath,
-      middleBandPath,
-      coreBandPath,
       samplePaths,
       historyTimeLabels,
       forecastTimeLabels,
@@ -630,14 +594,6 @@ export function PortfolioForecastDialog({
                       <span className={tone.textMuted}>P10-P90</span>
                     </span>
                     <span className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-[#F0B90B]/55" />
-                      <span className={tone.textMuted}>P25-P75</span>
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-[#FFE7A3]/80" />
-                      <span className={tone.textMuted}>P40-P60</span>
-                    </span>
-                    <span className="flex items-center gap-2">
                       <span className="h-2 w-2 rounded-full bg-white/35" />
                       <span className={tone.textMuted}>Scenario paths</span>
                     </span>
@@ -654,16 +610,6 @@ export function PortfolioForecastDialog({
                       <stop offset="0%" stopColor="rgba(240,185,11,0.08)" />
                       <stop offset="48%" stopColor="rgba(240,185,11,0.18)" />
                       <stop offset="100%" stopColor="rgba(240,185,11,0.32)" />
-                    </linearGradient>
-                    <linearGradient id="forecast-mc-band-mid" x1="56" y1="0" x2="100" y2="0">
-                      <stop offset="0%" stopColor="rgba(240,185,11,0.12)" />
-                      <stop offset="52%" stopColor="rgba(240,185,11,0.28)" />
-                      <stop offset="100%" stopColor="rgba(240,185,11,0.46)" />
-                    </linearGradient>
-                    <linearGradient id="forecast-mc-band-core" x1="56" y1="0" x2="100" y2="0">
-                      <stop offset="0%" stopColor="rgba(255,231,163,0.18)" />
-                      <stop offset="55%" stopColor="rgba(255,231,163,0.36)" />
-                      <stop offset="100%" stopColor="rgba(255,231,163,0.62)" />
                     </linearGradient>
                   </defs>
 
@@ -713,42 +659,12 @@ export function PortfolioForecastDialog({
                   {forecast ? (
                     <>
                       <path d={graph.outerBandPath} fill="url(#forecast-mc-band)" />
-                      <path d={graph.middleBandPath} fill="url(#forecast-mc-band-mid)" />
-                      <path d={graph.coreBandPath} fill="url(#forecast-mc-band-core)" />
                       <path
                         d={graph.p10Path}
                         fill="none"
                         stroke="rgba(240,185,11,0.28)"
                         strokeWidth="0.55"
                         strokeDasharray="1.6 2.2"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                      <path
-                        d={graph.p25Path}
-                        fill="none"
-                        stroke="rgba(240,185,11,0.20)"
-                        strokeWidth="0.45"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                      <path
-                        d={graph.p40Path}
-                        fill="none"
-                        stroke="rgba(255,231,163,0.16)"
-                        strokeWidth="0.4"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                      <path
-                        d={graph.p60Path}
-                        fill="none"
-                        stroke="rgba(255,231,163,0.16)"
-                        strokeWidth="0.4"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                      <path
-                        d={graph.p75Path}
-                        fill="none"
-                        stroke="rgba(240,185,11,0.20)"
-                        strokeWidth="0.45"
                         vectorEffect="non-scaling-stroke"
                       />
                       <path
