@@ -204,6 +204,7 @@ function PortfolioContent() {
     forecast: portfolioForecast,
     isLoading: isForecastLoading,
     error: portfolioForecastError,
+    ensureLoaded: ensurePortfolioForecastLoaded,
     refresh: refreshPortfolioForecast,
   } = usePortfolioForecast(effectiveSnapshot);
 
@@ -484,6 +485,7 @@ function PortfolioContent() {
                           forecast={portfolioForecast}
                           forecastError={portfolioForecastError}
                           isForecastLoading={isForecastLoading}
+                          onOpenForecast={ensurePortfolioForecastLoaded}
                           onRefreshForecast={refreshPortfolioForecast}
                           isLoading={isLoading || isRefreshing || throttledChart.length === 0}
                         />

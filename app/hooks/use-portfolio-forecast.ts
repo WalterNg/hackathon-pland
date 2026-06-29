@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { PortfolioForecast, PortfolioForecastResponse, PortfolioSnapshot } from "@/app/lib/portfolio-types";
 
@@ -8,18 +8,61 @@ type UsePortfolioForecastResult = {
   forecast: PortfolioForecast | null;
   isLoading: boolean;
   error: string | null;
+  ensureLoaded: () => void;
   refresh: () => void;
 };
+
+type ForecastRequestPayload = {
+  user_id: string;
+  portfolio: Array<{
+    asset: string;
+    amount: number;
+    current_price: number;
+  }>;
+  stablecoin_reserve: number;
+};
+
+type CachedForecastEntry = {
+  expiresAt: number;
+  forecast: PortfolioForecast;
+};
+
+const FORECAST_CACHE_TTL_MS = 5 * 60 * 1000;
+const forecastCache = new Map<string, CachedForecastEntry>();
+
+function readForecastCache(cacheKey: string | null): PortfolioForecast | null {
+  if (!cacheKey) {
+    return null;
+  }
+
+  const cached = forecastCache.get(cacheKey);
+  if (!cached) {
+    return null;
+  }
+
+  if (Date.now() >= cached.expiresAt) {
+    forecastCache.delete(cacheKey);
+    return null;
+  }
+
+  return cached.forecast;
+}
+
+function writeForecastCache(cacheKey: string, forecast: PortfolioForecast): void {
+  forecastCache.set(cacheKey, {
+    forecast,
+    expiresAt: Date.now() + FORECAST_CACHE_TTL_MS,
+  });
+}
 
 export function usePortfolioForecast(snapshot: PortfolioSnapshot | null): UsePortfolioForecastResult {
   const [forecast, setForecast] = useState<PortfolioForecast | null>(null);
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [refreshToken, setRefreshToken] = useState(0);
   const requestIdRef = useRef(0);
-  const hasLoadedRef = useRef(false);
+  const lastCompositionSignatureRef = useRef<string | null>(null);
 
-  const requestPayload = useMemo(() => {
+  const requestPayload = useMemo<ForecastRequestPayload | null>(() => {
     const portfolio = snapshot?.assets ?? [];
     if (!snapshot || portfolio.length === 0) {
       return null;
@@ -30,61 +73,110 @@ export function usePortfolioForecast(snapshot: PortfolioSnapshot | null): UsePor
       portfolio: portfolio.map((asset) => ({
         asset: asset.symbol,
         amount: Number(asset.quantity.toFixed(8)),
-        current_price: Number(asset.priceUsd.toFixed(2)),
+        current_price: Number(asset.priceUsd.toFixed(8)),
       })),
       stablecoin_reserve: 0,
     };
   }, [snapshot]);
 
-  const compositionSignature = useMemo(() => {
-    const portfolio = snapshot?.assets ?? [];
-    if (!snapshot || portfolio.length === 0) {
+  const cacheKey = useMemo(() => {
+    if (!requestPayload) {
       return null;
     }
 
     return JSON.stringify({
-      portfolioName: snapshot.summary.name,
-      positions: portfolio
+      portfolioName: requestPayload.user_id,
+      stablecoinReserve: requestPayload.stablecoin_reserve,
+      horizonHours: 48,
+      stepHours: 1,
+      positions: [...requestPayload.portfolio]
+        .sort((left, right) => left.asset.localeCompare(right.asset))
         .map((asset) => ({
-          asset: asset.symbol,
-          amount: Number(asset.quantity.toFixed(8)),
-        }))
-        .sort((left, right) => left.asset.localeCompare(right.asset)),
+          asset: asset.asset,
+          amount: asset.amount,
+          currentPrice: asset.current_price,
+        })),
     });
-  }, [snapshot?.summary.name, snapshot?.assets]);
+  }, [requestPayload]);
+
+  const compositionSignature = useMemo(() => {
+    if (!requestPayload) {
+      return null;
+    }
+
+    return JSON.stringify({
+      portfolioName: requestPayload.user_id,
+      positions: [...requestPayload.portfolio]
+        .sort((left, right) => left.asset.localeCompare(right.asset))
+        .map((asset) => ({
+          asset: asset.asset,
+          amount: asset.amount,
+        })),
+    });
+  }, [requestPayload]);
 
   useEffect(() => {
-    requestIdRef.current += 1;
-    const currentRequestId = requestIdRef.current;
-    const controller = new AbortController();
-    let timeoutId: number | null = null;
-
     if (!requestPayload || !compositionSignature) {
+      lastCompositionSignatureRef.current = null;
       setForecast(null);
-      setLoading(false);
       setError(null);
-      hasLoadedRef.current = false;
-      return () => controller.abort();
+      setLoading(false);
+      return;
     }
 
-    if (!hasLoadedRef.current) {
-      setLoading(true);
+    const compositionChanged = lastCompositionSignatureRef.current !== compositionSignature;
+    lastCompositionSignatureRef.current = compositionSignature;
+
+    const cachedForecast = readForecastCache(cacheKey);
+    if (cachedForecast) {
+      setForecast(cachedForecast);
+      setError(null);
+      setLoading(false);
+      return;
     }
 
-    const loadForecast = async () => {
-      try {
+    if (compositionChanged) {
+      setForecast(null);
+      setError(null);
+      setLoading(false);
+    }
+  }, [cacheKey, compositionSignature, requestPayload]);
+
+  const loadForecast = useCallback(
+    async (forceRefresh: boolean) => {
+      if (!requestPayload || !cacheKey) {
+        setForecast(null);
         setError(null);
+        setLoading(false);
+        return;
+      }
+
+      if (!forceRefresh) {
+        const cachedForecast = readForecastCache(cacheKey);
+        if (cachedForecast) {
+          setForecast(cachedForecast);
+          setError(null);
+          setLoading(false);
+          return;
+        }
+      }
+
+      requestIdRef.current += 1;
+      const currentRequestId = requestIdRef.current;
+
+      setLoading(true);
+      setError(null);
+
+      try {
         const response = await fetch("/api/portfolio/forecast", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify(requestPayload),
-          signal: controller.signal,
         });
 
         const payload = (await response.json().catch(() => null)) as PortfolioForecastResponse | null;
-
         if (requestIdRef.current !== currentRequestId) {
           return;
         }
@@ -95,36 +187,34 @@ export function usePortfolioForecast(snapshot: PortfolioSnapshot | null): UsePor
           return;
         }
 
+        writeForecastCache(cacheKey, payload.data);
         setForecast(payload.data);
-        hasLoadedRef.current = true;
         setError(null);
         setLoading(false);
       } catch (err) {
-        if (controller.signal.aborted || requestIdRef.current !== currentRequestId) {
+        if (requestIdRef.current !== currentRequestId) {
           return;
         }
 
         setError(err instanceof Error ? err.message : "Forecast unavailable.");
         setLoading(false);
       }
-    };
-
-    timeoutId = window.setTimeout(() => {
-      void loadForecast();
-    }, hasLoadedRef.current ? 1200 : 0);
-
-    return () => {
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
-      controller.abort();
-    };
-  }, [compositionSignature, refreshToken]);
+    },
+    [cacheKey, requestPayload],
+  );
 
   return {
     forecast,
     isLoading,
     error,
-    refresh: () => setRefreshToken((value) => value + 1),
+    ensureLoaded: () => {
+      void loadForecast(false);
+    },
+    refresh: () => {
+      if (cacheKey) {
+        forecastCache.delete(cacheKey);
+      }
+      void loadForecast(true);
+    },
   };
 }

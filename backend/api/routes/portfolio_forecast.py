@@ -19,7 +19,7 @@ async def predict_portfolio(payload: PortfolioForecastPayload) -> PortfolioForec
         raise HTTPException(status_code=422, detail="Portfolio must contain at least one asset.")
 
     try:
-        forecast = _forecast_service.predict(payload)
+        forecast = await _forecast_service.predict(payload)
     except ForecastUnavailableError as exc:
         logger.warning("Portfolio forecast unavailable: %s", exc)
         raise HTTPException(status_code=503, detail=str(exc)) from exc
