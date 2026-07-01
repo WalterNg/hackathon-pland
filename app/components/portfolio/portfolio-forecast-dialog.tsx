@@ -6,6 +6,7 @@ import type {
   PortfolioChartPoint,
   PortfolioForecast,
   PortfolioForecastPoint,
+  PortfolioForecastStepDistribution,
 } from "@/app/lib/portfolio-types";
 import { MaterialIcon } from "../dashboard/material-icon";
 
@@ -240,6 +241,34 @@ function buildBandPath(
   return `${upperPath} ${lowerPath} Z`;
 }
 
+function quantileFromSorted(sortedValues: number[], percentile: number): number {
+  if (sortedValues.length === 0) {
+    return 0;
+  }
+  if (sortedValues.length === 1) {
+    return sortedValues[0]!;
+  }
+
+  const clampedPercentile = Math.min(Math.max(percentile, 0), 1);
+  const position = clampedPercentile * (sortedValues.length - 1);
+  const lowerIndex = Math.floor(position);
+  const upperIndex = Math.ceil(position);
+  const weight = position - lowerIndex;
+  const lowerValue = sortedValues[lowerIndex]!;
+  const upperValue = sortedValues[upperIndex]!;
+  return lowerValue + (upperValue - lowerValue) * weight;
+}
+
+function buildPercentilePathFromDistributions(
+  distributions: PortfolioForecastStepDistribution[],
+  percentile: number,
+): PortfolioForecastPoint[] {
+  return distributions.map((distribution) => ({
+    hourOffset: distribution.hourOffset,
+    valueUsd: quantileFromSorted(distribution.sortedValueUsd, percentile),
+  }));
+}
+
 function findNearestPoint(points: PortfolioForecastPoint[], targetHourOffset: number): PortfolioForecastPoint | null {
   if (points.length === 0) {
     return null;
@@ -327,29 +356,41 @@ export function PortfolioForecastDialog({
       y: toY(point.totalValueUsd, range.min, range.spread),
     }));
 
-    const p10Path = forecast
-      ? buildForecastPath(forecast.percentilePathP10, forecast.horizonHours, range.min, range.spread)
-      : "";
     const p50Path = forecast
       ? buildForecastPath(forecast.percentilePathP50, forecast.horizonHours, range.min, range.spread)
       : "";
-    const p90Path = forecast
-      ? buildForecastPath(forecast.percentilePathP90, forecast.horizonHours, range.min, range.spread)
+
+    const p25Points = forecast ? buildPercentilePathFromDistributions(forecast.stepDistributions, 0.25) : [];
+    const p40Points = forecast ? buildPercentilePathFromDistributions(forecast.stepDistributions, 0.4) : [];
+    const p60Points = forecast ? buildPercentilePathFromDistributions(forecast.stepDistributions, 0.6) : [];
+    const p75Points = forecast ? buildPercentilePathFromDistributions(forecast.stepDistributions, 0.75) : [];
+
+    const bandOuterPath = forecast
+      ? buildBandPath(forecast.percentilePathP10, forecast.percentilePathP90, forecast.horizonHours, range.min, range.spread)
       : "";
-    const outerBandPath = forecast
-      ? buildBandPath(
-          forecast.percentilePathP10,
-          forecast.percentilePathP90,
-          forecast.horizonHours,
-          range.min,
-          range.spread,
-        )
+    const bandMiddlePath = forecast
+      ? buildBandPath(p25Points, p75Points, forecast.horizonHours, range.min, range.spread)
       : "";
-    const samplePaths = forecast
-      ? forecast.samplePaths.map((path) => ({
-          label: path.label,
-          svgPath: buildForecastPath(path.points, forecast.horizonHours, range.min, range.spread),
-        }))
+    const bandInnerPath = forecast
+      ? buildBandPath(p40Points, p60Points, forecast.horizonHours, range.min, range.spread)
+      : "";
+
+    const terminalLabels = forecast
+      ? ([
+          { key: "p90", points: forecast.percentilePathP90 },
+          { key: "p75", points: p75Points },
+          { key: "p25", points: p25Points },
+          { key: "p10", points: forecast.percentilePathP10 },
+        ] as const)
+          .filter(({ points }) => points.length > 0)
+          .map(({ key, points }) => {
+            const terminalPoint = points[points.length - 1]!;
+            return {
+              key,
+              text: shortUsdFormatter.format(terminalPoint.valueUsd),
+              topPct: (toY(terminalPoint.valueUsd, range.min, range.spread) / SVG_HEIGHT) * 100,
+            };
+          })
       : [];
 
     const historyTimeLabels =
@@ -376,11 +417,11 @@ export function PortfolioForecastDialog({
       range,
       historyPath,
       historyPoints,
-      p10Path,
       p50Path,
-      p90Path,
-      outerBandPath,
-      samplePaths,
+      bandOuterPath,
+      bandMiddlePath,
+      bandInnerPath,
+      terminalLabels,
       historyTimeLabels,
       forecastTimeLabels,
     };
@@ -501,9 +542,6 @@ export function PortfolioForecastDialog({
               Portfolio forecast
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] ${tone.accentBorder} ${tone.accentBg} ${tone.accent}`}>
-                Monte Carlo 48h
-              </span>
               <span className={`text-xs ${tone.textMuted}`}>
                 Generated: <span className="font-semibold text-white">{generatedLabel}</span>
               </span>
@@ -583,19 +621,23 @@ export function PortfolioForecastDialog({
               onMouseLeave={() => setHoverState(null)}
             >
               <div className={`absolute inset-0 overflow-hidden rounded-[0.9rem] border bg-[#14181d] ${tone.panelBorder}`}>
-                <div className="pointer-events-none absolute inset-x-3 top-3 z-[1] flex items-center justify-between text-[0.64rem] uppercase tracking-[0.16em]">
+                <div className="pointer-events-none absolute inset-x-3 top-3 z-[1] flex flex-wrap items-center justify-between gap-y-1 text-[0.64rem] uppercase tracking-[0.16em]">
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-[#F0B90B]" />
                     <span className={tone.textMuted}>Median path</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-[#F0B90B]/30" />
+                      <span className="h-2 w-2 rounded-full bg-[#F0B90B]/12" />
                       <span className={tone.textMuted}>P10-P90</span>
                     </span>
                     <span className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-white/35" />
-                      <span className={tone.textMuted}>Scenario paths</span>
+                      <span className="h-2 w-2 rounded-full bg-[#F0B90B]/25" />
+                      <span className={tone.textMuted}>P25-P75</span>
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-[#F0B90B]/45" />
+                      <span className={tone.textMuted}>P40-P60</span>
                     </span>
                   </div>
                 </div>
@@ -605,11 +647,6 @@ export function PortfolioForecastDialog({
                     <linearGradient id="forecast-history-fill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="rgba(240,185,11,0.22)" />
                       <stop offset="100%" stopColor="rgba(240,185,11,0.01)" />
-                    </linearGradient>
-                    <linearGradient id="forecast-mc-band" x1="56" y1="0" x2="100" y2="0">
-                      <stop offset="0%" stopColor="rgba(240,185,11,0.08)" />
-                      <stop offset="48%" stopColor="rgba(240,185,11,0.18)" />
-                      <stop offset="100%" stopColor="rgba(240,185,11,0.32)" />
                     </linearGradient>
                   </defs>
 
@@ -658,43 +695,31 @@ export function PortfolioForecastDialog({
 
                   {forecast ? (
                     <>
-                      <path d={graph.outerBandPath} fill="url(#forecast-mc-band)" />
-                      <path
-                        d={graph.p10Path}
-                        fill="none"
-                        stroke="rgba(240,185,11,0.28)"
-                        strokeWidth="0.55"
-                        strokeDasharray="1.6 2.2"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                      <path
-                        d={graph.p90Path}
-                        fill="none"
-                        stroke="rgba(240,185,11,0.28)"
-                        strokeWidth="0.55"
-                        strokeDasharray="1.6 2.2"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                      {graph.samplePaths.map((path, index) => (
-                        <path
-                          key={path.label}
-                          d={path.svgPath}
-                          fill="none"
-                          stroke={index === 2 ? "rgba(255,255,255,0.32)" : "rgba(255,255,255,0.18)"}
-                          strokeWidth={index === 2 ? "0.55" : "0.45"}
-                          vectorEffect="non-scaling-stroke"
-                        />
-                      ))}
+                      <path d={graph.bandOuterPath} fill="rgba(240,185,11,0.055)" />
+                      <path d={graph.bandMiddlePath} fill="rgba(240,185,11,0.1)" />
+                      <path d={graph.bandInnerPath} fill="rgba(240,185,11,0.17)" />
                       <path
                         d={graph.p50Path}
                         fill="none"
-                        stroke="rgba(255,240,185,0.92)"
-                        strokeWidth="1.15"
+                        stroke="rgba(255,240,185,0.78)"
+                        strokeWidth="1.1"
                         vectorEffect="non-scaling-stroke"
                       />
                     </>
                   ) : null}
                 </svg>
+
+                {forecast
+                  ? graph.terminalLabels.map((label) => (
+                      <span
+                        key={label.key}
+                        className="pointer-events-none absolute right-1.5 -translate-y-1/2 whitespace-nowrap rounded bg-[#0B0D10]/55 px-1 py-0.5 text-[0.58rem] font-medium text-white/70"
+                        style={{ top: `${label.topPct}%` }}
+                      >
+                        {label.text}
+                      </span>
+                    ))
+                  : null}
 
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 border-t border-white/[0.07]">
                   <div
