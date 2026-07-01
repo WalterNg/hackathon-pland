@@ -27,6 +27,30 @@ type BackendPortfolioForecastAssetProjection = {
   contribution_pct: number;
 };
 
+type BackendPortfolioForecastPoint = {
+  hour_offset: number;
+  value_usd: number;
+};
+
+type BackendPortfolioForecastPath = {
+  label: string;
+  terminal_value_usd: number;
+  points: BackendPortfolioForecastPoint[];
+};
+
+type BackendPortfolioForecastStepDistribution = {
+  hour_offset: number;
+  sorted_value_usd: number[];
+};
+
+type BackendPortfolioForecastCoverageSummary = {
+  covered_symbols: string[];
+  uncovered_symbols: string[];
+  covered_value_ratio: number;
+  sampled_row_count: number;
+  lookback_hours: number;
+};
+
 type BackendPortfolioForecastData = {
   status: "ready";
   horizon_hours: number;
@@ -36,8 +60,15 @@ type BackendPortfolioForecastData = {
   forecast_change_abs: number;
   forecast_change_pct: number;
   confidence_score: number;
-  artifact_timestamp: string;
-  predictions_by_symbol: Record<string, number>;
+  generated_at: string;
+  simulation_count: number;
+  step_hours: number;
+  sample_paths: BackendPortfolioForecastPath[];
+  step_distributions: BackendPortfolioForecastStepDistribution[];
+  percentile_path_p10: BackendPortfolioForecastPoint[];
+  percentile_path_p50: BackendPortfolioForecastPoint[];
+  percentile_path_p90: BackendPortfolioForecastPoint[];
+  coverage_summary: BackendPortfolioForecastCoverageSummary;
   asset_breakdown: BackendPortfolioForecastAssetProjection[];
 };
 
@@ -58,8 +89,40 @@ function toClientData(data: BackendPortfolioForecastData): PortfolioForecast {
     forecastChangeAbs: data.forecast_change_abs,
     forecastChangePct: data.forecast_change_pct,
     confidenceScore: data.confidence_score,
-    artifactTimestamp: data.artifact_timestamp,
-    predictionsBySymbol: data.predictions_by_symbol,
+    generatedAt: data.generated_at,
+    simulationCount: data.simulation_count,
+    stepHours: data.step_hours,
+    samplePaths: data.sample_paths.map((path) => ({
+      label: path.label,
+      terminalValueUsd: path.terminal_value_usd,
+      points: path.points.map((point) => ({
+        hourOffset: point.hour_offset,
+        valueUsd: point.value_usd,
+      })),
+    })),
+    stepDistributions: data.step_distributions.map((distribution) => ({
+      hourOffset: distribution.hour_offset,
+      sortedValueUsd: distribution.sorted_value_usd,
+    })),
+    percentilePathP10: data.percentile_path_p10.map((point) => ({
+      hourOffset: point.hour_offset,
+      valueUsd: point.value_usd,
+    })),
+    percentilePathP50: data.percentile_path_p50.map((point) => ({
+      hourOffset: point.hour_offset,
+      valueUsd: point.value_usd,
+    })),
+    percentilePathP90: data.percentile_path_p90.map((point) => ({
+      hourOffset: point.hour_offset,
+      valueUsd: point.value_usd,
+    })),
+    coverageSummary: {
+      coveredSymbols: data.coverage_summary.covered_symbols,
+      uncoveredSymbols: data.coverage_summary.uncovered_symbols,
+      coveredValueRatio: data.coverage_summary.covered_value_ratio,
+      sampledRowCount: data.coverage_summary.sampled_row_count,
+      lookbackHours: data.coverage_summary.lookback_hours,
+    },
     assetBreakdown: data.asset_breakdown.map((item) => ({
       symbol: item.symbol,
       currentValueUsd: item.current_value_usd,

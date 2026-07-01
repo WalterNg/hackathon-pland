@@ -231,6 +231,30 @@ export type PortfolioForecastAssetProjection = {
   contributionPct: number;
 };
 
+export type PortfolioForecastPoint = {
+  hourOffset: number;
+  valueUsd: number;
+};
+
+export type PortfolioForecastPath = {
+  label: string;
+  terminalValueUsd: number;
+  points: PortfolioForecastPoint[];
+};
+
+export type PortfolioForecastStepDistribution = {
+  hourOffset: number;
+  sortedValueUsd: number[];
+};
+
+export type PortfolioForecastCoverageSummary = {
+  coveredSymbols: string[];
+  uncoveredSymbols: string[];
+  coveredValueRatio: number;
+  sampledRowCount: number;
+  lookbackHours: number;
+};
+
 export type PortfolioForecast = {
   status: "ready";
   horizonHours: number;
@@ -240,8 +264,15 @@ export type PortfolioForecast = {
   forecastChangeAbs: number;
   forecastChangePct: number;
   confidenceScore: number;
-  artifactTimestamp: string;
-  predictionsBySymbol: Record<string, number>;
+  generatedAt: string;
+  simulationCount: number;
+  stepHours: number;
+  samplePaths: PortfolioForecastPath[];
+  stepDistributions: PortfolioForecastStepDistribution[];
+  percentilePathP10: PortfolioForecastPoint[];
+  percentilePathP50: PortfolioForecastPoint[];
+  percentilePathP90: PortfolioForecastPoint[];
+  coverageSummary: PortfolioForecastCoverageSummary;
   assetBreakdown: PortfolioForecastAssetProjection[];
 };
 

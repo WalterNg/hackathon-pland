@@ -1,4 +1,4 @@
-from typing import Dict, List, Literal, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -51,6 +51,38 @@ class PortfolioForecastAssetProjection(BaseModel):
     contribution_pct: float
 
 
+class PortfolioForecastPoint(BaseModel):
+    """One time/value point used by percentile or sample paths."""
+
+    hour_offset: int = Field(..., ge=0)
+    value_usd: float = Field(..., ge=0)
+
+
+class PortfolioForecastPath(BaseModel):
+    """Single simulated or representative path shown in the chart."""
+
+    label: str
+    terminal_value_usd: float = Field(..., ge=0)
+    points: List[PortfolioForecastPoint] = Field(default_factory=list)
+
+
+class PortfolioForecastStepDistribution(BaseModel):
+    """Sorted simulated portfolio values for one forecast hour."""
+
+    hour_offset: int = Field(..., ge=0)
+    sorted_value_usd: List[float] = Field(default_factory=list)
+
+
+class PortfolioForecastCoverageSummary(BaseModel):
+    """Coverage metadata explaining how complete the simulation inputs were."""
+
+    covered_symbols: List[str] = Field(default_factory=list)
+    uncovered_symbols: List[str] = Field(default_factory=list)
+    covered_value_ratio: float = Field(..., ge=0, le=100)
+    sampled_row_count: int = Field(..., ge=0)
+    lookback_hours: int = Field(..., ge=1)
+
+
 class PortfolioForecastData(BaseModel):
     """Normalized portfolio forecast payload returned by the prediction API."""
 
@@ -62,8 +94,15 @@ class PortfolioForecastData(BaseModel):
     forecast_change_abs: float
     forecast_change_pct: float
     confidence_score: int = Field(..., ge=1, le=10)
-    artifact_timestamp: str
-    predictions_by_symbol: Dict[str, float]
+    generated_at: str
+    simulation_count: int = Field(..., ge=1)
+    step_hours: int = Field(..., ge=1)
+    sample_paths: List[PortfolioForecastPath] = Field(default_factory=list)
+    step_distributions: List[PortfolioForecastStepDistribution] = Field(default_factory=list)
+    percentile_path_p10: List[PortfolioForecastPoint] = Field(default_factory=list)
+    percentile_path_p50: List[PortfolioForecastPoint] = Field(default_factory=list)
+    percentile_path_p90: List[PortfolioForecastPoint] = Field(default_factory=list)
+    coverage_summary: PortfolioForecastCoverageSummary
     asset_breakdown: List[PortfolioForecastAssetProjection] = Field(default_factory=list)
 
 
